@@ -7,6 +7,8 @@
 var AM_DATA = [];
 var amCharts = {};
 var amGridApi = null;
+var amRequestsGridApi = null;
+var AM_MY_REQUESTS = [];
 
 (function() {
     function inject() {
@@ -23,6 +25,10 @@ var amGridApi = null;
             <div class="header-actions">
                 <button type="button" class="export-btn" onclick="showCreateRequestForm()">
                     <i data-lucide="plus" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>Create New Request
+                </button>
+                <button type="button" class="export-btn" onclick="showAMMyRequests()" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+                    <i data-lucide="file-clock" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>My Requests
+                    <span id="amPendingBadge" style="display:none;margin-left:8px;background:#ef4444;color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;">0</span>
                 </button>
                 <button type="button" class="export-btn" onclick="showAMTransferRequests()" style="background: linear-gradient(135deg, #f97316, #ea580c);">
                     <i data-lucide="repeat" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>Pending Transfer Requests
@@ -47,7 +53,7 @@ var amGridApi = null;
 
         <div id="amContent" style="display:none;">
             <!-- 4 Stats Tiles -->
-            <div class="top-stats" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="top-stats" style="grid-template-columns: repeat(5, 1fr);">
                 <div class="stat-card">
                     <div class="stat-label">Last Month Revenue</div>
                     <div class="stat-value" id="amLastMonthRev">0</div>
@@ -67,6 +73,11 @@ var amGridApi = null;
                     <div class="stat-label">Child Accounts</div>
                     <div class="stat-value" id="amChildCount">0</div>
                     <div class="stat-subtitle">Sub Accounts</div>
+                </div>
+                <div class="stat-card" style="cursor:pointer;" onclick="showAMMyRequests()" title="View pending account requests">
+                    <div class="stat-label">Pending Requests</div>
+                    <div class="stat-value" id="amPendingCount">0</div>
+                    <div class="stat-subtitle">Awaiting Approval</div>
                 </div>
             </div>
 
@@ -137,6 +148,57 @@ var amGridApi = null;
                         <tbody id="amTransferTbody"></tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+<div class="dashboard" style="display:none;" id="amMyRequestsView">
+        <div class="header">
+            <div class="header-left">
+                <h1><i data-lucide="file-clock" style="width: 28px; height: 28px; display: inline-block; vertical-align: middle; margin-right: 10px;"></i>My Account Requests</h1>
+                <p>Track your submitted requests and approval status</p>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="export-btn" onclick="loadAMMyRequests()" style="padding:10px 16px;">
+                    <i data-lucide="refresh-cw" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>Refresh
+                </button>
+                <button type="button" class="theme-btn" onclick="backToAMDashboardFromRequests()" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600;">
+                    <i data-lucide="arrow-left" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>Back to Dashboard
+                </button>
+            </div>
+        </div>
+
+        <div id="amRequestsLoading" style="text-align:center; padding:60px; font-size:18px;">
+            <i data-lucide="loader" style="width: 24px; height: 24px; display: inline-block; vertical-align: middle; margin-right: 8px; animation: spin 1s linear infinite;"></i> Loading your requests...
+        </div>
+
+        <div id="amRequestsContent" style="display:none;">
+            <div class="table-section">
+                <div class="table-header">
+                    <h3 class="table-title">Request Tracker</h3>
+                    <div class="table-actions">
+                        <input type="text" class="search-box" id="amRequestSearchBox" placeholder="Search requests..." oninput="searchAMRequests()">
+                    </div>
+                </div>
+                <div id="amRequestsGrid" class="ag-theme-alpine" style="height: 600px; width: 100%;"></div>
+            </div>
+        </div>
+    </div>
+<div class="dashboard" style="display:none;" id="amRequestDetailView">
+        <div class="header">
+            <div class="header-left">
+                <h1><i data-lucide="eye" style="width: 28px; height: 28px; display: inline-block; vertical-align: middle; margin-right: 10px;"></i>Request Details</h1>
+                <p>Read-only view of your submitted request</p>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="theme-btn" onclick="showAMMyRequests()" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600;">
+                    <i data-lucide="arrow-left" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>Back to Tracker
+                </button>
+            </div>
+        </div>
+        <div style="max-width: 900px; margin: 0 auto;">
+            <div class="table-section">
+                <div id="amRequestDetailContent"></div>
+                <div id="amRequestDetailActions" style="display:flex;gap:16px;margin-top:24px;"></div>
             </div>
         </div>
     </div>
@@ -252,6 +314,10 @@ var amGridApi = null;
             document.getElementById('dashboardContent').style.display = 'none';
             document.getElementById('reviewRequestView').style.display = 'none';
             document.getElementById('transferRequestView').style.display = 'none';
+            document.getElementById('amMyRequestsView').style.display = 'none';
+            document.getElementById('amRequestDetailView').style.display = 'none';
+            document.getElementById('createRequestView').style.display = 'none';
+            document.getElementById('amTransferRequestsView').style.display = 'none';
 
             // Show AM dashboard
             document.getElementById('amAdDashboard').style.display = 'block';
@@ -271,10 +337,10 @@ var amGridApi = null;
 
                 if (userRole === 'Account Manager') {
                     window.AM_ALL_DATA = ALL_DATA.filter(a => a.am === userName);
-                    AM_DATA = window.AM_ALL_DATA.filter(a => a.type === 'Group');
+                    AM_DATA = window.AM_ALL_DATA.filter(a => a.type === 'Group' || !a.parent || a.code === a.parent);
                 } else if (userRole === 'Account Director') {
                     window.AM_ALL_DATA = ALL_DATA.filter(a => a.ad === userName);
-                    AM_DATA = window.AM_ALL_DATA.filter(a => a.type === 'Group');
+                    AM_DATA = window.AM_ALL_DATA.filter(a => a.type === 'Group' || !a.parent || a.code === a.parent);
                 }
 
                 setCurrentDate();
@@ -283,6 +349,7 @@ var amGridApi = null;
                 updateAMStats();
                 renderAMCharts();
                 renderAMTable();
+                updateAMPendingBadge();
 
                 document.getElementById('amLoading').style.display = 'none';
                 document.getElementById('amContent').style.display = 'block';
@@ -311,6 +378,25 @@ var amGridApi = null;
             } catch (err) {
                 console.error('Error:', err);
                 document.getElementById('amLoading').innerHTML = '<div style="color:#ef4444;">Error: ' + err.message + '</div>';
+            }
+        }
+
+        function isAMPendingStatus(status) {
+            return status === 'Not Onboarded' || status === 'Pending_SD_Approval';
+        }
+
+        function updateAMPendingBadge() {
+            const allAMAccounts = window.AM_ALL_DATA || [];
+            const pendingCount = allAMAccounts.filter(function(a) {
+                return a.requestType !== 'Transfer' && isAMPendingStatus(a.requestStatus);
+            }).length;
+
+            const badge = document.getElementById('amPendingBadge');
+            const countEl = document.getElementById('amPendingCount');
+            if (countEl) countEl.textContent = pendingCount;
+            if (badge) {
+                badge.textContent = pendingCount;
+                badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
             }
         }
 
@@ -465,7 +551,23 @@ var amGridApi = null;
                 };
             });
 
-            window.AM_PARENT_ROWS = parentRows;
+            // Orphan child requests (parent not in AM portfolio) still need visibility
+            const orphanChildren = (window.AM_ALL_DATA || []).filter(function(a) {
+                return a.type === 'Child' &&
+                    !AM_DATA.some(function(p) { return p.code === a.parent; });
+            }).map(function(child) {
+                return {
+                    ...child,
+                    _children: [],
+                    _hasChildren: false,
+                    _isParent: true,
+                    _isOrphanChild: true
+                };
+            });
+
+            const combinedParentRows = parentRows.concat(orphanChildren);
+
+            window.AM_PARENT_ROWS = combinedParentRows;
 
             const columnDefs = [{
                     field: 'code',
@@ -608,15 +710,18 @@ var amGridApi = null;
                     filter: 'agSetColumnFilter',
                     width: 150,
                     cellRenderer: params => {
-                        const badge = (params.value === 'OnBoarded' || params.value === 'AM_Approved') ? 'badge-success' : 'badge-warning';
-                        return `<span class="status-badge ${badge}">${params.value}</span>`;
+                        const status = params.value || 'Not Onboarded';
+                        let badge = 'badge-warning';
+                        if (status === 'OnBoarded' || status === 'AM_Approved') badge = 'badge-success';
+                        else if (status === 'Rejected') badge = 'badge-danger';
+                        return `<span class="status-badge ${badge}">${status}</span>`;
                     }
                 }
             ];
 
             const gridOptions = {
                 columnDefs: columnDefs,
-                rowData: parentRows.sort((a, b) => {
+                rowData: combinedParentRows.sort((a, b) => {
                     if (a.requestStatus !== 'OnBoarded' && b.requestStatus === 'OnBoarded') return -1;
                     if (a.requestStatus === 'OnBoarded' && b.requestStatus !== 'OnBoarded') return 1;
                     return b.code.localeCompare(a.code);
@@ -820,12 +925,16 @@ var amGridApi = null;
             clearRequestForm();
 
             document.getElementById('amAdDashboard').style.display = 'none';
+            document.getElementById('amMyRequestsView').style.display = 'none';
+            document.getElementById('amRequestDetailView').style.display = 'none';
             document.getElementById('createRequestView').style.display = 'block';
             populateRequestDropdowns();
         }
 
         function backToAMDashboard() {
             document.getElementById('createRequestView').style.display = 'none';
+            document.getElementById('amMyRequestsView').style.display = 'none';
+            document.getElementById('amRequestDetailView').style.display = 'none';
             document.getElementById('amAdDashboard').style.display = 'block';
         }
 
@@ -1238,8 +1347,9 @@ var amGridApi = null;
                     // RESET form section visibility
                     document.getElementById('requestFormSection').style.display = 'block';
 
-                    backToAMDashboard();
-                    initAMView();
+                    initAMView().then(function() {
+                        showAMMyRequests();
+                    });
                 }, 2000);
 
             } catch (err) {
@@ -1369,3 +1479,382 @@ Service Management System`);
                 // Don't throw error - just log it
             }
         }
+
+        // ========================================
+        // MY REQUESTS TRACKER (AM / AD)
+        // ========================================
+
+        function hideAllAMViews() {
+            ['amAdDashboard', 'createRequestView', 'amTransferRequestsView', 'amMyRequestsView', 'amRequestDetailView'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
+
+        function showAMMyRequests() {
+            hideAllAMViews();
+            document.getElementById('amMyRequestsView').style.display = 'block';
+            loadAMMyRequests();
+        }
+
+        function backToAMDashboardFromRequests() {
+            hideAllAMViews();
+            document.getElementById('amAdDashboard').style.display = 'block';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function amEsc(value) {
+            return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        async function amGetAdminEmails() {
+            try {
+                if (typeof getSDEmails === 'function') return await getSDEmails();
+                var res = await fetch(SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?$select=UserEmailID&$filter=Role eq 'Admin'", {
+                    headers: { 'Accept': 'application/json;odata=verbose' },
+                    credentials: 'include'
+                });
+                if (!res.ok) return [];
+                var data = await res.json();
+                return data.d.results.map(function(r) { return r.UserEmailID; }).filter(Boolean);
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function amBelongsToCurrentUser(row) {
+            var userName = USER_CONTEXT.userName;
+            var userRole = USER_CONTEXT.role;
+            if (userRole === 'Account Manager') {
+                return row.am === userName;
+            }
+            if (userRole === 'Account Director') {
+                return row.ad === userName;
+            }
+            return false;
+        }
+
+        async function loadAMMyRequests() {
+            var loadingEl = document.getElementById('amRequestsLoading');
+            var contentEl = document.getElementById('amRequestsContent');
+            var gridEl = document.getElementById('amRequestsGrid');
+
+            if (!loadingEl || !contentEl || !gridEl) return;
+
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+
+            try {
+                var lastThree = getLastThreeCompletedMonths();
+                var monthFields = lastThree.map(function(m) { return m.field; }).join(',');
+
+                var url = SP_URL + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items?" +
+                    "$select=ID,Title,Parent_x0020_Code,Customer_x0020_Name,Team," +
+                    "Account_x0020_Manager/Title,Account_x0020_Manager/EMail," +
+                    "Account_x0020_Director/Title,Account_x0020_Director/EMail," +
+                    "POC_x0020_Name,POC_x0020_Email_x0020_ID,POC_x0020_Contact_x0020_No," +
+                    monthFields + ",Request_x0020_Status,Request_x0020_Type,New_Account_Request_Date,Reject_New_Account_Reason&" +
+                    "$expand=Account_x0020_Manager,Account_x0020_Director&" +
+                    "$filter=(Request_x0020_Type eq 'New Account')&$top=5000";
+
+                var res = await fetch(url, {
+                    headers: { 'Accept': 'application/json;odata=verbose' },
+                    credentials: 'include'
+                });
+
+                if (!res.ok) throw new Error('Failed to load requests: ' + res.statusText);
+
+                var data = await res.json();
+                var requests = data.d.results.filter(function(r) {
+                    var row = {
+                        am: r.Account_x0020_Manager ? r.Account_x0020_Manager.Title : '',
+                        ad: r.Account_x0020_Director ? r.Account_x0020_Director.Title : ''
+                    };
+                    return amBelongsToCurrentUser(row);
+                });
+
+                AM_MY_REQUESTS = requests.map(function(r) {
+                    var requestDate = r.New_Account_Request_Date ? new Date(r.New_Account_Request_Date) : null;
+                    var daysSince = requestDate ? Math.floor((new Date() - requestDate) / 86400000) : null;
+                    var row = {
+                        id: r.ID,
+                        code: r.Title || '',
+                        parent: r.Parent_x0020_Code || '',
+                        customer: r.Customer_x0020_Name || '',
+                        team: r.Team || '',
+                        ad: r.Account_x0020_Director ? r.Account_x0020_Director.Title : '',
+                        adEmail: r.Account_x0020_Director ? (r.Account_x0020_Director.EMail || '') : '',
+                        am: r.Account_x0020_Manager ? r.Account_x0020_Manager.Title : '',
+                        amEmail: r.Account_x0020_Manager ? (r.Account_x0020_Manager.EMail || '') : '',
+                        status: r.Request_x0020_Status || 'Not Onboarded',
+                        rejectReason: r.Reject_New_Account_Reason || '',
+                        requestDate: requestDate,
+                        daysSince: daysSince,
+                        pocName: r.POC_x0020_Name || '',
+                        pocEmail: r.POC_x0020_Email_x0020_ID || '',
+                        pocPhone: r.POC_x0020_Contact_x0020_No || ''
+                    };
+                    lastThree.forEach(function(m) {
+                        row[m.field] = parseFloat(r[m.field]) || 0;
+                    });
+                    return row;
+                });
+
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+
+                if (AM_MY_REQUESTS.length === 0) {
+                    gridEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--t3);">No account requests found. Use <b>Create New Request</b> to submit one.</div>';
+                    if (amRequestsGridApi) {
+                        amRequestsGridApi.destroy();
+                        amRequestsGridApi = null;
+                    }
+                } else {
+                    renderAMRequestsGrid(AM_MY_REQUESTS, lastThree);
+                }
+
+                updateAMPendingBadge();
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                console.error('[AM Requests]', err);
+                loadingEl.innerHTML = '<div style="color:#ef4444;padding:20px;">Error: ' + err.message + '</div>';
+            }
+        }
+
+        function renderAMRequestsGrid(rowData, lastThree) {
+            var gridDiv = document.getElementById('amRequestsGrid');
+            if (!gridDiv) return;
+
+            var monthCols = lastThree.map(function(m) {
+                return {
+                    field: m.field,
+                    headerName: m.label,
+                    width: 120,
+                    type: 'numericColumn',
+                    valueFormatter: function(p) { return formatCurrency(p.value || 0); }
+                };
+            });
+
+            var columnDefs = [{
+                field: 'code',
+                headerName: 'Account Code',
+                pinned: 'left',
+                width: 150,
+                filter: 'agTextColumnFilter',
+                cellStyle: { fontWeight: '700' }
+            }, {
+                field: 'customer',
+                headerName: 'Customer',
+                width: 220,
+                filter: 'agTextColumnFilter'
+            }, {
+                field: 'parent',
+                headerName: 'L-10 / Parent',
+                width: 140,
+                filter: 'agTextColumnFilter'
+            }, {
+                field: 'team',
+                headerName: 'Team',
+                width: 100,
+                filter: 'agSetColumnFilter'
+            }].concat(monthCols).concat([{
+                field: 'requestDate',
+                headerName: 'Request Date',
+                width: 130,
+                sort: 'desc',
+                valueFormatter: function(p) {
+                    if (!p.value) return '—';
+                    return p.value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                }
+            }, {
+                field: 'daysSince',
+                headerName: 'Days Pending',
+                width: 130,
+                cellRenderer: function(p) {
+                    if (p.value === null || p.value === undefined) return '—';
+                    if (p.data.status === 'OnBoarded' || p.data.status === 'Rejected') return '—';
+                    var color = p.value > 14 ? '#ef4444' : p.value > 7 ? '#f97316' : '#10b981';
+                    return '<span style="font-weight:700;color:' + color + ';">' + p.value + 'd</span>';
+                }
+            }, {
+                field: 'status',
+                headerName: 'Status',
+                width: 170,
+                cellRenderer: function(p) {
+                    var status = p.value || 'Not Onboarded';
+                    var badge = 'badge-warning';
+                    if (status === 'OnBoarded' || status === 'AM_Approved') badge = 'badge-success';
+                    else if (status === 'Rejected') badge = 'badge-danger';
+                    return '<span class="status-badge ' + badge + '">' + status + '</span>';
+                }
+            }, {
+                field: 'actions',
+                headerName: 'Actions',
+                width: 220,
+                pinned: 'right',
+                sortable: false,
+                filter: false,
+                cellRenderer: function(p) {
+                    var d = p.data;
+                    var viewBtn = '<button type="button" class="export-btn" style="padding:5px 10px;font-size:11px;margin-right:6px;" onclick="viewAMRequest(' + d.id + ')">' +
+                        '<i data-lucide="eye" style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:3px;"></i>View</button>';
+                    var reminderBtn = '';
+                    if (isAMPendingStatus(d.status)) {
+                        reminderBtn = '<button type="button" class="reset-btn" style="padding:5px 10px;font-size:11px;" onclick="sendAMRequestReminder(' + d.id + ')">' +
+                            '<i data-lucide="mail" style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:3px;"></i>Send Reminder</button>';
+                    }
+                    return viewBtn + reminderBtn;
+                }
+            }]);
+
+            if (amRequestsGridApi) {
+                amRequestsGridApi.destroy();
+                amRequestsGridApi = null;
+            }
+            gridDiv.innerHTML = '';
+
+            agGrid.createGrid(gridDiv, {
+                columnDefs: columnDefs,
+                rowData: rowData,
+                defaultColDef: { sortable: true, filter: true, resizable: true },
+                pagination: true,
+                paginationPageSize: 25,
+                rowHeight: 48,
+                headerHeight: 48,
+                animateRows: true,
+                enableCellTextSelection: true,
+                onGridReady: function(params) {
+                    amRequestsGridApi = params.api;
+                    setTimeout(function() { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+                },
+                onCellClicked: function() {
+                    setTimeout(function() { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 80);
+                }
+            });
+        }
+
+        function searchAMRequests() {
+            if (!amRequestsGridApi) return;
+            var val = document.getElementById('amRequestSearchBox').value;
+            amRequestsGridApi.setGridOption('quickFilterText', val);
+        }
+
+        async function viewAMRequest(itemId) {
+            try {
+                var row = AM_MY_REQUESTS.find(function(r) { return r.id === itemId; });
+                if (!row) {
+                    await loadAMMyRequests();
+                    row = AM_MY_REQUESTS.find(function(r) { return r.id === itemId; });
+                }
+                if (!row) throw new Error('Request not found');
+
+                var lastThree = getLastThreeCompletedMonths();
+                var statusBadge = row.status;
+                if (row.status === 'Rejected') statusBadge = 'Rejected';
+                else if (row.status === 'OnBoarded') statusBadge = 'OnBoarded';
+                else statusBadge = row.status;
+
+                var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">';
+                var fields = [
+                    ['Account Code', row.code],
+                    ['L-10 / Parent', row.parent || 'N/A'],
+                    ['Customer Name', row.customer],
+                    ['Account Manager', row.am],
+                    ['Account Director', row.ad],
+                    ['Team', row.team || 'Pending assignment'],
+                    ['POC Name', row.pocName],
+                    ['POC Email', row.pocEmail],
+                    ['POC Contact', row.pocPhone],
+                    ['Request Status', statusBadge],
+                    ['Request Date', row.requestDate ? row.requestDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'],
+                    ['Days Pending', (isAMPendingStatus(row.status) && row.daysSince !== null) ? row.daysSince + ' days' : '—']
+                ];
+                fields.forEach(function(f) {
+                    html += '<div style="padding:12px;background:rgba(168,85,247,0.08);border-radius:8px;">' +
+                        '<div style="font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;margin-bottom:4px;">' + f[0] + '</div>' +
+                        '<div style="font-size:13px;font-weight:600;">' + (f[1] || 'N/A') + '</div></div>';
+                });
+                html += '</div>';
+
+                if (row.rejectReason) {
+                    html += '<div style="margin-top:16px;padding:14px;background:rgba(239,68,68,0.08);border-radius:8px;border:1px solid rgba(239,68,68,0.25);">' +
+                        '<div style="font-size:10px;color:#ef4444;font-weight:700;text-transform:uppercase;margin-bottom:4px;">Rejection Reason</div>' +
+                        '<div style="font-size:13px;font-weight:600;color:#ef4444;">' + row.rejectReason + '</div></div>';
+                }
+
+                html += '<h4 style="margin:20px 0 12px;font-size:.85rem;font-weight:700;color:var(--t2);">Revenue Details</h4>';
+                html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">';
+                lastThree.forEach(function(month) {
+                    html += '<div style="padding:12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;">' +
+                        '<div style="font-size:11px;color:var(--t3);margin-bottom:4px;font-weight:600;">' + month.label + '</div>' +
+                        '<div style="font-size:18px;font-weight:700;color:var(--sc);">' + formatCurrency(row[month.field] || 0) + '</div></div>';
+                });
+                html += '</div>';
+
+                document.getElementById('amRequestDetailContent').innerHTML = html;
+
+                var actionsHtml = '';
+                if (isAMPendingStatus(row.status)) {
+                    actionsHtml = '<button type="button" class="export-btn" onclick="sendAMRequestReminder(' + row.id + ')" style="flex:1;">' +
+                        '<i data-lucide="mail" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Send Reminder</button>';
+                }
+                document.getElementById('amRequestDetailActions').innerHTML = actionsHtml;
+
+                hideAllAMViews();
+                document.getElementById('amRequestDetailView').style.display = 'block';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                alert('Error loading request: ' + err.message);
+            }
+        }
+
+        async function sendAMRequestReminder(itemId) {
+            try {
+                var row = AM_MY_REQUESTS.find(function(r) { return r.id === itemId; });
+                if (!row) {
+                    await loadAMMyRequests();
+                    row = AM_MY_REQUESTS.find(function(r) { return r.id === itemId; });
+                }
+                if (!row) throw new Error('Request not found');
+                if (!isAMPendingStatus(row.status)) {
+                    alert('Reminders are only available for pending requests.');
+                    return;
+                }
+
+                var adminEmails = await amGetAdminEmails();
+                var to = adminEmails.join(';');
+                if (!to) {
+                    alert('No admin email found to send reminder.');
+                    return;
+                }
+
+                var daysText = (row.daysSince === null || row.daysSince === undefined) ? 'several' : String(row.daysSince);
+                var subject = encodeURIComponent('[REMINDER] New Account Request Pending Approval - ACC# ' + row.code + ' | ' + row.customer);
+                var body = encodeURIComponent(
+                    'Dear Admin Team,\n\n' +
+                    'This is a reminder that the following new account request is still pending approval (' + daysText + ' day(s)).\n\n' +
+                    'Account Code: ' + row.code + '\n' +
+                    'Customer: ' + row.customer + '\n' +
+                    'Account Manager: ' + row.am + '\n' +
+                    'Account Director: ' + row.ad + '\n' +
+                    'Current Status: ' + row.status + '\n' +
+                    'Request Date: ' + (row.requestDate ? row.requestDate.toLocaleDateString('en-GB') : 'N/A') + '\n\n' +
+                    'Please review and process this request in the Service Management Dashboard.\n\n' +
+                    'Sent by: ' + USER_CONTEXT.userName
+                );
+
+                var cc = [row.adEmail].filter(Boolean).join(';');
+                var mailto = 'mailto:' + encodeURIComponent(to) + '?subject=' + subject + '&body=' + body;
+                if (cc) mailto += '&cc=' + encodeURIComponent(cc);
+                window.location.href = mailto;
+            } catch (err) {
+                alert('Could not send reminder: ' + err.message);
+            }
+        }
+
+        window.showAMMyRequests = showAMMyRequests;
+        window.backToAMDashboardFromRequests = backToAMDashboardFromRequests;
+        window.loadAMMyRequests = loadAMMyRequests;
+        window.searchAMRequests = searchAMRequests;
+        window.viewAMRequest = viewAMRequest;
+        window.sendAMRequestReminder = sendAMRequestReminder;
