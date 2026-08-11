@@ -1,0 +1,74 @@
+Step 1 — SharePoint admin: list columns
+List name: ME_Pending_Tracking (do not rename)
+
+A) Confirm these 15 columns already exist (from your old v1 setup):
+
+Title, Email_Received_Date, Sender_Type, Subject_Line, Account_Code, Customer_Name, Pending_With, Case_Status, Issue_Type, Agent_Name, Team_Name, Resolved_Date, Priority, Remarks, Logged_By
+
+B) Confirm Team_Name choices include:
+
+TSM_ME
+TSM_SE
+(Optional keep for old data: DSM, PSD)
+C) Add these 9 NEW columns:
+
+Column	Type	Values
+Record_Type
+Choice
+Pending, Escalation
+Linked_Ref_ID
+Single line
+—
+Escalated_To
+Single line
+—
+Escalation_Level
+Choice
+L1, L2, L3, Executive
+Escalation_Date
+Date
+—
+Escalation_Reason
+Choice
+SLA Breach, Customer Complaint, Technical, Billing, Management Request, Other
+Line_Manager
+Single line
+—
+Escalation_Status
+Choice
+Open, Under Review, Closed
+Resolution_Notes
+Multiple lines
+—
+Step 2 — Upload files to SharePoint
+Location: Shared Documents on the SM site
+(http://sharedspaces:8086/sites/SM/Shared Documents/)
+
+File	Action
+tsm-pending-escalation.js
+Upload (new)
+SM.html
+Replace existing
+sm.txt
+Replace existing (if this is your live page)
+Files are on your laptop: /Users/macbook/Downloads/
+
+Do not upload: old me-pending.js v1
+
+Step 3 — Hard refresh portal
+Open SM portal
+Ctrl+F5 after upload
+Step 4 — Existing data (if any old ME records)
+Old ME-... ref IDs can stay
+For old rows, set Record_Type = Pending and Team_Name = TSM_ME where applicable
+Step 5 — Stakeholder heads-up (optional)
+Tell TSM Manager / LM:
+
+Menu renamed to TSM Pending/Escalations
+Covers TSM ME + TSM SE
+New Escalation Tracker tab
+Admin picks TSM Team (ME or SE) when logging
+Later (not now)
+Agent Score Card module
+Score formula
+Wire pending/escalation into Score Card
