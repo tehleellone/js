@@ -40,35 +40,3 @@ Open, Under Review, Closed
 Resolution_Notes
 Multiple lines
 —
-Step 2 — Upload files to SharePoint
-Location: Shared Documents on the SM site
-(http://sharedspaces:8086/sites/SM/Shared Documents/)
-
-File	Action
-tsm-pending-escalation.js
-Upload (new)
-SM.html
-Replace existing
-sm.txt
-Replace existing (if this is your live page)
-Files are on your laptop: /Users/macbook/Downloads/
-
-Do not upload: old me-pending.js v1
-
-Step 3 — Hard refresh portal
-Open SM portal
-Ctrl+F5 after upload
-Step 4 — Existing data (if any old ME records)
-Old ME-... ref IDs can stay
-For old rows, set Record_Type = Pending and Team_Name = TSM_ME where applicable
-Step 5 — Stakeholder heads-up (optional)
-Tell TSM Manager / LM:
-
-Menu renamed to TSM Pending/Escalations
-Covers TSM ME + TSM SE
-New Escalation Tracker tab
-Admin picks TSM Team (ME or SE) when logging
-Later (not now)
-Agent Score Card module
-Score formula
-Wire pending/escalation into Score Card
