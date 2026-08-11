@@ -352,7 +352,6 @@
     function tspeInferRecordType(item) {
         var explicit = tspeChoice(item.Record_Type);
         if (explicit && TSPE_RECORD_TYPES.indexOf(explicit) !== -1) return explicit;
-        if (tspeChoice(item.Issue_Type) === 'Escalation') return 'Escalation';
         return 'Pending';
     }
 
@@ -649,10 +648,10 @@
                 '<div id="tspeFilters" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px;"></div>' +
                 '<div id="tspeAgentTiles" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;"></div>' +
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
-                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;">Case Status</div><canvas id="tspeChartStatus" height="180"></canvas></div>' +
-                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;">Open · TSM ME vs TSM SE</div><canvas id="tspeChartTeam" height="180"></canvas></div>' +
-                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;" id="tspeChartThirdLabel">Pending vs Escalation (Open)</div><canvas id="tspeChartThird" height="180"></canvas></div>' +
-                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;" id="tspeChartFourthLabel">Escalation by Level</div><canvas id="tspeChartFourth" height="180"></canvas></div>' +
+                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;">Case Status</div><div style="position:relative;height:200px;max-height:200px;overflow:hidden;"><canvas id="tspeChartStatus"></canvas></div></div>' +
+                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;">Open · TSM ME vs TSM SE</div><div style="position:relative;height:200px;max-height:200px;overflow:hidden;"><canvas id="tspeChartTeam"></canvas></div></div>' +
+                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;" id="tspeChartThirdLabel">Pending vs Escalation (Open)</div><div style="position:relative;height:200px;max-height:200px;overflow:hidden;"><canvas id="tspeChartThird"></canvas></div></div>' +
+                    '<div class="edit-revenue-card" style="padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;" id="tspeChartFourthLabel">Escalation by Level</div><div style="position:relative;height:200px;max-height:200px;overflow:hidden;"><canvas id="tspeChartFourth"></canvas></div></div>' +
                 '</div>' +
                 '<div id="tspeGrid" class="ag-theme-alpine" style="height:560px;width:100%;"></div>' +
             '</div>' +
@@ -761,6 +760,20 @@
         });
     }
 
+    function tspeChartOptions(type) {
+        var base = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { position: type === 'doughnut' ? 'bottom' : 'top' } }
+        };
+        if (type === 'bar') {
+            base.plugins.legend = { display: false };
+            base.scales = { y: { beginAtZero: true, ticks: { precision: 0 } } };
+        }
+        return base;
+    }
+
     function tspeRenderCharts() {
         if (typeof Chart === 'undefined') return;
         tspeDestroyCharts();
@@ -776,7 +789,7 @@
                     labels: ['In Progress', 'Resolved'],
                     datasets: [{ data: [open.length, resolved.length], backgroundColor: ['#f97316', '#10b981'] }]
                 },
-                options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false }
+                options: tspeChartOptions('doughnut')
             });
         }
 
@@ -789,11 +802,7 @@
                     labels: ['TSM ME', 'TSM SE'],
                     datasets: [{ label: 'Open Cases', data: [split.me, split.se], backgroundColor: ['#3b82f6', '#10b981'] }]
                 },
-                options: {
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-                    maintainAspectRatio: false
-                }
+                options: tspeChartOptions('bar')
             });
         }
 
@@ -811,10 +820,10 @@
                 TSPE.charts.third = new Chart(thirdCanvas, {
                     type: 'bar',
                     data: {
-                        labels: toLabels,
-                        datasets: [{ label: 'Open', data: toLabels.map(function (l) { return toMap[l]; }), backgroundColor: '#a855f7' }]
+                        labels: toLabels.length ? toLabels : ['None'],
+                        datasets: [{ label: 'Open', data: toLabels.length ? toLabels.map(function (l) { return toMap[l]; }) : [0], backgroundColor: '#a855f7' }]
                     },
-                    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, maintainAspectRatio: false }
+                    options: tspeChartOptions('bar')
                 });
             } else {
                 if (thirdLabel) thirdLabel.textContent = 'Pending vs Escalation (Open · All TSM)';
@@ -830,7 +839,7 @@
                         labels: ['Pending Open', 'Escalation Open'],
                         datasets: [{ data: [pendingOpen, escOpen], backgroundColor: ['#f97316', '#ef4444'] }]
                     },
-                    options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false }
+                    options: tspeChartOptions('doughnut')
                 });
             }
         }
@@ -854,7 +863,7 @@
                         labels: lvlLabels.length ? lvlLabels : ['None'],
                         datasets: [{ label: 'Open', data: lvlLabels.length ? lvlLabels.map(function (l) { return lvlMap[l]; }) : [0], backgroundColor: '#ef4444' }]
                     },
-                    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, maintainAspectRatio: false }
+                    options: tspeChartOptions('bar')
                 });
             } else {
                 if (fourthLabel) fourthLabel.textContent = 'Open by Issue Type';
@@ -867,10 +876,10 @@
                 TSPE.charts.fourth = new Chart(fourthCanvas, {
                     type: 'bar',
                     data: {
-                        labels: issueLabels,
-                        datasets: [{ label: 'Open', data: issueLabels.map(function (l) { return issueMap[l]; }), backgroundColor: '#6366f1' }]
+                        labels: issueLabels.length ? issueLabels : ['None'],
+                        datasets: [{ label: 'Open', data: issueLabels.length ? issueLabels.map(function (l) { return issueMap[l]; }) : [0], backgroundColor: '#6366f1' }]
                     },
-                    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, maintainAspectRatio: false }
+                    options: tspeChartOptions('bar')
                 });
             }
         }
