@@ -9916,7 +9916,7 @@ async function ownerFetchUserRole(email) {
         // ─── COMING SOON VIEWS ──────────────────────────────────────────────
         var ALL_VIEW_IDS = ['dashboardContent', 'landingPage', 'customerServiceView',
             'reviewRequestView', 'transferRequestView', 'sdReviewTransferView',
-            'amAdDashboard', 'amTransferRequestsView',
+            'amAdDashboard', 'amTransferRequestsView', 'amMyRequestsView', 'amRequestDetailView',
             'createRequestView', 'accountSearchView', 'comingSoonView', 'portalAnalyticsView',
             'editRequestView', 'executiveHubView', 'contactUsView', 'newsletterView'
         ];
