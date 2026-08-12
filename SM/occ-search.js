@@ -1,4 +1,4 @@
-// occ-search.js v3 — SP layer mirrors occ.html (load all, client-side filter)
+// occ-search.js v5 — SM dashboard only, SharePoint JSOM cross-site read
 
 (function () {
     'use strict';
@@ -10,12 +10,9 @@
     var OCC_LIST_FALLBACKS = ['GLK OCC Form'];
     var OCC_CCO_THRESHOLD = 250000;
 
-    // Cached after resolveOccList() — same pattern as occ.html
-    var OCC_LIST_GUID = null;
-    var OCC_LIST_TITLE = null;
-    var OCC_LIST_RESOLVED = false;
     var OCC_ALL_ITEMS = null;
     var OCC_ALL_LOADING = null;
+    var OCC_SP_JS_LOADING = null;
 
     var OCC_F = {
         ACC_CODE: 'Title',
@@ -268,104 +265,103 @@
         return item;
     }
 
-    function occListApi(suffix) {
-        if (!suffix || suffix.charAt(0) !== '/') suffix = '/' + (suffix || '');
-        if (OCC_LIST_GUID) {
-            return OCC_SP_SITE + "/_api/web/lists(guid'" + OCC_LIST_GUID + "')" + suffix;
+    var OCC_JSOM_FIELDS = OCC_CORE_SELECT.concat(OCC_DETAIL_EXTRA).filter(function (f, i, a) {
+        return f !== 'Id' && a.indexOf(f) === i;
+    });
+
+    function occJsomVal(v) {
+        if (v === null || v === undefined) return v;
+        if (typeof v.get_lookupValue === 'function') {
+            return {
+                Title: v.get_lookupValue(),
+                EMail: typeof v.get_email === 'function' ? v.get_email() : ''
+            };
         }
-        var title = (OCC_LIST_TITLE || OCC_LIST).replace(/'/g, "''");
-        return OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')" + suffix;
+        return v;
     }
 
-    // Same XHR pattern as occ.html spGet — no withCredentials, no GetList
-    function occSpGetCb(url, cb) {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.setRequestHeader('Accept', 'application/json;odata=verbose');
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try { cb(null, JSON.parse(xhr.responseText)); }
-                catch (e) { cb(e, null); }
-            } else {
-                cb(new Error('HTTP ' + xhr.status + (xhr.responseText ? ': ' + String(xhr.responseText).slice(0, 120) : '')), null);
+    function occJsomItemToRaw(item) {
+        var raw = { Id: item.get_id() };
+        OCC_JSOM_FIELDS.forEach(function (field) {
+            try { raw[field] = occJsomVal(item.get_item(field)); } catch (e) { /* field missing */ }
+        });
+        return raw;
+    }
+
+    function occLoadSpJs() {
+        if (window.SP && SP.ClientContext) return Promise.resolve();
+        if (OCC_SP_JS_LOADING) return OCC_SP_JS_LOADING;
+        var base = OCC_SP_SITE + '/_layouts/15/';
+        var files = ['init.js', 'MicrosoftAjax.js', 'sp.runtime.js', 'sp.js'];
+        OCC_SP_JS_LOADING = new Promise(function (resolve, reject) {
+            var idx = 0;
+            function next() {
+                if (idx >= files.length) {
+                    if (window.SP && SP.ClientContext) resolve();
+                    else reject(new Error('SharePoint client library failed to load'));
+                    return;
+                }
+                var s = document.createElement('script');
+                s.type = 'text/javascript';
+                s.src = base + files[idx++];
+                s.onload = next;
+                s.onerror = function () { reject(new Error('Failed to load SharePoint script: ' + s.src)); };
+                document.head.appendChild(s);
             }
-        };
-        xhr.onerror = function () { cb(new Error('Network error contacting OCC site'), null); };
-        xhr.send();
+            next();
+        });
+        return OCC_SP_JS_LOADING;
     }
 
-    function occSpGet(url) {
-        return new Promise(function (resolve, reject) {
-            occSpGetCb(url, function (err, data) {
-                if (err) reject(err);
-                else resolve(data);
+    function occLoadAllItemsJsom() {
+        return occLoadSpJs().then(function () {
+            return new Promise(function (resolve, reject) {
+                var ctx = new SP.ClientContext(OCC_SP_SITE);
+                var list = ctx.get_web().get_lists().getByTitle(OCC_LIST);
+                var query = new SP.CamlQuery();
+                query.set_viewXml(
+                    '<View><Query><OrderBy><FieldRef Name="ID" Ascending="FALSE"/></OrderBy></Query>' +
+                    '<RowLimit Paged="TRUE">5000</RowLimit></View>'
+                );
+                var items = list.getItems(query);
+                ctx.load(items);
+                ctx.executeQueryAsync(
+                    function () {
+                        var rows = [];
+                        var en = items.getEnumerator();
+                        while (en.moveNext()) rows.push(occJsomItemToRaw(en.get_current()));
+                        resolve(rows);
+                    },
+                    function (sender, args) {
+                        reject(new Error(args.get_message()));
+                    }
+                );
             });
         });
     }
 
-    function occListIdFromResponse(d) {
-        if (!d) return null;
-        return d.Id || d.ID || null;
-    }
-
-    function resolveOccList(cb) {
-        if (OCC_LIST_RESOLVED) return cb(null);
-        var title = OCC_LIST.replace(/'/g, "''");
-        occSpGetCb(OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')?$select=Id,Title", function (err, data) {
-            if (!err && data && data.d) {
-                var listId = occListIdFromResponse(data.d);
-                if (listId) OCC_LIST_GUID = listId;
-                OCC_LIST_TITLE = data.d.Title || OCC_LIST;
-            } else {
-                OCC_LIST_TITLE = OCC_LIST;
-            }
-            OCC_LIST_RESOLVED = true;
-            cb(null);
-        });
-    }
-
-    function resolveOccListAsync() {
-        return new Promise(function (resolve, reject) {
-            resolveOccList(function (err) {
-                if (err) reject(err);
-                else resolve();
+    function occFetchItemByIdJsom(itemId) {
+        return occLoadSpJs().then(function () {
+            return new Promise(function (resolve, reject) {
+                var ctx = new SP.ClientContext(OCC_SP_SITE);
+                var item = ctx.get_web().get_lists().getByTitle(OCC_LIST).getItemById(parseInt(itemId, 10));
+                ctx.load(item);
+                ctx.executeQueryAsync(
+                    function () { resolve(occJsomItemToRaw(item)); },
+                    function (sender, args) { reject(new Error(args.get_message())); }
+                );
             });
-        });
-    }
-
-    function loadAllOccPages(url, acc, cb) {
-        occSpGetCb(url, function (err, data) {
-            if (err) return cb(err, acc);
-            acc = acc.concat((data.d && data.d.results) || []);
-            var next = data.d && data.d.__next;
-            if (next) return loadAllOccPages(next, acc, cb);
-            cb(null, acc);
-        });
-    }
-
-    function occLoadAllItems(cb) {
-        resolveOccList(function () {
-            var select = OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT).join(',');
-            var url = occListApi('/items?$select=' + encodeURIComponent(select) +
-                '&$expand=' + OCC_EXPAND.join(',') + '&$top=5000&$orderby=Id desc');
-            loadAllOccPages(url, [], cb);
         });
     }
 
     function occEnsureAllItems() {
         if (OCC_ALL_ITEMS) return Promise.resolve(OCC_ALL_ITEMS);
         if (OCC_ALL_LOADING) return OCC_ALL_LOADING;
-        OCC_ALL_LOADING = new Promise(function (resolve, reject) {
-            occLoadAllItems(function (err, rows) {
-                OCC_ALL_LOADING = null;
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                OCC_ALL_ITEMS = rows || [];
-                resolve(OCC_ALL_ITEMS);
-            });
+        OCC_ALL_LOADING = occLoadAllItemsJsom().then(function (rows) {
+            OCC_ALL_ITEMS = rows || [];
+            return OCC_ALL_ITEMS;
+        }).finally(function () {
+            OCC_ALL_LOADING = null;
         });
         return OCC_ALL_LOADING;
     }
@@ -373,19 +369,17 @@
     async function occFetchItemById(itemId) {
         if (OCC_ALL_ITEMS) {
             var cached = OCC_ALL_ITEMS.find(function (r) { return r.Id === itemId || r.ID === itemId; });
-            if (cached) return cached;
+            if (cached) {
+                try {
+                    var fresh = await occFetchItemByIdJsom(itemId);
+                    if (fresh) return fresh;
+                } catch (e) {
+                    console.warn('[OCC Search] detail refresh failed, using cached row', e);
+                }
+                return cached;
+            }
         }
-        await resolveOccListAsync();
-        var fullSelect = OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT).concat(OCC_DETAIL_EXTRA).join(',');
-        var url = occListApi('/items(' + itemId + ')?$select=' + encodeURIComponent(fullSelect) + '&$expand=' + OCC_EXPAND.join(','));
-        try {
-            var data = await occSpGet(url);
-            return data.d;
-        } catch (e) {
-            var coreSelect = OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT).join(',');
-            var data2 = await occSpGet(occListApi('/items(' + itemId + ')?$select=' + encodeURIComponent(coreSelect) + '&$expand=' + OCC_EXPAND.join(',')));
-            return data2.d;
-        }
+        return occFetchItemByIdJsom(itemId);
     }
 
     function occSmUrl() {
@@ -664,7 +658,8 @@
         var btn = document.querySelector('#occSearchRoot .export-btn');
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<i data-lucide="loader" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;animation:spin 1s linear infinite;"></i>Searching...';
+            btn.innerHTML = '<i data-lucide="loader" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;animation:spin 1s linear infinite;"></i>' +
+                (OCC_ALL_ITEMS ? 'Searching...' : 'Loading OCC records...');
         }
 
         try {
@@ -686,7 +681,11 @@
             console.error('[OCC Search]', e);
             if (errEl) {
                 errEl.style.display = 'block';
-                errEl.textContent = 'Search failed: ' + e.message;
+                var msg = e.message || String(e);
+                if (/401|403|access denied|unauthorized/i.test(msg)) {
+                    msg = 'Cannot read OCC list — ask admin to grant you read access on GLK OCC Form';
+                }
+                errEl.textContent = 'Search failed: ' + msg;
             }
         } finally {
             if (btn) {
@@ -742,6 +741,9 @@
         document.getElementById('occSearchView').style.display = 'block';
         window.scrollTo(0, 0);
         occInitShell();
+        occLoadSpJs().catch(function (e) {
+            console.warn('[OCC Search] SP JS preload failed (will retry on search)', e);
+        });
 
         var currentTheme = document.body.getAttribute('data-theme');
         var selector = document.getElementById('occSearchColorSchemeSelector');
