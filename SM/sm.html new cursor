@@ -3608,30 +3608,6 @@
             </div>
         </div>
     </div>
-    <!-- ===== OCC SEARCH VIEW ===== -->
-    <div class="dashboard" style="display:none;position:relative;z-index:10;" id="occSearchView">
-        <div class="header">
-            <div class="header-left">
-                <h1><i data-lucide="file-search" style="width: 28px; height: 28px; display: inline-block; vertical-align: middle; margin-right: 10px;"></i>OCC Search</h1>
-                <p>Search GLK OCC forms and track approval status (read-only)</p>
-            </div>
-            <div class="header-actions">
-                <select class="color-scheme-selector" id="occSearchColorSchemeSelector" onchange="changeTheme(event)">
-                    <option value="magenta">Magenta Theme</option>
-                    <option value="duralux">Duralux Theme</option>
-                </select>
-                <div class="theme-toggle" onclick="toggleTheme()">
-                    <i data-lucide="moon" id="occSearchThemeIcon"></i>
-                </div>
-                <button type="button" class="theme-btn" onclick="backToLandingFromOcc()" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600;">
-                    <i data-lucide="arrow-left" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>Back to Landing
-                </button>
-            </div>
-        </div>
-        <div style="max-width: 1400px; margin: 0 auto;">
-            <div id="occSearchRoot"></div>
-        </div>
-    </div>
     <!-- Edit-mode SharePoint item version history (Service Manager Request list) -->
     <div id="editHistoryModal" style="display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;">
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:18px;max-width:1100px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.35);overflow:hidden;">
@@ -5362,11 +5338,8 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 occBtn.style.display = occEnabled ? 'flex' : 'none';
                 occBtn.disabled = !occEnabled;
                 occBtn.onclick = function() {
-                    if (typeof showOccSearch === 'function') showOccSearch();
+                    window.location.href = 'http://sharedspaces:8081/sites/OCC/SitePages/occ-search.aspx';
                 };
-            }
-            if (typeof occRefreshAccessFlag === 'function') {
-                occRefreshAccessFlag();
             }
 
 // Reinitialize Lucide icons
@@ -9996,7 +9969,7 @@ async function ownerFetchUserRole(email) {
         var ALL_VIEW_IDS = ['dashboardContent', 'landingPage', 'customerServiceView',
             'reviewRequestView', 'transferRequestView', 'sdReviewTransferView',
             'amAdDashboard', 'amTransferRequestsView', 'amMyRequestsView', 'amRequestDetailView',
-            'createRequestView', 'accountSearchView', 'occSearchView', 'comingSoonView', 'portalAnalyticsView',
+            'createRequestView', 'accountSearchView', 'comingSoonView', 'portalAnalyticsView',
             'editRequestView', 'executiveHubView', 'contactUsView', 'newsletterView'
         ];
 
@@ -10082,9 +10055,6 @@ async function ownerFetchUserRole(email) {
 
         function backToLanding() {
             document.getElementById('accountSearchView').style.display = 'none';
-            var occView = document.getElementById('occSearchView');
-            if (occView) occView.style.display = 'none';
-            if (typeof occSearchReset === 'function') occSearchReset();
             const landing = document.getElementById('landingPage');
             if (landing) {
                 landing.style.position = '';
@@ -10561,7 +10531,6 @@ async function ownerFetchUserRole(email) {
     </script>
     </div><!-- End SharePoint Compatibility Wrapper -->
     <!-- Modular view scripts -->
-<script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/occ-search.js?v=6"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/pending.js"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/am-ad.js"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/transfer.js"></script>
