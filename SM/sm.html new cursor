@@ -10561,7 +10561,7 @@ async function ownerFetchUserRole(email) {
     </script>
     </div><!-- End SharePoint Compatibility Wrapper -->
     <!-- Modular view scripts -->
-<script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/occ-search.js?v=5"></script>
+<script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/occ-search.js?v=6"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/pending.js"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/am-ad.js"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/transfer.js"></script>
