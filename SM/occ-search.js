@@ -17,6 +17,8 @@
     // Cached after resolveOccList() — same pattern as occ.html
     var OCC_LIST_GUID = null;
     var OCC_LIST_TITLE = null;
+    var OCC_LIST_RESOLVED = false;
+    var OCC_LIST_RESOLVING = null;
 
     var OCC_F = {
         ACC_CODE: 'Title',
@@ -278,49 +280,107 @@
         return OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')" + suffix;
     }
 
-    async function occSpGet(url) {
-        var res = await fetch(url, {
-            headers: { Accept: 'application/json;odata=verbose' },
-            credentials: 'include'
+    function occSpGet(url) {
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', 'application/json;odata=verbose');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) return;
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try { resolve(JSON.parse(xhr.responseText)); }
+                    catch (e) { reject(e); }
+                } else {
+                    reject(new Error('HTTP ' + xhr.status + ': ' + String(xhr.responseText || '').slice(0, 120)));
+                }
+            };
+            xhr.onerror = function () {
+                reject(new Error('Network error contacting OCC site (check access to ' + OCC_SP_SITE + ')'));
+            };
+            xhr.send();
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + (await res.text()).slice(0, 120));
-        return res.json();
+    }
+
+    function occListIdFromResponse(d) {
+        if (!d) return null;
+        return d.Id || d.ID || null;
     }
 
     async function resolveOccList() {
-        if (OCC_LIST_GUID) return;
-        for (var i = 0; i < OCC_LIST_FALLBACKS.length; i++) {
-            var title = OCC_LIST_FALLBACKS[i].replace(/'/g, "''");
+        if (OCC_LIST_RESOLVED) return;
+        if (OCC_LIST_RESOLVING) return OCC_LIST_RESOLVING;
+
+        OCC_LIST_RESOLVING = (async function () {
+            for (var i = 0; i < OCC_LIST_FALLBACKS.length; i++) {
+                var title = OCC_LIST_FALLBACKS[i].replace(/'/g, "''");
+                try {
+                    var data = await occSpGet(OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')?$select=Id,Title");
+                    if (data.d) {
+                        var listId = occListIdFromResponse(data.d);
+                        if (listId) OCC_LIST_GUID = listId;
+                        OCC_LIST_TITLE = data.d.Title || title;
+                        OCC_LIST_RESOLVED = true;
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[OCC Search] getbytitle failed for', title, e);
+                }
+            }
+
+            // Optional path fallback — never block search if getbytitle title is known
             try {
-                var data = await occSpGet(OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')?$select=Id,Title");
-                if (data.d && data.d.Id) {
-                    OCC_LIST_GUID = data.d.Id;
-                    OCC_LIST_TITLE = data.d.Title || title;
+                var pathArg = "@listUrl='" + OCC_LIST_PATH.replace(/'/g, "''") + "'";
+                var pathData = await occSpGet(OCC_SP_SITE + '/_api/web/GetList(' + pathArg + ')?' + pathArg + '&$select=Id,Title');
+                if (pathData.d) {
+                    var pathId = occListIdFromResponse(pathData.d);
+                    if (pathId) OCC_LIST_GUID = pathId;
+                    OCC_LIST_TITLE = pathData.d.Title || OCC_LIST;
+                    OCC_LIST_RESOLVED = true;
                     return;
                 }
-            } catch (e) { /* try next */ }
-        }
-        var pathArg = "@listUrl='" + OCC_LIST_PATH.replace(/'/g, "''") + "'";
-        var pathData = await occSpGet(OCC_SP_SITE + '/_api/web/GetList(' + pathArg + ')?' + pathArg + '&$select=Id,Title');
-        if (!pathData.d || !pathData.d.Id) {
-            throw new Error('OCC list not found — tried titles: ' + OCC_LIST_FALLBACKS.join(', ') + ' and path ' + OCC_LIST_PATH);
-        }
-        OCC_LIST_GUID = pathData.d.Id;
-        OCC_LIST_TITLE = pathData.d.Title || OCC_LIST;
+            } catch (e) {
+                console.warn('[OCC Search] GetList fallback failed (using getbytitle)', e);
+            }
+
+            OCC_LIST_TITLE = OCC_LIST;
+            OCC_LIST_RESOLVED = true;
+        })();
+
+        return OCC_LIST_RESOLVING;
     }
 
-    function occBuildItemsUrl(filter, top) {
-        var select = OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT).join(',');
-        return occListApi('/items?$select=' + encodeURIComponent(select) +
-            '&$expand=' + OCC_EXPAND.join(',') +
-            (filter ? '&$filter=' + filter : '') +
-            '&$orderby=Id desc&$top=' + (top || 5000));
+    function occBuildItemsUrl(filter, top, opts) {
+        opts = opts || {};
+        var selectFields = opts.select || OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT);
+        var select = selectFields.join(',');
+        var url = occListApi('/items?$select=' + encodeURIComponent(select));
+        if (!opts.noExpand && OCC_EXPAND.length) {
+            url += '&$expand=' + OCC_EXPAND.join(',');
+        }
+        if (filter) url += '&$filter=' + filter;
+        url += '&$orderby=Id desc&$top=' + (top || 5000);
+        return url;
     }
 
     async function occFetchItems(filter, top) {
         await resolveOccList();
-        var data = await occSpGet(occBuildItemsUrl(filter, top));
-        return data.d.results || [];
+        var attempts = [
+            { select: OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT), noExpand: false },
+            { select: OCC_CORE_SELECT, noExpand: true },
+            { select: ['Id', 'Title', 'Account_x0020_Name', 'OCC_x0020_Reference_x0020_No', 'OCC_x0020_Status', 'Total_x0020_OCC_x0020_Value', 'Created', 'Posted_Date', 'Status'], noExpand: true }
+        ];
+        var lastErr = null;
+        for (var i = 0; i < attempts.length; i++) {
+            try {
+                var data = await occSpGet(occBuildItemsUrl(filter, top, attempts[i]));
+                return data.d.results || [];
+            } catch (e) {
+                lastErr = e;
+                console.warn('[OCC Search] items fetch attempt ' + (i + 1) + ' failed', e);
+            }
+        }
+        throw lastErr || new Error('Failed to load OCC items');
     }
 
     async function occFetchItemById(itemId) {
@@ -410,6 +470,13 @@
             return await occFetchItems(custFilter, 200);
         }
 
+        try {
+            var refFilter = "substringof('" + occODataEscape(q) + "',OCC_x0020_Reference_x0020_No)";
+            var refRows = await occFetchItems(refFilter, 200);
+            if (refRows.length) return refRows;
+        } catch (e) {
+            console.warn('[OCC Search] ref filter failed, falling back to client-side scan', e);
+        }
         var all = await occFetchItems('', 5000);
         var qLower = q.toLowerCase();
         return all.filter(function (r) {
