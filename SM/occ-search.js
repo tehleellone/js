@@ -1,8 +1,4 @@
-// ============================================================
-// occ-search.js — OCC Search (read-only) for Service Management
-// Data: http://sharedspaces:8081/sites/OCC — GLK OCC Form / OCC Form1
-// Access: Access_Control.OCC_SEARCH = Yes
-// ============================================================
+// occ-search.js v3 — SP layer mirrors occ.html (load all, client-side filter)
 
 (function () {
     'use strict';
@@ -18,7 +14,8 @@
     var OCC_LIST_GUID = null;
     var OCC_LIST_TITLE = null;
     var OCC_LIST_RESOLVED = false;
-    var OCC_LIST_RESOLVING = null;
+    var OCC_ALL_ITEMS = null;
+    var OCC_ALL_LOADING = null;
 
     var OCC_F = {
         ACC_CODE: 'Title',
@@ -280,25 +277,30 @@
         return OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')" + suffix;
     }
 
+    // Same XHR pattern as occ.html spGet — no withCredentials, no GetList
+    function occSpGetCb(url, cb) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.setRequestHeader('Accept', 'application/json;odata=verbose');
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try { cb(null, JSON.parse(xhr.responseText)); }
+                catch (e) { cb(e, null); }
+            } else {
+                cb(new Error('HTTP ' + xhr.status + (xhr.responseText ? ': ' + String(xhr.responseText).slice(0, 120) : '')), null);
+            }
+        };
+        xhr.onerror = function () { cb(new Error('Network error contacting OCC site'), null); };
+        xhr.send();
+    }
+
     function occSpGet(url) {
         return new Promise(function (resolve, reject) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', url, true);
-            xhr.withCredentials = true;
-            xhr.setRequestHeader('Accept', 'application/json;odata=verbose');
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState !== 4) return;
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try { resolve(JSON.parse(xhr.responseText)); }
-                    catch (e) { reject(e); }
-                } else {
-                    reject(new Error('HTTP ' + xhr.status + ': ' + String(xhr.responseText || '').slice(0, 120)));
-                }
-            };
-            xhr.onerror = function () {
-                reject(new Error('Network error contacting OCC site (check access to ' + OCC_SP_SITE + ')'));
-            };
-            xhr.send();
+            occSpGetCb(url, function (err, data) {
+                if (err) reject(err);
+                else resolve(data);
+            });
         });
     }
 
@@ -307,84 +309,73 @@
         return d.Id || d.ID || null;
     }
 
-    async function resolveOccList() {
-        if (OCC_LIST_RESOLVED) return;
-        if (OCC_LIST_RESOLVING) return OCC_LIST_RESOLVING;
-
-        OCC_LIST_RESOLVING = (async function () {
-            for (var i = 0; i < OCC_LIST_FALLBACKS.length; i++) {
-                var title = OCC_LIST_FALLBACKS[i].replace(/'/g, "''");
-                try {
-                    var data = await occSpGet(OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')?$select=Id,Title");
-                    if (data.d) {
-                        var listId = occListIdFromResponse(data.d);
-                        if (listId) OCC_LIST_GUID = listId;
-                        OCC_LIST_TITLE = data.d.Title || title;
-                        OCC_LIST_RESOLVED = true;
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('[OCC Search] getbytitle failed for', title, e);
-                }
+    function resolveOccList(cb) {
+        if (OCC_LIST_RESOLVED) return cb(null);
+        var title = OCC_LIST.replace(/'/g, "''");
+        occSpGetCb(OCC_SP_SITE + "/_api/web/lists/getbytitle('" + title + "')?$select=Id,Title", function (err, data) {
+            if (!err && data && data.d) {
+                var listId = occListIdFromResponse(data.d);
+                if (listId) OCC_LIST_GUID = listId;
+                OCC_LIST_TITLE = data.d.Title || OCC_LIST;
+            } else {
+                OCC_LIST_TITLE = OCC_LIST;
             }
+            OCC_LIST_RESOLVED = true;
+            cb(null);
+        });
+    }
 
-            // Optional path fallback — never block search if getbytitle title is known
-            try {
-                var pathArg = "@listUrl='" + OCC_LIST_PATH.replace(/'/g, "''") + "'";
-                var pathData = await occSpGet(OCC_SP_SITE + '/_api/web/GetList(' + pathArg + ')?' + pathArg + '&$select=Id,Title');
-                if (pathData.d) {
-                    var pathId = occListIdFromResponse(pathData.d);
-                    if (pathId) OCC_LIST_GUID = pathId;
-                    OCC_LIST_TITLE = pathData.d.Title || OCC_LIST;
-                    OCC_LIST_RESOLVED = true;
+    function resolveOccListAsync() {
+        return new Promise(function (resolve, reject) {
+            resolveOccList(function (err) {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+    }
+
+    function loadAllOccPages(url, acc, cb) {
+        occSpGetCb(url, function (err, data) {
+            if (err) return cb(err, acc);
+            acc = acc.concat((data.d && data.d.results) || []);
+            var next = data.d && data.d.__next;
+            if (next) return loadAllOccPages(next, acc, cb);
+            cb(null, acc);
+        });
+    }
+
+    function occLoadAllItems(cb) {
+        resolveOccList(function () {
+            var select = OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT).join(',');
+            var url = occListApi('/items?$select=' + encodeURIComponent(select) +
+                '&$expand=' + OCC_EXPAND.join(',') + '&$top=5000&$orderby=Id desc');
+            loadAllOccPages(url, [], cb);
+        });
+    }
+
+    function occEnsureAllItems() {
+        if (OCC_ALL_ITEMS) return Promise.resolve(OCC_ALL_ITEMS);
+        if (OCC_ALL_LOADING) return OCC_ALL_LOADING;
+        OCC_ALL_LOADING = new Promise(function (resolve, reject) {
+            occLoadAllItems(function (err, rows) {
+                OCC_ALL_LOADING = null;
+                if (err) {
+                    reject(err);
                     return;
                 }
-            } catch (e) {
-                console.warn('[OCC Search] GetList fallback failed (using getbytitle)', e);
-            }
-
-            OCC_LIST_TITLE = OCC_LIST;
-            OCC_LIST_RESOLVED = true;
-        })();
-
-        return OCC_LIST_RESOLVING;
-    }
-
-    function occBuildItemsUrl(filter, top, opts) {
-        opts = opts || {};
-        var selectFields = opts.select || OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT);
-        var select = selectFields.join(',');
-        var url = occListApi('/items?$select=' + encodeURIComponent(select));
-        if (!opts.noExpand && OCC_EXPAND.length) {
-            url += '&$expand=' + OCC_EXPAND.join(',');
-        }
-        if (filter) url += '&$filter=' + filter;
-        url += '&$orderby=Id desc&$top=' + (top || 5000);
-        return url;
-    }
-
-    async function occFetchItems(filter, top) {
-        await resolveOccList();
-        var attempts = [
-            { select: OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT), noExpand: false },
-            { select: OCC_CORE_SELECT, noExpand: true },
-            { select: ['Id', 'Title', 'Account_x0020_Name', 'OCC_x0020_Reference_x0020_No', 'OCC_x0020_Status', 'Total_x0020_OCC_x0020_Value', 'Created', 'Posted_Date', 'Status'], noExpand: true }
-        ];
-        var lastErr = null;
-        for (var i = 0; i < attempts.length; i++) {
-            try {
-                var data = await occSpGet(occBuildItemsUrl(filter, top, attempts[i]));
-                return data.d.results || [];
-            } catch (e) {
-                lastErr = e;
-                console.warn('[OCC Search] items fetch attempt ' + (i + 1) + ' failed', e);
-            }
-        }
-        throw lastErr || new Error('Failed to load OCC items');
+                OCC_ALL_ITEMS = rows || [];
+                resolve(OCC_ALL_ITEMS);
+            });
+        });
+        return OCC_ALL_LOADING;
     }
 
     async function occFetchItemById(itemId) {
-        await resolveOccList();
+        if (OCC_ALL_ITEMS) {
+            var cached = OCC_ALL_ITEMS.find(function (r) { return r.Id === itemId || r.ID === itemId; });
+            if (cached) return cached;
+        }
+        await resolveOccListAsync();
         var fullSelect = OCC_CORE_SELECT.concat(OCC_EXPAND_SELECT).concat(OCC_DETAIL_EXTRA).join(',');
         var url = occListApi('/items(' + itemId + ')?$select=' + encodeURIComponent(fullSelect) + '&$expand=' + OCC_EXPAND.join(','));
         try {
@@ -445,43 +436,28 @@
         btn.disabled = !enabled;
     }
 
-    async function occFetchFromList(listName, filter) {
-        return occFetchItems(filter);
-    }
-
     async function occSearchItems(searchType, term) {
         var q = term.trim();
         if (!q) return [];
 
+        // occ.html loads all items once, then filters client-side — same here
+        var all = await occEnsureAllItems();
+        var qLower = q.toLowerCase();
+
         if (searchType === 'account') {
-            // occ.html account lookup matches Title exactly or case-insensitive client-side
-            var accFilter = "substringof('" + occODataEscape(q) + "',Title)";
-            var accRows = await occFetchItems(accFilter, 200);
-            if (accRows.length) return accRows;
-            var allAcc = await occFetchItems('', 5000);
-            var qLowerAcc = q.toLowerCase();
-            return allAcc.filter(function (r) {
-                return String(r.Title || '').toLowerCase().indexOf(qLowerAcc) !== -1;
+            return all.filter(function (r) {
+                return String(r.Title || '').toLowerCase().indexOf(qLower) !== -1;
             });
         }
 
         if (searchType === 'customer') {
-            var custFilter = "substringof('" + occODataEscape(q) + "',Account_x0020_Name)";
-            return await occFetchItems(custFilter, 200);
+            return all.filter(function (r) {
+                return String(r.Account_x0020_Name || '').toLowerCase().indexOf(qLower) !== -1;
+            });
         }
 
-        try {
-            var refFilter = "substringof('" + occODataEscape(q) + "',OCC_x0020_Reference_x0020_No)";
-            var refRows = await occFetchItems(refFilter, 200);
-            if (refRows.length) return refRows;
-        } catch (e) {
-            console.warn('[OCC Search] ref filter failed, falling back to client-side scan', e);
-        }
-        var all = await occFetchItems('', 5000);
-        var qLower = q.toLowerCase();
         return all.filter(function (r) {
-            var ref = occPlain(r[OCC_F.REF]).toLowerCase();
-            return ref.indexOf(qLower) !== -1;
+            return occPlain(r[OCC_F.REF]).toLowerCase().indexOf(qLower) !== -1;
         });
     }
 
@@ -730,6 +706,8 @@
         document.getElementById('occDetailSection').style.display = 'none';
         OCC_SEARCH.results = [];
         OCC_SEARCH.activeItem = null;
+        OCC_ALL_ITEMS = null;
+        OCC_ALL_LOADING = null;
     }
 
     function occSearchReset() {
