@@ -2482,6 +2482,9 @@
                                 <button type="button" id="pocToggleBtn" class="export-btn" onclick="togglePocDetailsEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
                                     <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Disabled
                                 </button>
+                                <button type="button" id="rnpsEligibilityToggleBtn" class="export-btn" onclick="toggleRnpsEligibilityEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
+                                    <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>RNPS Eligibility: Disabled
+                                </button>
                                 <button type="button" class="reset-btn" onclick="resetFilters()">
                                     <i data-lucide="rotate-ccw" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>Reset All Filters</button>
                             </div>
@@ -3828,7 +3831,7 @@ let charts = {};
         async function fetchAccessControlSettings() {
             try {
                 let url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                    "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled&" +
+                    "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,RNPSEligibilityEnabled&" +
                     "$filter=(UserEmailID eq 'ubaid.mir@du.ae' or UserEmailID eq 'tehleel.lone@du.ae')&$top=2";
                 let res = await fetch(url, {
                     headers: {
@@ -3838,7 +3841,7 @@ let charts = {};
                 });
                 if (!res.ok) {
                     url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                        "$select=ID,UserEmailID,RevenueEnabled&" +
+                        "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,RNPSEligibilityEnabled&" +
                         "$filter=(UserEmailID eq 'ubaid.mir@du.ae' or UserEmailID eq 'tehleel.lone@du.ae')&$top=2";
                     res = await fetch(url, {
                         headers: {
@@ -3852,15 +3855,19 @@ let charts = {};
                 const results = data.d.results;
                 window.REVENUE_ENABLED = results.some(r => parseAccessControlYesNo(r.RevenueEnabled));
                 window.POC_DETAILS_ENABLED = results.some(r => parseAccessControlYesNo(r.POCDetailsEnabled));
+                window.RNPS_ELIGIBILITY_EDIT_ENABLED = results.some(r => parseAccessControlYesNo(r.RNPSEligibilityEnabled));
                 window.REVENUE_CONTROL_ITEMS = results;
                 console.log('[RevenueEnabled]', window.REVENUE_ENABLED);
                 console.log('[POCDetailsEnabled]', window.POC_DETAILS_ENABLED, '(global for all users)');
+                console.log('[RNPSEligibilityEnabled]', window.RNPS_ELIGIBILITY_EDIT_ENABLED, '(global for all users in Edit screen)');
                 updateRevenueToggleBtn();
                 updatePocToggleBtn();
+                updateRnpsEligibilityToggleBtn();
             } catch (e) {
                 console.warn('fetchAccessControlSettings failed:', e);
                 window.REVENUE_ENABLED = false;
                 window.POC_DETAILS_ENABLED = false;
+                window.RNPS_ELIGIBILITY_EDIT_ENABLED = false;
             }
         }
 
@@ -4012,6 +4019,80 @@ let charts = {};
                 btn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
             } else {
                 btn.innerHTML = '<i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Disabled';
+                btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        async function toggleRnpsEligibilityEnabled() {
+            if (!isAccessControlAdmin()) {
+                alert('Only authorised admins can change this setting.');
+                return;
+            }
+            try {
+                const newValue = !window.RNPS_ELIGIBILITY_EDIT_ENABLED;
+                const items = window.REVENUE_CONTROL_ITEMS || [];
+                if (items.length === 0) {
+                    alert('Control rows not found');
+                    return;
+                }
+
+                const digestRes = await fetch(SP_URL + '/_api/contextinfo', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json;odata=verbose'
+                    },
+                    credentials: 'include'
+                });
+                if (!digestRes.ok) throw new Error('Failed to get digest');
+                const digest = (await digestRes.json()).d.GetContextWebInformation.FormDigestValue;
+
+                for (const item of items) {
+                    const updateRes = await fetch(SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items(" + item.ID + ")", {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json;odata=verbose',
+                            'Content-Type': 'application/json;odata=verbose',
+                            'X-RequestDigest': digest,
+                            'IF-MATCH': '*',
+                            'X-HTTP-Method': 'MERGE'
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(Object.assign({
+                            __metadata: {
+                                type: 'SP.Data.Access_x005f_ControlListItem'
+                            }
+                        }, buildAccessControlYesNoPayload('RNPSEligibilityEnabled', newValue, item)))
+                    });
+                    if (!updateRes.ok) {
+                        const errText = await updateRes.text();
+                        throw new Error('Update failed for ' + item.UserEmailID + ': ' + errText);
+                    }
+                }
+
+                window.RNPS_ELIGIBILITY_EDIT_ENABLED = newValue;
+                window.REVENUE_CONTROL_ITEMS = items.map(i => ({
+                    ...i,
+                    RNPSEligibilityEnabled: newValue ? 'Yes' : 'No'
+                }));
+                updateRnpsEligibilityToggleBtn();
+                if (typeof smRefreshEditRnpsEligibilityFields === 'function' && EDIT_ACCOUNT_DATA) {
+                    smRefreshEditRnpsEligibilityFields();
+                }
+                console.log('[RNPSEligibilityEnabled] updated to', newValue);
+            } catch (e) {
+                alert('Error updating RNPS Eligibility setting: ' + e.message);
+            }
+        }
+
+        function updateRnpsEligibilityToggleBtn() {
+            const btn = document.getElementById('rnpsEligibilityToggleBtn');
+            if (!btn) return;
+            if (window.RNPS_ELIGIBILITY_EDIT_ENABLED) {
+                btn.innerHTML = '<i data-lucide="unlock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>RNPS Eligibility: Enabled';
+                btn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+            } else {
+                btn.innerHTML = '<i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>RNPS Eligibility: Disabled';
                 btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
             }
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -4488,7 +4569,7 @@ function computeLMRNPS(rnpsGrouped) {
                 "POC_x0020_Name,POC_x0020_Email_x0020_ID,POC_x0020_Contact_x0020_No," +
                 "Secondary_x0020_POC_x0020_Name,Secondary_x0020_POC_x0020_Email,Secondary_x0020_POC_x0020_Contac," +
                 "Technical_x0020_POC_x0020_Name,Technical_x0020_POC_x0020_Email,Technical_x0020_POC_x0020_Contac," +
-                "AccountType,RNPS_Eligibility,RNPS_POC," +
+                "AccountType,RNPS_Eligibility,RNPS_POC,RNPS_Not_Eligible_Reason," +
                 // 2025 months
                 "Oct_x002d_25,Nov_x002d_25,Dec_x002d_25," +
                 // 2026 months
@@ -4567,6 +4648,7 @@ function computeLMRNPS(rnpsGrouped) {
                     accountType: parseChoiceField(item.AccountType) || '',
                     rnpsEligibility: parseChoiceField(item.RNPS_Eligibility) || '',
                     rnpsPoc: smNormalizeRnpsPoc(parseChoiceField(item.RNPS_POC) || 'Primary'),
+                    rnpsNotEligibleReason: smPlainTextFromSharePoint(item.RNPS_Not_Eligible_Reason),
 
                     // [NEW] Store last 3 months values with keys
                     [lastThreeMonths[0].key]: monthRevenues[0] || 0, // e.g., 'oct25'
@@ -6980,6 +7062,115 @@ if (window.TSM_SE_ACTIVE) {
         };
         SmSetColumnFilter.prototype.destroy = function () {};
 
+        function smCanEditRnpsEligibility() {
+            return !!window.RNPS_ELIGIBILITY_EDIT_ENABLED;
+        }
+
+        function smBuildEditRnpsEligibilityHtml(account) {
+            var html = '<div id="editRnpsEligibilityWrap">';
+            if (smCanEditRnpsEligibility()) {
+                html += '<div class="edit-field-card">' +
+                    '<div class="edit-field-label">RNPS Eligibility</div>' +
+                    '<select class="filter-select" id="editRnpsEligibility" onchange="onEditRnpsEligibilityChange()" style="font-size: 14px; padding: 10px; width: 100%;">' +
+                    '<option value="">Select...</option>' +
+                    '<option value="Yes"' + (account.rnpsEligibility === 'Yes' ? ' selected' : '') + '>Yes</option>' +
+                    '<option value="No"' + (account.rnpsEligibility === 'No' ? ' selected' : '') + '>No</option>' +
+                    '</select></div>';
+                html += '<div class="edit-field-card" id="editRnpsNotEligibleReasonWrap" style="display:none;grid-column:1/-1;">' +
+                    '<div class="edit-field-label">Reason for RNPS not Eligible *</div>' +
+                    '<textarea class="filter-select" id="editRnpsNotEligibleReason" rows="3" placeholder="Enter reason..." style="resize:vertical;cursor:text;width:100%;font-size:14px;padding:12px 16px;">' +
+                    smEscapeHtml(account.rnpsNotEligibleReason || '') +
+                    '</textarea></div>';
+            } else {
+                html += '<div class="edit-field-card">' +
+                    '<div class="edit-field-label">RNPS Eligibility</div>' +
+                    '<div class="edit-field-value">' + (account.rnpsEligibility || '—') + '</div></div>';
+                if (smIsRnpsNotEligible(account.rnpsEligibility)) {
+                    html += '<div class="edit-field-card" style="grid-column:1/-1;">' +
+                        '<div class="edit-field-label">Reason for RNPS not Eligible</div>' +
+                        '<div class="edit-field-value">' + smEscapeHtml(account.rnpsNotEligibleReason || '—') + '</div></div>';
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function smRefreshEditRnpsEligibilityFields() {
+            if (!EDIT_ACCOUNT_DATA) return;
+            var wrap = document.getElementById('editRnpsEligibilityWrap');
+            if (!wrap) return;
+            wrap.outerHTML = smBuildEditRnpsEligibilityHtml(EDIT_ACCOUNT_DATA);
+            smSyncEditRnpsFieldsUi();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+        window.smRefreshEditRnpsEligibilityFields = smRefreshEditRnpsEligibilityFields;
+
+        function smIsRnpsEligible(val) {
+            return String(val || '').trim().toLowerCase() === 'yes';
+        }
+
+        function smIsRnpsNotEligible(val) {
+            return String(val || '').trim().toLowerCase() === 'no';
+        }
+
+        function smPlainTextFromSharePoint(val) {
+            if (val == null || val === '') return '';
+            if (typeof val === 'object') {
+                if (val.results && val.results.length) return smPlainTextFromSharePoint(val.results[0]);
+                if (val.Value != null) return smPlainTextFromSharePoint(val.Value);
+                return '';
+            }
+            var s = String(val).trim();
+            if (!s) return '';
+            if (/<[a-z][\s\S]*>/i.test(s)) {
+                var tmp = document.createElement('div');
+                tmp.innerHTML = s;
+                return (tmp.textContent || tmp.innerText || '').trim();
+            }
+            return s;
+        }
+
+        function smEscapeHtml(val) {
+            return String(val == null ? '' : val)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function onEditRnpsEligibilityChange() {
+            smSyncEditRnpsFieldsUi();
+        }
+
+        function smSyncEditRnpsFieldsUi() {
+            var el = document.getElementById('editRnpsEligibility');
+            var wrap = document.getElementById('editRnpsPocWrap');
+            var reasonWrap = document.getElementById('editRnpsNotEligibleReasonWrap');
+            if (!wrap || !reasonWrap) return;
+
+            var eligibility = el ? el.value : ((EDIT_ACCOUNT_DATA && EDIT_ACCOUNT_DATA.rnpsEligibility) || '');
+            var isYes = smIsRnpsEligible(eligibility);
+            var isNo = smIsRnpsNotEligible(eligibility);
+
+            wrap.style.display = isNo ? 'none' : '';
+            reasonWrap.style.display = isNo ? '' : 'none';
+
+            document.querySelectorAll('input[name="editRnpsPoc"]').forEach(function (radio) {
+                radio.disabled = isNo;
+                if (isNo) radio.checked = false;
+            });
+
+            if (isYes && !document.querySelector('input[name="editRnpsPoc"]:checked')) {
+                var defaultOpt = document.querySelector('input[name="editRnpsPoc"][value="Primary"]');
+                if (defaultOpt) defaultOpt.checked = true;
+            }
+
+            var reasonEl = document.getElementById('editRnpsNotEligibleReason');
+            if (reasonEl) reasonEl.required = isNo;
+        }
+        window.onEditRnpsEligibilityChange = onEditRnpsEligibilityChange;
+        window.smSyncEditRnpsFieldsUi = smSyncEditRnpsFieldsUi;
+
         function smNormalizeRnpsPoc(val) {
             const v = String(val || 'Primary').trim();
             if (/^secondary$/i.test(v)) return 'Secondary';
@@ -7030,6 +7221,9 @@ if (window.TSM_SE_ACTIVE) {
         }
 
         function smGetRnpsPocDetails(row) {
+            if (smIsRnpsNotEligible(row && row.rnpsEligibility)) {
+                return { name: '', email: '', phone: '' };
+            }
             const tag = smNormalizeRnpsPoc(row && row.rnpsPoc);
             if (tag === 'Secondary') {
                 return {
@@ -7216,10 +7410,21 @@ if (window.TSM_SE_ACTIVE) {
                     width: 150
                 },
                 {
+                    field: 'rnpsNotEligibleReason',
+                    headerName: 'Reason for RNPS not Eligible',
+                    width: 220,
+                    valueFormatter: function (params) {
+                        return smPlainTextFromSharePoint(params.value) || '';
+                    }
+                },
+                {
                     field: 'rnpsPoc',
                     headerName: 'RNPS POC',
                     width: 120,
-                    valueFormatter: params => smNormalizeRnpsPoc(params.value)
+                    valueFormatter: function (params) {
+                        if (smIsRnpsNotEligible(params.data && params.data.rnpsEligibility)) return '—';
+                        return smNormalizeRnpsPoc(params.value);
+                    }
                 },
                 ...lastThree.map((month, index) => ({
                     field: month.key,
@@ -7630,7 +7835,8 @@ ${USER_CONTEXT.userName}`
             if (colDef.type === 'numericColumn' || field === 'avg') {
                 return formatCurrency(raw || 0);
             }
-            if (field === 'accountType' || field === 'rnpsEligibility' || field === 'rnpsPoc') {
+            if (field === 'accountType' || field === 'rnpsEligibility' || field === 'rnpsPoc' || field === 'rnpsNotEligibleReason') {
+                if (field === 'rnpsNotEligibleReason') return smPlainTextFromSharePoint(raw) || '';
                 return raw || '';
             }
             if (field === '_rnpsPocName' || field === '_rnpsPocEmail' || field === '_rnpsPocPhone') {
@@ -7682,6 +7888,7 @@ ${USER_CONTEXT.userName}`
             const allAccounts = window.ALL_FILTERED || [];
 
             parentAccounts.forEach(parent => {
+                if (isRnpsExport && !smIsRnpsEligible(parent.rnpsEligibility)) return;
                 exportData.push(smApplyRnpsExportRow({
                     ...parent,
                     _isExportParent: true
@@ -7988,11 +8195,11 @@ else if (sectionId === 'qaView') {
 else if (sectionId === 'rnpsView') {
     if (typeof rnpsInit === 'function') rnpsInit();
 }
-else if (sectionId === 'contactUsView') {
-    if (typeof cuLoadContacts === 'function') cuLoadContacts();
-}
 else if (sectionId === 'tsmPendingView') {
     if (typeof initTSMPendingEscalation === 'function') initTSMPendingEscalation();
+}
+else if (sectionId === 'contactUsView') {
+    if (typeof cuLoadContacts === 'function') cuLoadContacts();
 }
           else if (sectionId === 'seMailboxView') {
     if (typeof SEMailbox !== 'undefined') SEMailbox.init();
@@ -8052,12 +8259,12 @@ else if (sectionId === 'psdView') {
                     case 'rnpsView':
                         if (typeof rnpsInit === 'function') rnpsInit();
                         break;
-                    case 'contactUsView':
-                        if (typeof cuLoadContacts === 'function') cuLoadContacts();
-                        break;
                     case 'tsmPendingView':
                         if (typeof tspeInit === 'function') await tspeInit(true);
                         else if (typeof initTSMPendingEscalation === 'function') await initTSMPendingEscalation(true);
+                        break;
+                    case 'contactUsView':
+                        if (typeof cuLoadContacts === 'function') cuLoadContacts();
                         break;
                     case 'suggestionsView':
                         if (typeof sgLoadSuggestions === 'function') sgLoadSuggestions();
@@ -8142,12 +8349,14 @@ else if (sectionId === 'psdView') {
                 if (typeof lucide !== 'undefined') {
                     lucide.createIcons();
                 }
-                // Show revenue/POC toggles only to authorised admins (global effect applies to all users)
+                // Show revenue/POC/RNPS toggles only to authorised admins (global effect applies to all users)
                 if (isAccessControlAdmin()) {
                     const btn = document.getElementById('revenueToggleBtn');
                     if (btn) btn.style.display = 'inline-flex';
                     const pocBtn = document.getElementById('pocToggleBtn');
                     if (pocBtn) pocBtn.style.display = 'inline-flex';
+                    const rnpsBtn = document.getElementById('rnpsEligibilityToggleBtn');
+                    if (rnpsBtn) rnpsBtn.style.display = 'inline-flex';
                 }
                 // ✅ ALWAYS show landing page for ALL users (even without access)
                 console.log('[INFO] User:', USER_CONTEXT.userName, '| Role:', USER_CONTEXT.role);
@@ -8377,6 +8586,7 @@ async function ownerFetchUserRole(email) {
             'Technical_x0020_POC_x0020_Contac': 'Technical POC Contact',
             'AccountType': 'Account Type',
             'RNPS_Eligibility': 'RNPS Eligibility',
+            'RNPS_Not_Eligible_Reason': 'Reason for RNPS not Eligible',
             'RNPS_POC': 'RNPS POC',
             'Service_Required': 'Service Required',
             'Parent_x0020_Code': 'Parent Code',
@@ -9305,19 +9515,7 @@ async function ownerFetchUserRole(email) {
                     '<div class="edit-field-label">Account Type</div>' +
                     '<div class="edit-field-value">' + (account.accountType || '—') + '</div></div>';
 
-                if (USER_CONTEXT.isAdmin) {
-                    html += '<div class="edit-field-card">' +
-                        '<div class="edit-field-label">RNPS Eligibility</div>' +
-                        '<select class="filter-select" id="editRnpsEligibility" style="font-size: 14px; padding: 10px; width: 100%;">' +
-                        '<option value="">Select...</option>' +
-                        '<option value="Yes"' + (account.rnpsEligibility === 'Yes' ? ' selected' : '') + '>Yes</option>' +
-                        '<option value="No"' + (account.rnpsEligibility === 'No' ? ' selected' : '') + '>No</option>' +
-                        '</select></div>';
-                } else {
-                    html += '<div class="edit-field-card">' +
-                        '<div class="edit-field-label">RNPS Eligibility</div>' +
-                        '<div class="edit-field-value">' + (account.rnpsEligibility || '—') + '</div></div>';
-                }
+                html += smBuildEditRnpsEligibilityHtml(account);
 
                 html += '</div></div>';
 
@@ -9373,7 +9571,7 @@ async function ownerFetchUserRole(email) {
 
                 html += '<div class="edit-section-block">';
                 html += '<h3 class="table-title"><i data-lucide="users" style="width: 18px; height: 18px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>POC Details</h3>';
-                html += '<div class="filter-group" style="margin-bottom: 1rem;">' +
+                html += '<div class="filter-group" id="editRnpsPocWrap" style="margin-bottom: 1rem;">' +
                     '<label class="filter-label">RNPS POC</label>' +
                     '<div style="display:flex;gap:1.25rem;flex-wrap:wrap;padding:8px 0;">';
                 ['Primary', 'Secondary', 'Technical'].forEach(function (opt) {
@@ -9394,6 +9592,7 @@ async function ownerFetchUserRole(email) {
 
                 document.getElementById('editCurrentInfo').innerHTML = html;
                 renderEditPocFields();
+                smSyncEditRnpsFieldsUi();
 
                 if (account.secondarySm) {
                     const mappedExisting = SM_MAPPING_DATA.find(function(a) {
@@ -9624,6 +9823,8 @@ async function ownerFetchUserRole(email) {
             window.EDIT_ACCOUNT_CODE = null;
             window.EDIT_POC_VALUES = null;
             window.EDIT_RNPS_POC = null;
+            window.EDIT_RNPS_NOT_ELIGIBLE_REASON = null;
+            window.EDIT_RNPS_ELIGIBILITY = null;
         }
 
 
@@ -9677,10 +9878,25 @@ async function ownerFetchUserRole(email) {
             const revenueChanged = newRevenue !== null && newRevenue !== (EDIT_ACCOUNT_DATA.allMonths[revenueField] || 0);
             let newRnpsEligibility = EDIT_ACCOUNT_DATA.rnpsEligibility || '';
             let rnpsChanged = false;
-            if (USER_CONTEXT.isAdmin) {
+            if (smCanEditRnpsEligibility()) {
                 const rnpsEl = document.getElementById('editRnpsEligibility');
                 newRnpsEligibility = rnpsEl ? rnpsEl.value : (EDIT_ACCOUNT_DATA.rnpsEligibility || '');
                 rnpsChanged = newRnpsEligibility !== (EDIT_ACCOUNT_DATA.rnpsEligibility || '');
+            }
+
+            const effectiveRnpsEligibility = smCanEditRnpsEligibility() ? newRnpsEligibility : (EDIT_ACCOUNT_DATA.rnpsEligibility || '');
+            const isRnpsYes = smIsRnpsEligible(effectiveRnpsEligibility);
+            const isRnpsNo = smIsRnpsNotEligible(effectiveRnpsEligibility);
+
+            let newRnpsNotEligibleReason = EDIT_ACCOUNT_DATA.rnpsNotEligibleReason || '';
+            if (smCanEditRnpsEligibility() && isRnpsNo) {
+                newRnpsNotEligibleReason = (document.getElementById('editRnpsNotEligibleReason') || {}).value.trim();
+                if (!newRnpsNotEligibleReason) {
+                    alert('Reason for RNPS not Eligible is required when RNPS Eligibility is No');
+                    return;
+                }
+            } else if (smCanEditRnpsEligibility() && isRnpsYes) {
+                newRnpsNotEligibleReason = '';
             }
 
             const pocChanges = getEditPocChanges();
@@ -9695,10 +9911,24 @@ async function ownerFetchUserRole(email) {
                     return;
                 }
             }
-            const newRnpsPoc = smNormalizeRnpsPoc((document.querySelector('input[name="editRnpsPoc"]:checked') || {}).value);
-            const rnpsPocChanged = newRnpsPoc !== smNormalizeRnpsPoc(EDIT_ACCOUNT_DATA.rnpsPoc);
 
-            if (!amChanged && !adChanged && !secondarySmChanged && !revenueChanged && !rnpsChanged && !pocChanged && !rnpsPocChanged && window.EDIT_ALL_MONTHS.length === 0) {
+            let newRnpsPoc = '';
+            if (isRnpsYes) {
+                const pocChecked = document.querySelector('input[name="editRnpsPoc"]:checked');
+                if (!pocChecked) {
+                    alert('Please select RNPS POC when RNPS Eligibility is Yes');
+                    return;
+                }
+                newRnpsPoc = smNormalizeRnpsPoc(pocChecked.value);
+            }
+
+            const rnpsReasonChanged = newRnpsNotEligibleReason !== (EDIT_ACCOUNT_DATA.rnpsNotEligibleReason || '');
+            const oldRnpsPocDisplay = smIsRnpsNotEligible(EDIT_ACCOUNT_DATA.rnpsEligibility) ? '' : smNormalizeRnpsPoc(EDIT_ACCOUNT_DATA.rnpsPoc);
+            const rnpsPocChanged = isRnpsYes
+                ? newRnpsPoc !== oldRnpsPocDisplay
+                : (EDIT_ACCOUNT_DATA.rnpsPoc && !smIsRnpsNotEligible(EDIT_ACCOUNT_DATA.rnpsEligibility));
+
+            if (!amChanged && !adChanged && !secondarySmChanged && !revenueChanged && !rnpsChanged && !rnpsReasonChanged && !pocChanged && !rnpsPocChanged && window.EDIT_ALL_MONTHS.length === 0) {
                 alert('No changes detected');
                 return;
             }
@@ -9717,7 +9947,8 @@ async function ownerFetchUserRole(email) {
                 ['Account Director', EDIT_ACCOUNT_DATA.ad, newAD],
                 ['Account Type', EDIT_ACCOUNT_DATA.accountType || '—', EDIT_ACCOUNT_DATA.accountType || '—'],
                 ['RNPS Eligibility', EDIT_ACCOUNT_DATA.rnpsEligibility || '—', newRnpsEligibility || '—'],
-                ['RNPS POC', smNormalizeRnpsPoc(EDIT_ACCOUNT_DATA.rnpsPoc), newRnpsPoc]
+                ['Reason for RNPS not Eligible', EDIT_ACCOUNT_DATA.rnpsNotEligibleReason || '—', newRnpsNotEligibleReason || '—'],
+                ['RNPS POC', oldRnpsPocDisplay || '—', isRnpsYes ? newRnpsPoc : '—']
             ];
 
             if (revenueChanged) {
@@ -9738,12 +9969,17 @@ async function ownerFetchUserRole(email) {
                 changes.push([pc.label, pc.oldVal, pc.newVal]);
             });
             window.EDIT_POC_CHANGES = pocChanges;
-            window.EDIT_RNPS_POC = newRnpsPoc;
+            window.EDIT_RNPS_POC = isRnpsYes ? newRnpsPoc : '';
+            window.EDIT_RNPS_NOT_ELIGIBLE_REASON = newRnpsNotEligibleReason;
+            window.EDIT_RNPS_ELIGIBILITY = effectiveRnpsEligibility;
             changes.forEach(([label, oldVal, newVal]) => {
                 const hasChanged = oldVal !== newVal;
+                const safeLabel = smEscapeHtml(label);
+                const safeOld = smEscapeHtml(oldVal);
+                const safeNew = smEscapeHtml(newVal);
                 html += `<div style="padding: 12px; background: ${hasChanged ? 'rgba(16, 185, 129, 0.15)' : 'rgba(168, 85, 247, 0.1)'}; border-radius: 8px; border: ${hasChanged ? '2px solid var(--success)' : 'none'};">
-            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;">${label}</div>
-            <div style="font-size: 14px; font-weight: 600;">${hasChanged ? `${oldVal} <i data-lucide="arrow-right" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin: 0 4px;"></i> ${newVal}` : newVal}</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;">${safeLabel}</div>
+            <div style="font-size: 14px; font-weight: 600;">${hasChanged ? `${safeOld} <i data-lucide="arrow-right" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin: 0 4px;"></i> ${safeNew}` : safeNew}</div>
         </div>`;
             });
 
@@ -9832,9 +10068,17 @@ async function ownerFetchUserRole(email) {
                     updateData[window.EDIT_REVENUE_DATA.field] = window.EDIT_REVENUE_DATA.value;
                 }
 
-                if (USER_CONTEXT.isAdmin) {
+                if (smCanEditRnpsEligibility()) {
                     const rnpsEl = document.getElementById('editRnpsEligibility');
-                    if (rnpsEl) updateData.RNPS_Eligibility = rnpsEl.value;
+                    if (rnpsEl) {
+                        updateData.RNPS_Eligibility = rnpsEl.value;
+                        if (smIsRnpsNotEligible(rnpsEl.value)) {
+                            updateData.RNPS_POC = null;
+                            updateData.RNPS_Not_Eligible_Reason = (document.getElementById('editRnpsNotEligibleReason') || {}).value.trim();
+                        } else if (smIsRnpsEligible(rnpsEl.value)) {
+                            updateData.RNPS_Not_Eligible_Reason = '';
+                        }
+                    }
                 }
 
                 // Save all 3 months if revenue enabled
@@ -9861,9 +10105,11 @@ async function ownerFetchUserRole(email) {
 
                 if (window.EDIT_RNPS_POC) {
                     updateData.RNPS_POC = window.EDIT_RNPS_POC;
-                } else {
+                } else if (smIsRnpsEligible(window.EDIT_RNPS_ELIGIBILITY || (EDIT_ACCOUNT_DATA && EDIT_ACCOUNT_DATA.rnpsEligibility))) {
                     const rnpsPocEl = document.querySelector('input[name="editRnpsPoc"]:checked');
                     if (rnpsPocEl) updateData.RNPS_POC = smNormalizeRnpsPoc(rnpsPocEl.value);
+                } else if (smIsRnpsNotEligible(window.EDIT_RNPS_ELIGIBILITY || (EDIT_ACCOUNT_DATA && EDIT_ACCOUNT_DATA.rnpsEligibility))) {
+                    updateData.RNPS_POC = null;
                 }
 
                 const updateRes = await fetch(updateUrl, {
@@ -9890,6 +10136,8 @@ async function ownerFetchUserRole(email) {
                 window.EDIT_REVENUE_DATA = null;
                 window.EDIT_POC_VALUES = null;
                 window.EDIT_RNPS_POC = null;
+                window.EDIT_RNPS_NOT_ELIGIBLE_REASON = null;
+                window.EDIT_RNPS_ELIGIBILITY = null;
                 EDIT_ACCOUNT_DATA = null;
                 setTimeout(() => {
                     // RESET EVERYTHING
@@ -9898,6 +10146,8 @@ async function ownerFetchUserRole(email) {
                     window.EDIT_REVENUE_DATA = null;
                     window.EDIT_POC_VALUES = null;
                     window.EDIT_RNPS_POC = null;
+                    window.EDIT_RNPS_NOT_ELIGIBLE_REASON = null;
+                    window.EDIT_RNPS_ELIGIBILITY = null;
                     EDIT_ACCOUNT_DATA = null;
 
                     // Reset dropdowns to placeholder
@@ -10531,6 +10781,7 @@ async function ownerFetchUserRole(email) {
     </script>
     </div><!-- End SharePoint Compatibility Wrapper -->
     <!-- Modular view scripts -->
+<script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/tsm-pending-escalation.js"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/pending.js"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/am-ad.js"></script>
 <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/transfer.js"></script>
@@ -10547,7 +10798,6 @@ async function ownerFetchUserRole(email) {
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd-assignment.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/rnps.js"></script>
   <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/semailbox.js"></script>
-  <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/tsm-pending-escalation.js"></script>
   <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/tsm-se.js?v=4"></script>
     <div class="dashboard" style="display:none;" id="executiveHubView"></div>
     <script>
