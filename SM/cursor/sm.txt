@@ -2262,6 +2262,13 @@
                             <span class="btn-text">Go to Account Search</span>
                             <span class="btn-shine"></span>
                         </button>
+                        <button type="button" id="goToOccSearch" class="landing-btn btn-primary-enhanced" style="display:none; margin-top: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8);">
+                            <span class="btn-icon">
+                                <i data-lucide="file-search" style="width: 20px; height: 20px;"></i>
+                            </span>
+                            <span class="btn-text">Go to OCC Search</span>
+                            <span class="btn-shine"></span>
+                        </button>
                     </div>
                 </div>
 
@@ -5103,7 +5110,7 @@ USER_CONTEXT.isTSMSEViewer = (DEV_USER_PROFILE.role === 'TSM_SE_Viewer');
 
             const url = siteUrl +
                 "/_api/web/lists/getbytitle('" + accessListTitle + "')/items" +
-                "?$select=UserEmailID,Role&$top=5000";
+                "?$select=UserEmailID,Role,OCC_SEARCH&$top=5000";
 
             const xhr = new XMLHttpRequest();
             xhr.open('GET', url, true);
@@ -5129,6 +5136,7 @@ USER_CONTEXT.isTSMManager = (USER_CONTEXT.role === 'TSM Manager');
 USER_CONTEXT.isTSMSEViewer = (USER_CONTEXT.role === 'TSM_SE_Viewer');
 USER_CONTEXT.isPsdAdmin = (USER_CONTEXT.role === 'PSD_Admin');
 USER_CONTEXT.isPsdAgent = (USER_CONTEXT.role === 'PSD_Agent');
+USER_CONTEXT.occSearchEnabled = parseAccessControlYesNo(accessRecord.OCC_SEARCH);
 USER_CONTEXT.isActive = true;
 
                         localStorage.setItem('sm_user_email', userEmail);
@@ -5204,6 +5212,7 @@ USER_CONTEXT.isAM = false;
 USER_CONTEXT.isAD = false;
 USER_CONTEXT.isReadOnly = false;
 USER_CONTEXT.isTSMManager = false;
+USER_CONTEXT.occSearchEnabled = false;
 USER_CONTEXT.isActive = true;
 
                     localStorage.setItem('sm_user_email', USER_CONTEXT.userEmail);
@@ -5217,6 +5226,7 @@ USER_CONTEXT.isActive = true;
                     console.log('[✗] User not found as LM/SM:', userName);
                     USER_CONTEXT.role = 'none';
                     USER_CONTEXT.isActive = false;
+                    USER_CONTEXT.occSearchEnabled = false;
                     callback(false);
                 }
             } catch (err) {
@@ -5400,6 +5410,17 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 searchBtn.disabled = false; // ✅ ALWAYS ENABLED
                 searchBtn.onclick = function() {
                     showAccountSearch();
+                };
+            }
+
+            // ===== OCC SEARCH BUTTON (Access_Control.OCC_SEARCH = Yes) =====
+            const occBtn = document.getElementById('goToOccSearch');
+            if (occBtn) {
+                var occEnabled = parseAccessControlYesNo(USER_CONTEXT.occSearchEnabled) || USER_CONTEXT.occSearchEnabled === true;
+                occBtn.style.display = occEnabled ? 'flex' : 'none';
+                occBtn.disabled = !occEnabled;
+                occBtn.onclick = function() {
+                    window.location.href = 'http://sharedspaces:8081/sites/OCC/SitePages/occ-search.aspx';
                 };
             }
 
@@ -8372,7 +8393,7 @@ else if (sectionId === 'psdView') {
 async function ownerFetchUserRole(email) {
             // Step 1: Check Access_Control list
             const url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                "$select=UserEmailID,Role&" +
+                "$select=UserEmailID,Role,OCC_SEARCH&" +
                 "$filter=UserEmailID eq '" + email + "'&$top=1";
             const res = await fetch(url, {
                 headers: { 'Accept': 'application/json;odata=verbose' },
@@ -8381,7 +8402,7 @@ async function ownerFetchUserRole(email) {
             if (res.ok) {
                 const data = await res.json();
                 const results = data.d.results;
-                if (results.length > 0) return { role: results[0].Role, name: null };
+                if (results.length > 0) return { role: results[0].Role, name: null, occSearch: results[0].OCC_SEARCH };
             }
 
             // Step 2: Get their display name from the main SP list directly
@@ -8470,6 +8491,7 @@ async function ownerFetchUserRole(email) {
             USER_CONTEXT.isSM         = role === 'Service Manager';
             USER_CONTEXT.isReadOnly   = role === 'Read Only';
             USER_CONTEXT.isTSMManager = role === 'TSM Manager';
+            USER_CONTEXT.occSearchEnabled = result.occSearch ? parseAccessControlYesNo(result.occSearch) : false;
             window.USER_CONTEXT       = USER_CONTEXT;
 
             document.getElementById('ownerViewAsPanel').style.display = 'none';
@@ -10196,7 +10218,7 @@ async function ownerFetchUserRole(email) {
         // ─── COMING SOON VIEWS ──────────────────────────────────────────────
         var ALL_VIEW_IDS = ['dashboardContent', 'landingPage', 'customerServiceView',
             'reviewRequestView', 'transferRequestView', 'sdReviewTransferView',
-            'amAdDashboard', 'amTransferRequestsView',
+            'amAdDashboard', 'amTransferRequestsView', 'amMyRequestsView', 'amRequestDetailView',
             'createRequestView', 'accountSearchView', 'comingSoonView', 'portalAnalyticsView',
             'editRequestView', 'executiveHubView', 'contactUsView', 'newsletterView'
         ];
