@@ -239,7 +239,8 @@ body[data-theme="dark"] .status-dot,body[data-theme="magenta-dark"] .status-dot{
 .chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;box-shadow:var(--cs)}
 .chart-title{font-size:.8rem;font-weight:700;color:var(--t2);margin-bottom:.65rem;display:flex;align-items:center;gap:.35rem;justify-content:space-between;}
 .chart-title svg{width:16px;height:16px;stroke:var(--acc);fill:none;stroke-width:2;flex-shrink:0}
-.chart-container{position:relative;height:260px}
+.chart-container{position:relative;height:300px;padding-top:10px}
+.ppt-charts-grid .chart-container{height:340px}
 .table-section{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--cs);}
 .table-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.65rem;margin-bottom:.85rem;}
 .table-title{font-size:.9rem;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:.35rem;margin:0!important}
@@ -394,16 +395,41 @@ body[data-theme="dark"] .badge-warning,body[data-theme="magenta-dark"] .badge-wa
 .timeline-step.pending .timeline-step-title{color:var(--amber)}
 .timeline-step.rejected .timeline-step-title{color:var(--red)}
 .timeline-step-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
-.lm-revenue{margin-top:.45rem;padding-top:.45rem;border-top:1px solid var(--border)}
-.lm-revenue-label{font-size:.62rem;font-weight:700;text-transform:uppercase;color:var(--t3);margin-bottom:.25rem}
-.lm-revenue-count{font-size:.78rem;font-weight:800;color:var(--t1);margin-bottom:.35rem}
-.lm-revenue-breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem}
-.lm-revenue-item{background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:.35rem .45rem;text-align:center}
-.lm-revenue-item-label{font-size:.58rem;font-weight:700;text-transform:uppercase;color:var(--t3)}
-.lm-revenue-item-value{font-size:.72rem;font-weight:800;color:var(--sc);margin-top:.1rem}
-.lm-revenue-item.open .lm-revenue-item-value{color:var(--amber)}
-.lm-revenue-item.approved .lm-revenue-item-value{color:var(--green)}
-.lm-revenue-item.rejected .lm-revenue-item-value{color:var(--red)}
+.lm-revenue{border-radius:8px;padding:.55rem .7rem;background:var(--grad);color:#fff;margin-bottom:.55rem;margin-top:.45rem}
+.lm-revenue-label{font-size:.65rem;text-transform:uppercase;opacity:.82;font-weight:700;margin-bottom:.15rem}
+.lm-revenue-count{font-size:1.05rem;font-weight:900;margin-bottom:.3rem}
+.lm-revenue-breakdown{display:flex;flex-direction:column;gap:.15rem}
+.lm-revenue-item{display:flex;justify-content:space-between;align-items:center}
+.lm-revenue-item-label{font-size:.66rem;opacity:.85}
+.lm-revenue-item-value{font-size:.72rem;font-weight:700}
+.lm-revenue-item-value.open-val{color:#fde68a}
+.lm-revenue-item-value.approved-val{color:#bbf7d0}
+.lm-revenue-item-value.rejected-val{color:#fecaca}
+.lm-stat-box.stat-open{border-left:3px solid var(--amber)}
+.lm-stat-box.stat-approved{border-left:3px solid var(--green)}
+.lm-stat-box.stat-rejected{border-left:3px solid var(--red)}
+.lm-progress-section{margin-top:.45rem}
+.stat-col{min-width:72px;text-align:center;padding:.35rem .5rem;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border)}
+.stat-col .stat-label{font-size:.58rem;text-transform:uppercase;color:var(--t3);font-weight:700;margin-bottom:.1rem}
+.stat-col .stat-value{font-size:.88rem;font-weight:800;color:var(--sc)}
+.stat-col.stat-open{border-color:rgba(217,119,6,.35);background:rgba(217,119,6,.08)}
+.stat-col.stat-open .stat-value{color:var(--amber)}
+.stat-col.stat-approved{border-color:rgba(22,163,74,.35);background:rgba(22,163,74,.08)}
+.stat-col.stat-approved .stat-value{color:var(--green)}
+.stat-col.stat-rejected{border-color:rgba(220,38,38,.35);background:rgba(220,38,38,.08)}
+.stat-col.stat-rejected .stat-value{color:var(--red)}
+.manager-row{align-items:stretch;gap:.65rem;padding:.85rem 1rem}
+.manager-name-col{flex:1;min-width:140px;display:flex;flex-direction:column;justify-content:center}
+.manager-name{font-size:.86rem;font-weight:800;color:var(--t1)}
+.manager-tag{font-size:.68rem;color:var(--t3);margin-top:.12rem}
+.am-tile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.85rem}
+.grid-action-cell{display:flex;gap:4px;align-items:center;justify-content:center;height:100%}
+.grid-icon-btn{width:30px;height:30px;border-radius:8px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:800;transition:all .15s}
+.grid-icon-btn.view{background:var(--grad);color:#fff}
+.grid-icon-btn.remind{background:rgba(217,119,6,.15);color:var(--amber);border:1px solid rgba(217,119,6,.35)}
+.grid-icon-btn:hover{transform:scale(1.06);box-shadow:var(--cs)}
+.ppt-key-insights{background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(14,165,233,.08));border:1px solid var(--border-s);border-left:4px solid var(--acc);border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem;font-size:.84rem;font-weight:600;color:var(--t2);line-height:1.55}
+.ppt-key-insights strong{color:var(--acc);font-weight:800}
 .nav-sub-item{padding-left:2.4rem!important;font-size:.78rem}
 .nav-sub-item .nav-icon{width:16px;height:16px}
 .nav-sub-item .nav-icon svg{width:14px;height:14px}
@@ -416,7 +442,31 @@ body[data-theme="dark"] .badge-warning,body[data-theme="magenta-dark"] .badge-wa
 .ppt-kpi-value{font-size:1.25rem;font-weight:900;color:var(--sc);margin-top:.15rem}
 .ppt-kpi-sub{font-size:.68rem;color:var(--t3);margin-top:.1rem}
 .ppt-charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-bottom:1rem}
-@media(max-width:900px){.ppt-charts-grid{grid-template-columns:1fr}}
+.ppt-dual-section{display:grid;grid-template-columns:1.4fr .9fr;gap:.85rem;margin-bottom:1rem;align-items:stretch}
+.ppt-highlights-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;box-shadow:var(--cs);display:flex;flex-direction:column;gap:.55rem}
+.ppt-highlights-title{font-size:.72rem;font-weight:800;text-transform:uppercase;color:var(--acc);letter-spacing:.06em}
+.ppt-highlights-panel p,.ppt-highlights-panel li{font-size:.78rem;color:var(--t2);line-height:1.55;margin:0}
+.ppt-highlights-panel strong{color:var(--t1)}
+.ppt-highlights-panel ul{padding-left:1.1rem;margin:.25rem 0}
+.ppt-highlights-panel .takeaway{margin-top:auto;padding-top:.65rem;border-top:1px dashed var(--border);font-size:.76rem;font-weight:600;color:var(--t1)}
+.ppt-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.65rem;margin-bottom:1rem}
+.ppt-kpi.highlight-kpi{background:linear-gradient(135deg,var(--nab),var(--bg-card));border-color:var(--nab2)}
+.ppt-kpi.highlight-kpi .ppt-kpi-value{font-size:1.45rem}
+.ppt-slide-full{grid-column:1/-1}
+.ppt-pivot-wrap{overflow-x:auto;margin-top:.5rem}
+.ppt-pivot-table{width:100%;border-collapse:collapse;font-size:.76rem}
+.ppt-pivot-table th,.ppt-pivot-table td{padding:.45rem .6rem;border:1px solid var(--border);text-align:left}
+.ppt-pivot-table th{background:var(--bg-secondary);color:var(--t1);font-weight:800;text-transform:uppercase;font-size:.65rem}
+.ppt-pivot-table tr:nth-child(even){background:var(--bg-secondary)}
+.ppt-approver-cards{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-top:.5rem}
+.ppt-approver-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;box-shadow:var(--cs)}
+.ppt-approver-card.mid{border-top:4px solid var(--acc2)}
+.ppt-approver-card.high{border-top:4px solid var(--acc)}
+.ppt-approver-card .label{font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--t3)}
+.ppt-approver-card .count{font-size:1.6rem;font-weight:900;color:var(--sc);margin:.25rem 0}
+.ppt-approver-card .value{font-size:.82rem;font-weight:700;color:var(--t2)}
+.ppt-approver-card .who{font-size:.78rem;font-weight:800;color:var(--acc);margin-top:.5rem}
+@media(max-width:900px){.ppt-charts-grid,.ppt-dual-section,.ppt-approver-cards{grid-template-columns:1fr}}
 .ppt-budget-bar{margin-top:.5rem;height:8px;background:var(--border);border-radius:99px;overflow:hidden}
 .ppt-budget-fill{height:100%;background:var(--grad);border-radius:99px;transition:width .3s}
 .ppt-budget-fill.warn{background:linear-gradient(90deg,#d97706,#dc2626)}
@@ -507,11 +557,12 @@ body[data-theme="dark"] .badge-warning,body[data-theme="magenta-dark"] .badge-wa
         <div class="nav-section-label">Overview</div>
         <div class="nav-item active" id="navDashboard" onclick="showView('dashboard',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div><div class="nav-label">Dashboard</div></div>
         <div class="nav-section-label">OCC Reports (PPT)</div>
+        <div class="nav-item nav-sub-item" id="navReportMonthly" onclick="showReport('monthly',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div><div class="nav-label">Posted Monthly View</div></div>
         <div class="nav-item nav-sub-item" id="navReportPosted" onclick="showReport('posted',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="nav-label">Posted / Approved</div></div>
         <div class="nav-item nav-sub-item" id="navReportPending" onclick="showReport('pending',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="nav-label">Pending OCCs</div></div>
         <div class="nav-item nav-sub-item" id="navReportApproval" onclick="showReport('approval',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div class="nav-label">Approval Level</div></div>
-        <div class="nav-item nav-sub-item" id="navReportHandset" onclick="showReport('handset',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div><div class="nav-label">Handset Journey</div></div>
         <div class="nav-item nav-sub-item" id="navReportSLA" onclick="showReport('sla',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="nav-label">Internal SLA</div></div>
+        <div class="nav-item nav-sub-item" id="navReportHandset" onclick="showReport('handset',this)"><div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div><div class="nav-label">Handset Journey</div></div>
       </div>
     </div>
     <div class="content">
@@ -598,6 +649,7 @@ body[data-theme="dark"] .badge-warning,body[data-theme="magenta-dark"] .badge-wa
           </div>
         </div>
         <div class="ppt-kpi-row" id="pptKpiRow"></div>
+        <div class="ppt-key-insights" id="pptKeyInsights"></div>
         <div class="ppt-charts-grid" id="pptChartsGrid"></div>
         <div id="pptExtraSection"></div>
       </div>
@@ -641,12 +693,27 @@ body[data-theme="dark"] .badge-warning,body[data-theme="magenta-dark"] .badge-wa
 
 <script>
 
-const SP_SITE = 'http://sharedspaces:8081/sites/OCC';
+const SP_SITE_DEFAULT = 'http://sharedspaces:8081/sites/OCC';
+let SP_SITE = SP_SITE_DEFAULT;
+let SP_LIST_PATH = '/sites/OCC/Lists/OCC Form1';
 const SP_LIST = 'GLK OCC Form';
-const SP_LIST_PATH = '/sites/OCC/Lists/OCC Form1';
-const SP_LIST_FALLBACKS = ['GLK OCC Form'];
+const SP_LIST_FALLBACKS = ['GLK OCC Form', 'OCC Form1', 'OCC Form'];
 const SP_ACCESS = 'OCC_ACCESS';
 const CCO_THRESHOLD = 250000;
+
+function initSpConfig(){
+  if(window._spPageContextInfo && window._spPageContextInfo.webAbsoluteUrl){
+    SP_SITE = String(window._spPageContextInfo.webAbsoluteUrl).replace(/\/$/,'');
+  } else {
+    try{
+      const m = window.location.pathname.match(/(\/sites\/[^/]+)/i);
+      if(m) SP_SITE = window.location.origin + m[1];
+    }catch(e){}
+  }
+  const sitePath = SP_SITE.replace(/^https?:\/\/[^/]+/i,'');
+  SP_LIST_PATH = sitePath + '/Lists/OCC Form1';
+}
+initSpConfig();
 
 const APPROVERS = {
   channelMarketing: { name: 'Abou Moustafa', role: 'Head of Channel Marketing', email: 'abou.moustafa@du.ae' },
@@ -1023,7 +1090,7 @@ function resolveOccList(cb){
         window._OCC_LIST_GUID = data.d.Id;
         cb(null);
       } else {
-        cb(new Error('OCC list not found — tried titles: '+SP_LIST_FALLBACKS.join(', ')+' and path '+SP_LIST_PATH));
+        cb(new Error('OCC list not found on site '+SP_SITE+' — tried: '+SP_LIST_FALLBACKS.join(', ')+'. Host this page ON the OCC SharePoint site where GLK OCC Form exists.'));
       }
     });
   }
@@ -1147,7 +1214,7 @@ function loadData(cb){
       } else {
         usingMock = false;
         ALL_ITEMS = (rows||[]).map(parseItem);
-        el('dataSourceBadge').textContent = 'Live · '+ALL_ITEMS.length+' records';
+        el('dataSourceBadge').textContent = 'Live · '+ALL_ITEMS.length+' records · '+SP_SITE.replace(/^https?:\/\/[^/]+/,'');
         el('dataSourceBadge').style.color = '';
         showMockBanner(false);
       }
@@ -1296,16 +1363,32 @@ function buildOccTileStats(items, pool){
 }
 
 function occTileHtml(name, meta, stats){
+  const openPct = stats.total ? (stats.open/stats.total*100).toFixed(0) : 0;
+  const approvedPct = stats.total ? (stats.approved/stats.total*100).toFixed(0) : 0;
   return '<div class="lm-header"><h3>'+name+'</h3><div class="lm-meta">'+meta+'</div></div>'+
-    '<div class="lm-stats-grid"><div class="lm-stat-box"><div class="lm-stat-label">OCCs</div><div class="lm-stat-value">'+stats.total+'</div></div><div class="lm-stat-box"><div class="lm-stat-label">Value</div><div class="lm-stat-value">'+fmt(stats.value)+'</div></div></div>'+
-    '<div class="lm-revenue"><div class="lm-revenue-label">Open / Closed Approved / Closed Rejected</div>'+
-    '<div class="lm-revenue-count">'+stats.open+' / '+stats.approved+' / '+stats.rejected+'</div>'+
+    '<div class="lm-stats-grid">'+
+      '<div class="lm-stat-box stat-open"><div class="lm-stat-label">Open</div><div class="lm-stat-value">'+stats.open+'</div></div>'+
+      '<div class="lm-stat-box stat-approved"><div class="lm-stat-label">Approved</div><div class="lm-stat-value">'+stats.approved+'</div></div>'+
+    '</div>'+
+    '<div class="lm-stats-grid">'+
+      '<div class="lm-stat-box"><div class="lm-stat-label">Total OCCs</div><div class="lm-stat-value">'+stats.total+'</div></div>'+
+      '<div class="lm-stat-box stat-rejected"><div class="lm-stat-label">Rejected</div><div class="lm-stat-value">'+stats.rejected+'</div></div>'+
+    '</div>'+
+    '<div class="lm-revenue"><div class="lm-revenue-label">OCC Value Breakdown</div>'+
+    '<div class="lm-revenue-count">AED '+fmt(stats.value)+' total</div>'+
     '<div class="lm-revenue-breakdown">'+
-      '<div class="lm-revenue-item open"><div class="lm-revenue-item-label">Open</div><div class="lm-revenue-item-value">'+fmt(stats.openValue)+'</div></div>'+
-      '<div class="lm-revenue-item approved"><div class="lm-revenue-item-label">Approved</div><div class="lm-revenue-item-value">'+fmt(stats.approvedValue)+'</div></div>'+
-      '<div class="lm-revenue-item rejected"><div class="lm-revenue-item-label">Rejected</div><div class="lm-revenue-item-value">'+fmt(stats.rejectedValue)+'</div></div>'+
+      '<div class="lm-revenue-item"><div class="lm-revenue-item-label">Open</div><div class="lm-revenue-item-value open-val">'+fmt(stats.openValue)+'</div></div>'+
+      '<div class="lm-revenue-item"><div class="lm-revenue-item-label">Approved</div><div class="lm-revenue-item-value approved-val">'+fmt(stats.approvedValue)+'</div></div>'+
+      '<div class="lm-revenue-item"><div class="lm-revenue-item-label">Rejected</div><div class="lm-revenue-item-value rejected-val">'+fmt(stats.rejectedValue)+'</div></div>'+
     '</div></div>'+
-    '<div class="waiver-tile-note">'+stats.contribPct+'% of current view</div>';
+    '<div class="lm-progress-section">'+
+      '<div class="lm-progress-row"><span class="lm-progress-label">Open ratio</span><span class="lm-progress-value">'+openPct+'%</span></div>'+
+      '<div class="progress-bar"><div class="progress-fill" style="width:'+openPct+'%;background:var(--amber)"></div></div>'+
+      '<div class="lm-progress-row"><span class="lm-progress-label">Approved ratio</span><span class="lm-progress-value">'+approvedPct+'%</span></div>'+
+      '<div class="progress-bar"><div class="progress-fill" style="width:'+approvedPct+'%"></div></div>'+
+      '<div class="lm-progress-row"><span class="lm-progress-label">Share of view</span><span class="lm-progress-value">'+stats.contribPct+'%</span></div>'+
+      '<div class="progress-bar"><div class="progress-fill" style="width:'+stats.contribPct+'%"></div></div>'+
+    '</div>';
 }
 
 function renderCascade(){
@@ -1429,17 +1512,14 @@ function renderAMRows(dir){
   const ams = Object.values(amMap).sort((a,b)=> b.items.reduce((s,x)=>s+x.value,0)-a.items.reduce((s,x)=>s+x.value,0));
   set('amBadge', ams.length);
   const grid = el('amGrid'); grid.innerHTML='';
+  grid.className = 'am-tile-grid';
   ams.forEach(am=>{
     const stats = buildOccTileStats(am.items, dirItems);
-    const row = document.createElement('div');
-    row.className = 'manager-row'+(selAMTile===am.name?' selected':'');
-    row.innerHTML = '<div class="manager-row-main"><div class="manager-row-name">'+am.name+'</div><div class="manager-row-meta">Account Manager · Requestor</div></div>'+
-      '<div class="manager-row-stats"><div class="manager-row-stat"><div class="manager-row-stat-val">'+stats.total+'</div><div class="manager-row-stat-lbl">OCCs</div></div><div class="manager-row-stat"><div class="manager-row-stat-val">'+fmt(stats.value)+'</div><div class="manager-row-stat-lbl">Value</div></div>'+
-      '<div class="manager-row-stat"><div class="manager-row-stat-val" style="color:var(--amber)">'+stats.open+'</div><div class="manager-row-stat-lbl">Open</div></div>'+
-      '<div class="manager-row-stat"><div class="manager-row-stat-val" style="color:var(--green)">'+stats.approved+'</div><div class="manager-row-stat-lbl">Approved</div></div>'+
-      '<div class="manager-row-stat"><div class="manager-row-stat-val" style="color:var(--red)">'+stats.rejected+'</div><div class="manager-row-stat-lbl">Rejected</div></div></div>';
-    row.onclick = function(){ selectAMTile(am.name); };
-    grid.appendChild(row);
+    const tile = document.createElement('div');
+    tile.className = 'lm-tile'+(selAMTile===am.name?' selected':'');
+    tile.innerHTML = occTileHtml(am.name, 'Account Manager · Requestor', stats);
+    tile.onclick = function(){ selectAMTile(am.name); };
+    grid.appendChild(tile);
   });
 }
 
@@ -1482,7 +1562,7 @@ function showMockBanner(show){
   b = document.createElement('div');
   b.id = 'mockDataBanner';
   b.style.cssText = 'background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.35);color:#b45309;padding:.65rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.82rem;font-weight:600;line-height:1.45';
-  b.innerHTML = 'Showing <strong>15 mock records</strong> only — SharePoint did not respond. Deploy this page inside the OCC SharePoint site (Content Editor) so it loads all 1000+ live records with your credentials.';
+  b.innerHTML = 'Showing <strong>15 mock records</strong> — SharePoint list not found on <strong>'+SP_SITE+'</strong>. Paste this page inside the <strong>OCC site</strong> (Content Editor web part) at <code>/sites/OCC</code> where <strong>GLK OCC Form</strong> exists.';
   const dash = el('viewDashboard');
   if(dash && dash.firstChild) dash.insertBefore(b, dash.firstChild);
 }
@@ -1514,39 +1594,37 @@ let _formViewItemId=null;
 function occEnhanceCol(col){ if(col.field&&OCC_SET_FIELDS.has(col.field)) col.filter=OccSetColumnFilter; else if(col.type==='numericColumn') col.filter='agNumberColumnFilter'; return col; }
 function gridColDefs(){
   return [
-    { headerName:'Reminder', width:92, minWidth:92, maxWidth:100, pinned:'left', suppressSizeToFit:true, cellRenderer:p=>{
-      const d=p.data; if(!d||d.portalStatus!=='Open') return '';
-      return '<button type="button" class="action-btn primary" onclick="sendReminder(\''+d.id+'\')">✉ Remind</button>';
+    { headerName:'Actions', field:'_actions', width:88, minWidth:88, maxWidth:88, suppressSizeToFit:true, sortable:false, filter:false, pinned:null, cellRenderer:p=>{
+      const d=p.data; if(!d) return '';
+      let html = '<div class="grid-action-cell"><button type="button" class="grid-icon-btn view" title="View OCC" onclick="openFormView(\''+d.id+'\')">👁</button>';
+      if(d.portalStatus==='Open') html += '<button type="button" class="grid-icon-btn remind" title="Send reminder" onclick="sendReminder(\''+d.id+'\')">✉</button>';
+      return html+'</div>';
     }},
-    { headerName:'View', width:72, minWidth:72, maxWidth:80, pinned:'left', suppressSizeToFit:true, cellRenderer:p=>{ const d=p.data; if(!d)return ''; return '<button type="button" class="action-btn primary" onclick="openFormView(\''+d.id+'\')">View</button>'; }},
-    { field:'ref', headerName:'OCC Ref', minWidth:120, flex:1 },
-    { field:'accountCode', headerName:'Account', minWidth:100, flex:1 },
-    { field:'accountName', headerName:'Account Name', minWidth:140, flex:1.2 },
-    { field:'requestor', headerName:'Requestor', minWidth:130, flex:1.1 },
-    { field:'vertical', headerName:'Vertical', minWidth:100, flex:0.8 },
-    { field:'value', headerName:'Value', minWidth:105, flex:0.9, valueFormatter:p=>'AED '+fmt(p.value) },
-    { field:'portalStatus', headerName:'Portal Status', minWidth:125, flex:1, cellRenderer:p=>'<span class="status-badge '+badgeClass(p.value)+'">'+p.value+'</span>' },
-    { field:'stuckAt', headerName:'Stuck At', minWidth:130, flex:1 },
-    { field:'daysRaised', headerName:'Days Raised', minWidth:95, flex:0.7 },
-    { field:'daysStuck', headerName:'Days Stuck', minWidth:95, flex:0.7 },
-    { field:'reason', headerName:'Reason', minWidth:120, flex:1 },
-    { field:'am', headerName:'Sales Director', minWidth:120, flex:1 },
-    { field:'handset', headerName:'Handset', minWidth:90, flex:0.7 },
-    { field:'handsets', headerName:'# Handsets', minWidth:95, flex:0.7 },
-    { field:'posted', headerName:'Posted', minWidth:100, flex:0.8, valueFormatter:p=>fmtDate(p.value) },
-    { field:'created', headerName:'Created', minWidth:100, flex:0.8, valueFormatter:p=>fmtDate(p.value) },
-    { field:'subject', headerName:'Subject', minWidth:150, flex:1.3 }
+    { field:'ref', headerName:'OCC Ref', width:130, minWidth:120 },
+    { field:'accountCode', headerName:'Account', width:105, minWidth:95 },
+    { field:'accountName', headerName:'Account Name', width:155, minWidth:130 },
+    { field:'requestor', headerName:'Requestor', width:140, minWidth:120 },
+    { field:'vertical', headerName:'Vertical', width:100, minWidth:90 },
+    { field:'value', headerName:'Value (AED)', width:115, minWidth:105, valueFormatter:p=>'AED '+fmt(p.value) },
+    { field:'portalStatus', headerName:'Status', width:130, minWidth:120, cellRenderer:p=>'<span class="status-badge '+badgeClass(p.value)+'">'+p.value+'</span>' },
+    { field:'stuckAt', headerName:'Stuck At', width:140, minWidth:120 },
+    { field:'daysRaised', headerName:'Days Raised', width:100, minWidth:90 },
+    { field:'daysStuck', headerName:'Days Stuck', width:95, minWidth:85 },
+    { field:'reason', headerName:'Reason', width:130, minWidth:110 },
+    { field:'am', headerName:'Sales Director', width:130, minWidth:110 },
+    { field:'handset', headerName:'Handset', width:85, minWidth:75 },
+    { field:'created', headerName:'Created', width:100, minWidth:90, valueFormatter:p=>fmtDate(p.value) },
+    { field:'subject', headerName:'Subject', width:160, minWidth:130 }
   ].map(occEnhanceCol);
 }
 
 function initGrid(){
   const opts = {
     columnDefs:gridColDefs(), rowData:getViewItems(),
-    defaultColDef:{sortable:true,filter:true,resizable:true,minWidth:110,wrapHeaderText:true,autoHeaderHeight:true,suppressSizeToFit:false},
+    defaultColDef:{sortable:true,filter:true,resizable:true,minWidth:90,wrapHeaderText:true,autoHeaderHeight:true},
     animateRows:true, pagination:true, paginationPageSize:100, paginationPageSizeSelector:[50,100,250,500],
-    rowHeight:44, headerHeight:56,
-    onGridReady:function(e){ e.api.sizeColumnsToFit(); },
-    onFirstDataRendered:function(e){ e.api.sizeColumnsToFit(); }
+    rowHeight:48, headerHeight:52, suppressColumnVirtualisation:false,
+    onGridReady:function(e){ e.api.sizeColumnsToFit({columnLimits:[{colId:'_actions',maxWidth:88}]}); }
   };
   const e = el('myGrid');
   if(GRID_API) GRID_API.destroy();
@@ -1957,34 +2035,85 @@ function occCenterPlugin(mainText, subText){
   }};
 }
 
+function occDrawChartLabel(ctx, text, x, y, opts){
+  opts = opts || {};
+  const dark = (document.body.getAttribute('data-theme')||'').includes('dark');
+  ctx.save();
+  ctx.font = (opts.bold===false?'600':'bold')+' '+(opts.size||11)+'px Inter';
+  const m = ctx.measureText(text);
+  const pad = 4;
+  const w = m.width + pad*2;
+  const h = (opts.size||11) + 8;
+  const align = opts.align || 'center';
+  const lx = align==='center' ? x-w/2 : align==='left' ? x : x-w;
+  const ly = y - h + 2;
+  ctx.fillStyle = dark ? 'rgba(13,22,48,.94)' : 'rgba(255,255,255,.94)';
+  ctx.strokeStyle = dark ? 'rgba(96,165,250,.35)' : 'rgba(37,99,235,.25)';
+  ctx.lineWidth = 1;
+  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(lx, ly, w, h, 4); ctx.fill(); ctx.stroke(); }
+  else { ctx.fillRect(lx, ly, w, h); }
+  ctx.fillStyle = opts.color || getChartColors().text;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, ly + h/2);
+  ctx.restore();
+}
+
+function occChartLayoutPad(){ return { layout:{ padding:{ top:28, right:12, left:4, bottom:4 } } }; }
+
+function buildPptKeyInsights(items, reportId){
+  if(!items.length) return 'Key Insight: No OCC records match the current filters for this report view.';
+  const totalValue = items.reduce(function(s,i){ return s+i.value; }, 0);
+  const topReason = (function(){
+    const m={}; items.forEach(i=>{ m[i.reason]=(m[i.reason]||0)+i.value; });
+    return Object.keys(m).sort(function(a,b){ return m[b]-m[a]; })[0]||'—';
+  })();
+  const topVert = (function(){
+    const m={}; items.forEach(i=>{ m[i.vertical]=(m[i.vertical]||0)+i.value; });
+    return Object.keys(m).sort(function(a,b){ return m[b]-m[a]; })[0]||'—';
+  })();
+  if(reportId==='posted') return 'Key Insight: <strong>'+items.length+' approved OCCs</strong> totalling <strong>AED '+fmt(totalValue)+'</strong>. Highest value driver: <strong>'+topReason+'</strong> in <strong>'+topVert+'</strong> vertical.';
+  if(reportId==='pending') return 'Key Insight: <strong>'+items.length+' open OCCs</strong> pending approval worth <strong>AED '+fmt(totalValue)+'</strong>. Most common reason: <strong>'+topReason+'</strong> · Top vertical: <strong>'+topVert+'</strong>.';
+  if(reportId==='approval'){
+    const high = items.filter(i=>i.value>=CCO_THRESHOLD);
+    return 'Key Insight: <strong>'+high.length+' high-value OCCs (≥250K)</strong> requiring CCCO path vs <strong>'+(items.length-high.length)+' mid-range</strong> (&lt;250K). Combined value: <strong>AED '+fmt(totalValue)+'</strong>.';
+  }
+  if(reportId==='handset'){
+    const hs = items.reduce(function(s,i){ return s+num(i.handsets); }, 0);
+    const appr = items.filter(i=>i.portalStatus==='Closed Approved').reduce(function(s,i){ return s+i.value; }, 0);
+    return 'Key Insight: <strong>'+items.length+' handset waivers</strong> ('+hs+' devices) · Approved value <strong>AED '+fmt(appr)+'</strong> of 1M AED budget ('+(appr/HANDSET_BUDGET*100).toFixed(1)+'% used).';
+  }
+  if(reportId==='sla'){
+    const b={'0-9':0,'10-29':0,'30+':0};
+    items.forEach(function(i){ const d=i.daysRaised||0; if(d<=9)b['0-9']++; else if(d<=29)b['10-29']++; else b['30+']++; });
+    return 'Key Insight: <strong>'+items.length+' closed OCCs</strong> analysed for SLA · <strong>'+b['0-9']+'</strong> closed in 0–9 days · <strong>'+b['30+']+'</strong> took 30+ days. Total value: <strong>AED '+fmt(totalValue)+'</strong>.';
+  }
+  return 'Key Insight: '+items.length+' OCCs · AED '+fmt(totalValue)+' total value.';
+}
+
 function occBarValuePlugin(opts){
   opts = opts || {};
   return { id:'occBarVals'+Math.random(), afterDatasetsDraw:function(chart){
-    const ctx=chart.ctx; const c=getChartColors(); const dsCount=chart.data.datasets.length;
-    ctx.save(); ctx.font='600 10px Inter';
+    const dsCount = chart.data.datasets.length;
     chart.data.datasets.forEach(function(ds, di){
       if(opts.datasetIndex!==undefined && di!==opts.datasetIndex) return;
       if(opts.onlyLastDataset && di !== dsCount-1) return;
-      const meta=chart.getDatasetMeta(di); if(meta.hidden) return;
+      const meta = chart.getDatasetMeta(di); if(meta.hidden) return;
+      const isHorizontal = chart.options.indexAxis==='y';
       meta.data.forEach(function(bar, i){
-        const val=ds.data[i]; if(val===null||val===undefined||val===0) return;
-        const label = typeof val==='number' && Math.abs(val)>=1000 ? fmt(val) : String(val);
-        const isHorizontal = chart.options.indexAxis==='y';
-        ctx.fillStyle=c.text;
+        const val = ds.data[i]; if(val===null||val===undefined) return;
+        const label = typeof val==='number' ? (Math.abs(val)>=1000 ? fmt(val) : (Number.isInteger(val)?String(val):val.toFixed(1))) : String(val);
         if(isHorizontal){
           const w = bar.width||0;
-          if(w < 36) return;
-          ctx.textAlign='left'; ctx.textBaseline='middle';
-          ctx.fillText(label, bar.x - w + 6, bar.y);
+          if(w < 28) return;
+          occDrawChartLabel(chart.ctx, label, bar.x - w + 8, bar.y, {align:'left', color:'#fff', size:10});
         } else {
           const h = bar.height||0;
-          if(h < 18) return;
-          ctx.textAlign='center'; ctx.textBaseline='bottom';
-          ctx.fillText(label, bar.x, bar.y - 4);
+          if(h < 12) return;
+          occDrawChartLabel(chart.ctx, label, bar.x, bar.y - 8, {align:'center'});
         }
       });
     });
-    ctx.restore();
   }};
 }
 
@@ -2060,10 +2189,10 @@ function renderReasonChart(){
   const map = {};
   base.forEach(i=>{ map[i.reason]=(map[i.reason]||{count:0,value:0}); map[i.reason].count++; map[i.reason].value+=i.value; });
   const labels = Object.keys(map); const c = getChartColors();
-  CHARTS.reason = new Chart(el('chartReason'), { type:'bar', plugins:[occBarValuePlugin({onlyLastDataset:true})], data:{ labels, datasets:[
+  CHARTS.reason = new Chart(el('chartReason'), Object.assign({ type:'bar', plugins:[occBarValuePlugin({datasetIndex:0}), occBarValuePlugin({datasetIndex:1})], data:{ labels, datasets:[
     { label:'Value (AED)', data:labels.map(l=>map[l].value), backgroundColor:c.acc, borderRadius:8, yAxisID:'y' },
     { label:'Count', data:labels.map(l=>map[l].count), backgroundColor:c.acc2, borderRadius:8, yAxisID:'y1' }
-  ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:c.text,usePointStyle:true}}}, scales:{ x:{ticks:{color:c.text},grid:{display:false}}, y:{position:'left',ticks:{color:c.text}}, y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:c.text}} } } });
+  ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:c.text,usePointStyle:true}}}, scales:{ x:{ticks:{color:c.text},grid:{display:false}}, y:{position:'left',ticks:{color:c.text},grace:'12%'}, y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:c.text},grace:'12%'} } } }, occChartLayoutPad()));
 }
 
 function renderVerticalChart(){
@@ -2125,29 +2254,34 @@ function renderTop10Chart(){
   CHARTS.top10 = new Chart(el('chartTop10'), { type:'bar', plugins:[occBarValuePlugin()], data:{ labels:top.map(i=>i.ref), datasets:[{ label:'Value (AED)', data:top.map(i=>i.value), backgroundColor:c.acc, borderRadius:8 }] }, options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:c.text},grid:{color:c.grid}},y:{ticks:{color:c.text},grid:{display:false}} } } });
 }
 
-let currentReportId='posted';
+
+let currentReportId='monthly';
 const PPT_REPORTS={
-  posted:{ title:'Posted / Approved OCCs', sub:'Closed approved OCCs — by Reason & Vertical (matches PPT slide 1)' },
-  pending:{ title:'Pending OCCs', sub:'Open / in-workflow OCCs — by Reason & Vertical (matches PPT slide 2)' },
-  approval:{ title:'OCCs by Approval Level', sub:'Mid-range (<250K) vs High-value (≥250K / CCCO) — matches PPT slide 3' },
-  handset:{ title:'Handset Journey', sub:'Handset waivers by Vertical & Account Manager — 1M AED budget tracking (matches PPT slide 4)' },
-  sla:{ title:'Internal SLA', sub:'Days from Created to completion — 0–9 / 10–29 / 30+ buckets (matches PPT slide 5)' }
+  monthly:{ title:'OCCs Posted / Approved — Monthly View', sub:'Slide 3 · Monthly trend with Key Insights (oc_for.pptx)' },
+  posted:{ title:'Posted / Approved OCCs for 2026', sub:'Slide 4 · OCC Value & Count Per Reason & Vertical + Highlights' },
+  pending:{ title:'Pending OCCs for 2026', sub:'Slide 5 & 9 · Pending charts + approval-level breakdown table' },
+  approval:{ title:'OCCs Category as per Approval Level', sub:'Slide 6 · Mid-range (<250K) vs High-value (≥250K) · Abou & Marwan / Diego' },
+  sla:{ title:'OCCs Internal SLA', sub:'Slide 7 · 0–9 / 10–29 / 30+ days donut with SLA Compliance Summary' },
+  handset:{ title:'OCC — Handset Journey', sub:'Slide 8 · Per Vertical & Per Account Manager · 1M budget / 900K alert' }
 };
 const HANDSET_BUDGET = 1000000;
 const HANDSET_BUDGET_WARN = 900000;
 let PPT_CHARTS={};
 
+function fmtPpt(v){ return num(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
 function populatePptYearFilter(){
   const sel = el('pptYearFilter');
   if(!sel) return;
   const years = [...new Set(SCOPED.map(i=>i.year).filter(y=>y&&y!=='—'))].sort().reverse();
-  const cur = sel.value || 'all';
-  sel.innerHTML = '<option value="all">All Years</option>' + years.map(y=>'<option value="'+y+'">'+y+'</option>').join('');
-  sel.value = years.includes(cur) ? cur : 'all';
+  const cur = sel.value || String(new Date().getFullYear());
+  sel.innerHTML = years.map(y=>'<option value="'+y+'">'+y+'</option>').join('');
+  if(!years.length) sel.innerHTML = '<option value="'+new Date().getFullYear()+'">'+new Date().getFullYear()+'</option>';
+  sel.value = years.includes(cur) ? cur : (years[0]||String(new Date().getFullYear()));
 }
 
 function getPptBaseItems(){
-  const year = el('pptYearFilter') ? el('pptYearFilter').value : 'all';
+  const year = el('pptYearFilter') ? el('pptYearFilter').value : String(new Date().getFullYear());
   let items = SCOPED.slice();
   if(year && year !== 'all') items = items.filter(i=>i.year===year);
   return items;
@@ -2155,7 +2289,7 @@ function getPptBaseItems(){
 
 function getReportItems(reportId){
   const base = getPptBaseItems();
-  if(reportId==='posted') return base.filter(i=>i.portalStatus==='Closed Approved');
+  if(reportId==='monthly' || reportId==='posted') return base.filter(i=>i.portalStatus==='Closed Approved');
   if(reportId==='pending') return base.filter(i=>i.portalStatus==='Open');
   if(reportId==='approval') return base;
   if(reportId==='handset') return base.filter(isHandsetItem);
@@ -2167,20 +2301,124 @@ function destroyPptCharts(){
   Object.keys(PPT_CHARTS).forEach(function(k){ if(PPT_CHARTS[k]){ PPT_CHARTS[k].destroy(); delete PPT_CHARTS[k]; } });
 }
 
-function pptKpiCard(label, value, sub){
-  return '<div class="ppt-kpi"><div class="ppt-kpi-label">'+label+'</div><div class="ppt-kpi-value">'+value+'</div>'+(sub?'<div class="ppt-kpi-sub">'+sub+'</div>':'')+'</div>';
+function pptKpiCard(label, value, sub, highlight){
+  return '<div class="ppt-kpi'+(highlight?' highlight-kpi':'')+'"><div class="ppt-kpi-label">'+label+'</div><div class="ppt-kpi-value">'+value+'</div>'+(sub?'<div class="ppt-kpi-sub">'+sub+'</div>':'')+'</div>';
 }
 
-function pptBarChart(canvasId, labels, values, color){
-  const c = getChartColors();
-  const ctx = el(canvasId);
-  if(!ctx) return;
-  if(PPT_CHARTS[canvasId]){ PPT_CHARTS[canvasId].destroy(); delete PPT_CHARTS[canvasId]; }
-  PPT_CHARTS[canvasId] = new Chart(ctx, {
-    type:'bar', plugins:[occBarValuePlugin({onlyLastDataset:true})],
-    data:{ labels:labels, datasets:[{ label:'Value', data:values, backgroundColor:color||c.acc, borderRadius:8 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:c.text,maxRotation:45,minRotation:0},grid:{display:false}}, y:{ticks:{color:c.text},grid:{color:c.grid}} } }
+function occBuildGroupMap(items, field){
+  const map = {};
+  items.forEach(function(i){
+    const k = i[field] || '—';
+    if(!map[k]) map[k] = { c:0, v:0, hs:0 };
+    map[k].c++; map[k].v += i.value;
+    map[k].hs += num(i.handsets);
   });
+  return map;
+}
+
+function occTopN(map, n, by){
+  return Object.keys(map).sort(function(a,b){ return map[b][by||'v'] - map[a][by||'v']; }).slice(0,n);
+}
+
+function buildReasonHighlights(items, reasonMap, isPending){
+  const totalV = items.reduce(function(s,i){ return s+i.value; }, 0);
+  const byVal = occTopN(reasonMap, reasonMap.length, 'v');
+  const top3 = byVal.slice(0,3);
+  const top3V = top3.reduce(function(s,k){ return s+reasonMap[k].v; }, 0);
+  const pct = totalV ? Math.round(top3V/totalV*100) : 0;
+  const byCnt = occTopN(reasonMap, reasonMap.length, 'c');
+  const topCnt = byCnt[0] || '—';
+  const topCntN = topCnt !== '—' ? reasonMap[topCnt].c : 0;
+  let html = '<div class="ppt-highlights-title">Highlights</div><ul>';
+  html += '<li>Top 3 categories (<strong>'+top3.join(', ')+'</strong>) account for over <strong>'+pct+'%</strong> of total OCC value'+(isPending?' in the pending cases':'')+'.</li>';
+  html += '<li><strong>'+topCnt+'</strong> has the highest case count (<strong>'+topCntN+'</strong>), indicating frequent occurrences.</li>';
+  html += '</ul>';
+  return html;
+}
+
+function buildVerticalHighlights(items, vertMap, isPending){
+  const byCnt = occTopN(vertMap, vertMap.length, 'c');
+  const byVal = occTopN(vertMap, vertMap.length, 'v');
+  const highest = byCnt[0] || '—';
+  const moderate = byCnt.slice(1,5).filter(function(v){ return vertMap[v].c > 0; });
+  const minimal = byCnt.filter(function(v){ return vertMap[v].c <= 1; });
+  const topValVerts = byVal.slice(0,3);
+  let html = '<div class="ppt-highlights-title">Highlights</div><ul>';
+  html += '<li><strong>'+highest+'</strong> has the highest number of discounts/waivers issued.</li>';
+  if(moderate.length) html += '<li><strong>'+moderate.join(', ')+'</strong> show moderate numbers, indicating fewer waivers.</li>';
+  if(minimal.length) html += '<li><strong>'+minimal.slice(0,3).join(', ')+'</strong> have minimal instances of discounts/waivers.</li>';
+  html += '</ul><div class="takeaway"><strong>Overall Takeaway:</strong> Verticals ('+topValVerts.join(', ')+') account for the majority of discounts/waivers'+(isPending?' OCC value':'')+'.</div>';
+  return html;
+}
+
+function buildMonthlyKeyInsight(items){
+  const monthMap = {};
+  items.forEach(function(i){
+    const d = i.posted || i.created;
+    if(!d) return;
+    const dt = new Date(d);
+    if(isNaN(dt)) return;
+    const k = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+    if(!monthMap[k]) monthMap[k] = { v:0, items:[] };
+    monthMap[k].v += i.value;
+    monthMap[k].items.push(i);
+  });
+  const months = Object.keys(monthMap).sort();
+  if(!months.length) return 'Key Insights: No dated OCC records for monthly trend.';
+  let spikeMonth = months[0], spikeVal = 0;
+  months.forEach(function(m){ if(monthMap[m].v > spikeVal){ spikeVal = monthMap[m].v; spikeMonth = m; } });
+  const top = monthMap[spikeMonth].items.sort(function(a,b){ return b.value-a.value; })[0];
+  const monthLabel = new Date(spikeMonth+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'});
+  if(top && spikeVal > 0){
+    return 'Key Insights: Spike in <strong>'+monthLabel+'</strong> is due to <strong>'+(top.accountName||top.ref)+'</strong> OCC which values <strong>AED '+fmtPpt(top.value)+'</strong>.';
+  }
+  return 'Key Insights: Monthly OCC value peaks in <strong>'+monthLabel+'</strong> at <strong>AED '+fmtPpt(spikeVal)+'</strong>.';
+}
+
+function buildPendingPivotTable(items){
+  const stages = {};
+  items.forEach(function(i){
+    const stage = i.stuckAt || 'Unknown';
+    if(!stages[stage]) stages[stage] = { count:0, value:0, verts:{} };
+    stages[stage].count++;
+    stages[stage].value += i.value;
+    const v = i.vertical || '—';
+    if(!stages[stage].verts[v]) stages[stage].verts[v] = { count:0, value:0 };
+    stages[stage].verts[v].count++;
+    stages[stage].verts[v].value += i.value;
+  });
+  let html = '<div class="chart-card ppt-slide-full"><div class="chart-title">Pending OCCs — Breakdown by Approval Level (YTD)</div>';
+  html += '<div class="ppt-pivot-wrap"><table class="ppt-pivot-table"><thead><tr><th>Approval Level</th><th>Count</th><th>Sum of OCC Value (AED)</th><th>Vertical Breakdown</th></tr></thead><tbody>';
+  Object.keys(stages).sort(function(a,b){ return stages[b].value - stages[a].value; }).forEach(function(stage){
+    const s = stages[stage];
+    const vertLines = Object.keys(s.verts).sort().map(function(v){
+      return v+': '+s.verts[v].count+' ('+fmtPpt(s.verts[v].value)+')';
+    }).join('<br>');
+    html += '<tr><td><strong>'+stage+'</strong></td><td>'+s.count+'</td><td>'+fmtPpt(s.value)+'</td><td style="font-size:.72rem">'+vertLines+'</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
+function occDonutPercentPlugin(){
+  return { id:'occDonutPct'+Math.random(), afterDatasetsDraw:function(chart){
+    const ctx = chart.ctx;
+    const data = chart.data.datasets[0].data;
+    const total = data.reduce(function(a,b){ return a+b; }, 0);
+    if(!total) return;
+    const meta = chart.getDatasetMeta(0);
+    meta.data.forEach(function(arc, i){
+      const val = data[i];
+      const pct = Math.round(val/total*100);
+      const pos = arc.tooltipPosition();
+      ctx.save();
+      ctx.font='bold 14px Inter';
+      ctx.fillStyle='#fff';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(pct+'%', pos.x, pos.y);
+      ctx.restore();
+    });
+  }};
 }
 
 function pptGroupedBar(canvasId, labels, ds1, ds2, l1, l2){
@@ -2188,26 +2426,86 @@ function pptGroupedBar(canvasId, labels, ds1, ds2, l1, l2){
   const ctx = el(canvasId);
   if(!ctx) return;
   if(PPT_CHARTS[canvasId]){ PPT_CHARTS[canvasId].destroy(); delete PPT_CHARTS[canvasId]; }
-  PPT_CHARTS[canvasId] = new Chart(ctx, {
-    type:'bar', plugins:[occBarValuePlugin({datasetIndex:1})],
+  PPT_CHARTS[canvasId] = new Chart(ctx, Object.assign({
+    type:'bar', plugins:[occBarValuePlugin({datasetIndex:0}), occBarValuePlugin({datasetIndex:1})],
     data:{ labels:labels, datasets:[
-      { label:l1||'Count', data:ds1, backgroundColor:c.acc2, borderRadius:8, yAxisID:'y' },
-      { label:l2||'Value', data:ds2, backgroundColor:c.acc, borderRadius:8, yAxisID:'y1' }
+      { label:l1||'Count', data:ds1, backgroundColor:c.acc2, borderRadius:6, yAxisID:'y', barPercentage:.72 },
+      { label:l2||'Value (AED)', data:ds2, backgroundColor:c.acc, borderRadius:6, yAxisID:'y1', barPercentage:.72 }
     ]},
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:c.text,usePointStyle:true}}}, scales:{ x:{ticks:{color:c.text,maxRotation:45}}, y:{position:'left',ticks:{color:c.text},grid:{color:c.grid}}, y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:c.text}} } }
-  });
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'top',labels:{color:c.text,usePointStyle:true,font:{weight:'700'}}}}, scales:{ x:{ticks:{color:c.text,maxRotation:35,minRotation:0},grid:{display:false}}, y:{position:'left',title:{display:true,text:'Count',color:c.text,font:{weight:'700'}},ticks:{color:c.text},grid:{color:c.grid},grace:'15%'}, y1:{position:'right',title:{display:true,text:'Value (AED)',color:c.text,font:{weight:'700'}},grid:{drawOnChartArea:false},ticks:{color:c.text,callback:function(v){return fmt(v);}},grace:'15%'} } }
+  }, occChartLayoutPad()));
 }
 
-function pptDonut(canvasId, labels, data, centerMain, centerSub){
+function pptLineChart(canvasId, labels, values, counts){
   const c = getChartColors();
   const ctx = el(canvasId);
   if(!ctx) return;
   if(PPT_CHARTS[canvasId]){ PPT_CHARTS[canvasId].destroy(); delete PPT_CHARTS[canvasId]; }
-  PPT_CHARTS[canvasId] = new Chart(ctx, {
-    type:'doughnut', plugins:[occCenterPlugin(centerMain, centerSub)],
-    data:{ labels:labels, datasets:[{ data:data, backgroundColor:[c.green,c.amber,c.red,c.acc,c.purple], borderWidth:4, borderColor:'var(--bg-card)', hoverOffset:10 }] },
-    options:{ responsive:true, maintainAspectRatio:false, cutout:'58%', plugins:{ legend:{ position:'bottom', labels:{color:c.text,usePointStyle:true} } } }
-  });
+  PPT_CHARTS[canvasId] = new Chart(ctx, Object.assign({
+    type:'line',
+    plugins:[{ id:'lineVals', afterDatasetsDraw:function(chart){
+      chart.data.datasets.forEach(function(ds, di){
+        const meta = chart.getDatasetMeta(di);
+        meta.data.forEach(function(pt, i){
+          const val = ds.data[i];
+          if(val===null||val===undefined) return;
+          const label = di===0 ? fmt(val) : String(val);
+          occDrawChartLabel(chart.ctx, label, pt.x, pt.y - (di===0?14:-14), {align:'center', size:10});
+        });
+      });
+    }}],
+    data:{ labels:labels, datasets:[
+      { label:'OCC Value (AED)', data:values, borderColor:c.acc, backgroundColor:'rgba(37,99,235,.12)', fill:true, tension:.35, pointRadius:5, pointBackgroundColor:c.acc, borderWidth:2.5, yAxisID:'y' },
+      { label:'OCC Count', data:counts, borderColor:c.acc2, backgroundColor:'rgba(14,165,233,.08)', fill:false, tension:.35, pointRadius:4, pointBackgroundColor:c.acc2, borderWidth:2, yAxisID:'y1' }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false}, plugins:{legend:{labels:{color:c.text,usePointStyle:true}}}, scales:{ x:{ticks:{color:c.text},grid:{color:c.grid}}, y:{position:'left',ticks:{color:c.text,callback:function(v){return fmt(v);}},grid:{color:c.grid}}, y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:c.text,stepSize:1},grace:'10%'} } }
+  }, occChartLayoutPad()));
+}
+
+function pptDonutSLA(canvasId, labels, data, centerMain){
+  const c = getChartColors();
+  const ctx = el(canvasId);
+  if(!ctx) return;
+  if(PPT_CHARTS[canvasId]){ PPT_CHARTS[canvasId].destroy(); delete PPT_CHARTS[canvasId]; }
+  PPT_CHARTS[canvasId] = new Chart(ctx, Object.assign({
+    type:'doughnut',
+    plugins:[occCenterPlugin(centerMain,'SLA Buckets'), occDonutPercentPlugin()],
+    data:{ labels:labels, datasets:[{ data:data, backgroundColor:[c.green,c.amber,c.red], borderWidth:4, borderColor:'var(--bg-card)', hoverOffset:8 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'55%', plugins:{ legend:{ position:'bottom', labels:{color:c.text,usePointStyle:true,font:{weight:'600'}, generateLabels:function(chart){
+      const ds = chart.data.datasets[0]; const total = ds.data.reduce(function(a,b){return a+b;},0);
+      return chart.data.labels.map(function(l,i){
+        const v = ds.data[i]; const pct = total?Math.round(v/total*100):0;
+        return { text: l+' ('+pct+'%)', fillStyle: ds.backgroundColor[i], hidden:false, index:i };
+      });
+    }} } } }
+  }, occChartLayoutPad()));
+}
+
+function renderPostedPendingLayout(items, isPending){
+  const totalValue = items.reduce(function(s,i){ return s+i.value; }, 0);
+  const reasonMap = occBuildGroupMap(items, 'reason');
+  const vertMap = occBuildGroupMap(items, 'vertical');
+  const rLabels = occTopN(reasonMap, 12, 'v');
+  const vLabels = occTopN(vertMap, 12, 'v');
+
+  el('pptKpiRow').innerHTML =
+    pptKpiCard('Total OCC Value', fmtPpt(totalValue)+' AED', '', true) +
+    pptKpiCard('Total OCC Count', String(items.length), isPending?'Pending YTD':'Posted/Approved YTD', true);
+
+  el('pptKeyInsights').innerHTML = isPending
+    ? 'Key Insights: <strong>'+items.length+' pending OCCs</strong> worth <strong>AED '+fmtPpt(totalValue)+'</strong> awaiting approval across workflow stages.'
+    : buildMonthlyKeyInsight(items);
+
+  el('pptChartsGrid').innerHTML =
+    '<div class="ppt-dual-section"><div class="chart-card"><div class="chart-title">OCC Value &amp; Count Per Reason</div><div class="chart-container"><canvas id="pptChartReason"></canvas></div></div><div class="ppt-highlights-panel">'+buildReasonHighlights(items, reasonMap, isPending)+'</div></div>'+
+    '<div class="ppt-dual-section"><div class="chart-card"><div class="chart-title">OCC Value &amp; Count Per Vertical</div><div class="chart-container"><canvas id="pptChartVertical"></canvas></div></div><div class="ppt-highlights-panel">'+buildVerticalHighlights(items, vertMap, isPending)+'</div></div>';
+
+  el('pptExtraSection').innerHTML = isPending ? buildPendingPivotTable(items) : '';
+
+  setTimeout(function(){
+    pptGroupedBar('pptChartReason', rLabels, rLabels.map(function(l){return reasonMap[l].c;}), rLabels.map(function(l){return reasonMap[l].v;}), 'Count', 'Value (AED)');
+    pptGroupedBar('pptChartVertical', vLabels, vLabels.map(function(l){return vertMap[l].c;}), vLabels.map(function(l){return vertMap[l].v;}), 'Count', 'Value (AED)');
+  }, 60);
 }
 
 function renderCurrentReport(){
@@ -2216,92 +2514,102 @@ function renderCurrentReport(){
   set('pptReportTitle', cfg.title);
   set('pptReportSub', cfg.sub);
   const items = getReportItems(currentReportId);
-  const totalValue = items.reduce(function(s,i){ return s+i.value; }, 0);
   const kpi = el('pptKpiRow');
+  const insights = el('pptKeyInsights');
   const charts = el('pptChartsGrid');
   const extra = el('pptExtraSection');
   if(!kpi||!charts||!extra) return;
 
-  if(currentReportId==='posted' || currentReportId==='pending'){
-    kpi.innerHTML = pptKpiCard('Total OCC Value','AED '+fmt(totalValue), items.length+' OCCs') +
-      pptKpiCard('Total Count', items.length, currentReportId==='posted'?'Closed Approved':'Open / Pending') +
-      pptKpiCard('Avg Value', items.length?'AED '+fmt(totalValue/items.length):'—', 'Per OCC');
-    const reasonMap={}, vertMap={};
+  if(currentReportId==='monthly'){
+    const totalValue = items.reduce(function(s,i){ return s+i.value; }, 0);
+    const monthMap = {};
     items.forEach(function(i){
-      reasonMap[i.reason]=(reasonMap[i.reason]||{c:0,v:0}); reasonMap[i.reason].c++; reasonMap[i.reason].v+=i.value;
-      vertMap[i.vertical]=(vertMap[i.vertical]||{c:0,v:0}); vertMap[i.vertical].c++; vertMap[i.vertical].v+=i.value;
+      const d = i.posted || i.created; if(!d) return;
+      const dt = new Date(d); if(isNaN(dt)) return;
+      const k = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+      const lbl = dt.toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+      if(!monthMap[k]) monthMap[k] = { label:lbl, v:0, c:0 };
+      monthMap[k].v += i.value; monthMap[k].c++;
     });
-    const rLabels=Object.keys(reasonMap), vLabels=Object.keys(vertMap);
-    charts.innerHTML = '<div class="chart-card"><div class="chart-title">By Reason — Value & Count</div><div class="chart-container"><canvas id="pptChartReason"></canvas></div></div>'+
-      '<div class="chart-card"><div class="chart-title">By Vertical — Value & Count</div><div class="chart-container"><canvas id="pptChartVertical"></canvas></div></div>';
+    const keys = Object.keys(monthMap).sort();
+    kpi.innerHTML = pptKpiCard('Total OCC Value', fmtPpt(totalValue)+' AED', '', true) + pptKpiCard('Total OCC Count', String(items.length), 'YTD Posted/Approved', true);
+    insights.innerHTML = buildMonthlyKeyInsight(items);
+    charts.innerHTML = '<div class="chart-card ppt-slide-full"><div class="chart-title">OCCs Posted / Approved — Monthly Trend</div><div class="chart-container" style="height:360px"><canvas id="pptChartMonthly"></canvas></div></div>';
     extra.innerHTML = '';
     setTimeout(function(){
-      pptGroupedBar('pptChartReason', rLabels, rLabels.map(function(l){return reasonMap[l].c;}), rLabels.map(function(l){return reasonMap[l].v;}), 'Count', 'Value');
-      pptGroupedBar('pptChartVertical', vLabels, vLabels.map(function(l){return vertMap[l].c;}), vLabels.map(function(l){return vertMap[l].v;}), 'Count', 'Value');
-    }, 50);
+      pptLineChart('pptChartMonthly', keys.map(function(k){return monthMap[k].label;}), keys.map(function(k){return monthMap[k].v;}), keys.map(function(k){return monthMap[k].c;}));
+    }, 60);
     return;
   }
+
+  if(currentReportId==='posted'){ renderPostedPendingLayout(items, false); return; }
+  if(currentReportId==='pending'){ renderPostedPendingLayout(items, true); return; }
 
   if(currentReportId==='approval'){
     const low = items.filter(function(i){ return i.value < CCO_THRESHOLD; });
     const high = items.filter(function(i){ return i.value >= CCO_THRESHOLD; });
-    kpi.innerHTML = pptKpiCard('Mid-range (<250K)', low.length+' OCCs', 'AED '+fmt(low.reduce(function(s,i){return s+i.value;},0))) +
-      pptKpiCard('High-value (≥250K)', high.length+' OCCs', 'AED '+fmt(high.reduce(function(s,i){return s+i.value;},0))) +
-      pptKpiCard('CCCO Required', high.filter(function(i){return i.portalStatus==='Open';}).length+' pending', 'Diego / CCCO path');
-    charts.innerHTML = '<div class="chart-card"><div class="chart-title">Count by Approval Tier</div><div class="chart-container"><canvas id="pptChartTierCount"></canvas></div></div>'+
-      '<div class="chart-card"><div class="chart-title">Value by Approval Tier</div><div class="chart-container"><canvas id="pptChartTierValue"></canvas></div></div>';
-    extra.innerHTML = '<div class="chart-card"><div class="chart-title">Approver Reference</div><div style="padding:.75rem 1rem;font-size:.82rem;color:var(--t2);line-height:1.6"><strong>Mid-range (&lt;250K):</strong> Abou (Head of Marketing) & Marwan (Head of Enterprise — auto on HM approve)<br><strong>High-value (≥250K):</strong> Diego (CCCO approval required)</div></div>';
+    const lowV = low.reduce(function(s,i){ return s+i.value; }, 0);
+    const highV = high.reduce(function(s,i){ return s+i.value; }, 0);
+    const lowPct = items.length ? Math.round(low.length/items.length*100) : 0;
+    const highPct = items.length ? Math.round(high.length/items.length*100) : 0;
+    kpi.innerHTML = '';
+    insights.innerHTML = 'Key Insights: Mid-Range OCCs represent <strong>'+lowPct+'%</strong> of total count. High-Value OCCs represent <strong>'+highPct+'%</strong> of total count.';
+    charts.innerHTML =
+      '<div class="ppt-approver-cards">'+
+        '<div class="ppt-approver-card mid"><div class="label">Mid-Range OCCs (Up to 249,999 AED)</div><div class="count">'+low.length+' OCCs</div><div class="value">'+lowPct+'% of total · AED '+fmtPpt(lowV)+'</div><div class="who">Highest Approval Level<br>Abou &amp; Marwan</div></div>'+
+        '<div class="ppt-approver-card high"><div class="label">High-Value OCCs (250,000 AED &amp; Above)</div><div class="count">'+high.length+' OCCs</div><div class="value">'+highPct+'% of total · AED '+fmtPpt(highV)+'</div><div class="who">Highest Approval Level<br>Diego</div></div>'+
+      '</div>'+
+      '<div class="chart-card ppt-slide-full" style="margin-top:.85rem"><div class="chart-title">OCC Count &amp; Value by Approval Category</div><div class="chart-container"><canvas id="pptChartApproval"></canvas></div></div>';
+    extra.innerHTML = '';
     setTimeout(function(){
-      pptBarChart('pptChartTierCount', ['< 250K AED','≥ 250K AED'], [low.length, high.length], getChartColors().acc2);
-      pptBarChart('pptChartTierValue', ['< 250K AED','≥ 250K AED'], [low.reduce(function(s,i){return s+i.value;},0), high.reduce(function(s,i){return s+i.value;},0)], getChartColors().acc);
-    }, 50);
-    return;
-  }
-
-  if(currentReportId==='handset'){
-    const approved = items.filter(function(i){ return i.portalStatus==='Closed Approved'; });
-    const approvedValue = approved.reduce(function(s,i){ return s+i.value; }, 0);
-    const handsets = items.reduce(function(s,i){ return s+num(i.handsets); }, 0);
-    const pct = Math.min(100, (approvedValue/HANDSET_BUDGET)*100);
-    kpi.innerHTML = pptKpiCard('Handset OCCs', items.length, handsets+' handsets total') +
-      pptKpiCard('Approved Handset Value','AED '+fmt(approvedValue), 'Budget: AED 1M') +
-      pptKpiCard('Budget Used', pct.toFixed(1)+'%', approvedValue>=HANDSET_BUDGET_WARN?'⚠ Approaching 900K alert':'Within budget');
-    const vertMap={}, amMap={};
-    items.forEach(function(i){
-      vertMap[i.vertical]=(vertMap[i.vertical]||0)+i.value;
-      amMap[i.requestor]=(amMap[i.requestor]||0)+i.value;
-    });
-    const vLabels=Object.keys(vertMap).sort(function(a,b){return vertMap[b]-vertMap[a];}).slice(0,12);
-    const aLabels=Object.keys(amMap).sort(function(a,b){return amMap[b]-amMap[a];}).slice(0,12);
-    charts.innerHTML = '<div class="chart-card"><div class="chart-title">Handset Value by Vertical</div><div class="chart-container"><canvas id="pptChartHandsetVert"></canvas></div></div>'+
-      '<div class="chart-card"><div class="chart-title">Handset Value by Account Manager</div><div class="chart-container"><canvas id="pptChartHandsetAM"></canvas></div></div>';
-    extra.innerHTML = '<div class="chart-card"><div class="chart-title">Handset Budget Tracker (Approved)</div><div style="padding:.85rem 1rem"><div style="display:flex;justify-content:space-between;font-size:.78rem;font-weight:700;color:var(--t2);margin-bottom:.35rem"><span>AED '+fmt(approvedValue)+' used</span><span>1M AED budget</span></div><div class="ppt-budget-bar"><div class="ppt-budget-fill'+(approvedValue>=HANDSET_BUDGET_WARN?' warn':'')+'" style="width:'+pct+'%"></div></div><div style="font-size:.72rem;color:var(--t3);margin-top:.35rem;">Alert threshold: AED 900K</div></div></div>';
-    setTimeout(function(){
-      pptBarChart('pptChartHandsetVert', vLabels, vLabels.map(function(l){return vertMap[l];}), getChartColors().purple);
-      pptBarChart('pptChartHandsetAM', aLabels, aLabels.map(function(l){return amMap[l];}), getChartColors().acc);
-    }, 50);
+      pptGroupedBar('pptChartApproval', ['Mid-Range (<250K)','High-Value (≥250K)'], [low.length, high.length], [lowV, highV], 'Count', 'Value (AED)');
+    }, 60);
     return;
   }
 
   if(currentReportId==='sla'){
-    const buckets={'0-9 days':{c:0,v:0},'10-29 days':{c:0,v:0},'30+ days':{c:0,v:0}};
+    const buckets={'0-9 Days':0,'10-29 Days':0,'30+ Days':0};
     items.forEach(function(i){
       const d = i.daysRaised||0;
-      const key = d<=9?'0-9 days':d<=29?'10-29 days':'30+ days';
-      buckets[key].c++; buckets[key].v+=i.value;
+      const key = d<=9?'0-9 Days':d<=29?'10-29 Days':'30+ Days';
+      buckets[key]++;
     });
-    const labels=Object.keys(buckets);
-    const total = items.length;
-    kpi.innerHTML = pptKpiCard('Closed OCCs (SLA sample)', total, 'Completed / closed items') +
-      pptKpiCard('0–9 days', buckets['0-9 days'].c, 'AED '+fmt(buckets['0-9 days'].v)) +
-      pptKpiCard('30+ days', buckets['30+ days'].c, 'AED '+fmt(buckets['30+ days'].v));
-    charts.innerHTML = '<div class="chart-card"><div class="chart-title">SLA Distribution (Count)</div><div class="chart-container"><canvas id="pptChartSLA"></canvas></div></div>'+
-      '<div class="chart-card"><div class="chart-title">SLA Value by Bucket</div><div class="chart-container"><canvas id="pptChartSLAValue"></canvas></div></div>';
+    const labels = ['0-9 Days','10-29 Days','30+ Days'];
+    const data = labels.map(function(l){ return buckets[l]; });
+    const total = data.reduce(function(a,b){return a+b;},0);
+    const pcts = data.map(function(v){ return total?Math.round(v/total*100):0; });
+    kpi.innerHTML = labels.map(function(l,i){ return pptKpiCard(l, pcts[i]+'%', buckets[l]+' OCCs'); }).join('');
+    insights.innerHTML = 'Key Insights: SLA timeframes are distributed across all buckets — focus on closing OCCs within the shortest SLA.';
+    charts.innerHTML = '<div class="chart-card ppt-slide-full"><div class="chart-title">OCCs Internal SLA</div><div class="chart-container" style="height:380px"><canvas id="pptChartSLA"></canvas></div></div>';
+    extra.innerHTML = '<div class="ppt-highlights-panel ppt-slide-full"><div class="ppt-highlights-title">SLA Compliance Summary</div><ul>'+
+      '<li><strong>'+pcts[0]+'%</strong> of cases were closed within <strong>0–9 days</strong>, indicating strong adherence to SLAs.</li>'+
+      '<li><strong>'+pcts[1]+'%</strong> of cases were resolved between <strong>10–29 days</strong>, suggesting room for improvement.</li>'+
+      '<li><strong>'+pcts[2]+'%</strong> of cases exceeded <strong>30 days</strong>.</li>'+
+      '</ul><div class="takeaway"><strong>Key Takeaway:</strong> Timeframes are distributed across all buckets. Need to focus on closure of OCCs within the shortest SLA.</div></div>';
+    setTimeout(function(){ pptDonutSLA('pptChartSLA', labels, data, String(total)); }, 60);
+    return;
+  }
+
+  if(currentReportId==='handset'){
+    const totalValue = items.reduce(function(s,i){ return s+i.value; }, 0);
+    const totalHs = items.reduce(function(s,i){ return s+num(i.handsets); }, 0);
+    const approvedVal = items.filter(function(i){ return i.portalStatus==='Closed Approved'; }).reduce(function(s,i){ return s+i.value; }, 0);
+    const vertMap = occBuildGroupMap(items, 'vertical');
+    const amMap = occBuildGroupMap(items, 'requestor');
+    const vLabels = occTopN(vertMap, 10, 'hs');
+    const aLabels = occTopN(amMap, 10, 'hs');
+    const topVert = vLabels[0]||'—';
+    const topAM = aLabels[0]||'—';
+    kpi.innerHTML = pptKpiCard('Total OCC Value', fmtPpt(totalValue)+' AED', '', true) + pptKpiCard('Total Handset Count', String(totalHs), 'Handset waivers', true);
+    insights.innerHTML = 'Key Insights: <strong>'+topVert+'</strong> leads with <strong>'+(vertMap[topVert]?vertMap[topVert].hs:0)+' handsets</strong>. <strong>'+topAM+'</strong> raised the most handset requests ('+(amMap[topAM]?amMap[topAM].hs:0)+' handsets). Budget 1M AED monitored — warning at 900K.';
+    charts.innerHTML =
+      '<div class="ppt-dual-section"><div class="chart-card"><div class="chart-title">Per Vertical Level</div><div class="chart-container"><canvas id="pptChartHandsetVert"></canvas></div></div><div class="ppt-highlights-panel"><div class="ppt-highlights-title">Summary</div><p><strong>'+topVert+'</strong> is the leading vertical for handset OCCs with <strong>'+(vertMap[topVert]?vertMap[topVert].hs:0)+'</strong> handsets and <strong>AED '+fmt(vertMap[topVert]?vertMap[topVert].v:0)+'</strong>.</p><p>Verticals with no handset activity are excluded from the chart.</p></div></div>'+
+      '<div class="ppt-dual-section"><div class="chart-card"><div class="chart-title">Per Account Manager Level</div><div class="chart-container"><canvas id="pptChartHandsetAM"></canvas></div></div><div class="ppt-highlights-panel"><div class="ppt-highlights-title">Budget Monitor</div><p>Approved budget: <strong>1M AED</strong></p><p>Approved handset value: <strong>AED '+fmtPpt(approvedVal)+'</strong></p><div class="ppt-budget-bar" style="margin-top:.5rem"><div class="ppt-budget-fill'+(approvedVal>=HANDSET_BUDGET_WARN?' warn':'')+'" style="width:'+Math.min(100,approvedVal/HANDSET_BUDGET*100)+'%"></div></div><p style="margin-top:.35rem;font-size:.72rem;color:var(--t3)">Warning issued at 900K AED threshold.</p></div></div>';
     extra.innerHTML = '';
     setTimeout(function(){
-      pptDonut('pptChartSLA', labels, labels.map(function(l){return buckets[l].c;}), String(total), 'Closed OCCs');
-      pptBarChart('pptChartSLAValue', labels, labels.map(function(l){return buckets[l].v;}), getChartColors().amber);
-    }, 50);
+      pptGroupedBar('pptChartHandsetVert', vLabels, vLabels.map(function(l){return vertMap[l].hs;}), vLabels.map(function(l){return vertMap[l].v;}), 'Handsets', 'Value (AED)');
+      pptGroupedBar('pptChartHandsetAM', aLabels, aLabels.map(function(l){return amMap[l].hs;}), aLabels.map(function(l){return amMap[l].v;}), 'Handsets', 'Value (AED)');
+    }, 60);
   }
 }
 
