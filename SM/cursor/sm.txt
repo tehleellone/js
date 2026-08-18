@@ -2479,9 +2479,19 @@
                                 <button type="button" id="revenueToggleBtn" class="export-btn" onclick="toggleRevenueEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
                                     <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Revenue: Disabled
                                 </button>
-                                <button type="button" id="pocToggleBtn" class="export-btn" onclick="togglePocDetailsEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
-                                    <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Disabled
-                                </button>
+                                <div id="pocTypesControl" style="display:none;align-items:center;gap:10px;padding:.5rem 1rem;font-size:.82rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+                                    <i data-lucide="users" style="width:14px;height:14px;display:inline-block;vertical-align:middle;"></i>
+                                    <span style="font-weight:700;white-space:nowrap;">POC Edit:</span>
+                                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                                        <input type="checkbox" class="poc-type-checkbox" value="Primary" onchange="savePocDetailsEnabledTypesFromUi()"> Primary
+                                    </label>
+                                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                                        <input type="checkbox" class="poc-type-checkbox" value="Secondary" onchange="savePocDetailsEnabledTypesFromUi()"> Secondary
+                                    </label>
+                                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                                        <input type="checkbox" class="poc-type-checkbox" value="Technical" onchange="savePocDetailsEnabledTypesFromUi()"> Technical
+                                    </label>
+                                </div>
                                 <button type="button" id="rnpsEligibilityToggleBtn" class="export-btn" onclick="toggleRnpsEligibilityEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
                                     <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>RNPS Eligibility: Disabled
                                 </button>
@@ -3823,6 +3833,85 @@ let charts = {};
             };
         }
 
+        function parseAccessControlMultiChoice(val) {
+            const set = new Set();
+            if (!val) return set;
+            if (val.results && Array.isArray(val.results)) {
+                val.results.forEach(function(v) {
+                    if (v) set.add(String(v).trim());
+                });
+                return set;
+            }
+            if (Array.isArray(val)) {
+                val.forEach(function(v) {
+                    if (v) set.add(String(v).trim());
+                });
+                return set;
+            }
+            if (typeof val === 'string') {
+                val.split(';').forEach(function(v) {
+                    v = v.trim();
+                    if (v) set.add(v);
+                });
+            }
+            return set;
+        }
+
+        function buildAccessControlMultiChoicePayload(fieldName, values, sampleItem) {
+            const results = values || [];
+            const existing = sampleItem ? sampleItem[fieldName] : null;
+            if (existing && typeof existing === 'object' && existing.results) {
+                return {
+                    [fieldName]: {
+                        __metadata: {
+                            type: 'Collection(Edm.String)'
+                        },
+                        results: results
+                    }
+                };
+            }
+            return {
+                [fieldName]: results.join('; ')
+            };
+        }
+
+        function applyPocDetailsEnabledTypesFromRows(results) {
+            const merged = new Set();
+            (results || []).forEach(function(r) {
+                parseAccessControlMultiChoice(r.POCDetailsEnabledTypes).forEach(function(t) {
+                    merged.add(t);
+                });
+            });
+            if (merged.size === 0) {
+                (results || []).forEach(function(r) {
+                    if (parseAccessControlYesNo(r.POCDetailsEnabled)) {
+                        ['Primary', 'Secondary', 'Technical'].forEach(function(t) {
+                            merged.add(t);
+                        });
+                    }
+                });
+            }
+            window.POC_DETAILS_ENABLED_TYPES = {
+                primary: merged.has('Primary'),
+                secondary: merged.has('Secondary'),
+                technical: merged.has('Technical')
+            };
+            window.POC_DETAILS_ENABLED = merged.size > 0 ||
+                (results || []).some(function(r) {
+                    return parseAccessControlYesNo(r.POCDetailsEnabled);
+                });
+        }
+
+        function smIsPocCategoryEditable(category) {
+            const map = window.POC_DETAILS_ENABLED_TYPES || {};
+            return !!map[category];
+        }
+
+        function smCanViewAccountSearchPocDetails() {
+            if (isAccessControlAdmin()) return true;
+            return USER_CONTEXT.role === 'PSD_Admin' || USER_CONTEXT.role === 'PSD_Agent';
+        }
+
         function isAccessControlAdmin() {
             const email = (USER_CONTEXT.userEmail || '').toLowerCase();
             return email === 'ubaid.mir@du.ae' || email === 'tehleel.lone@du.ae';
@@ -3831,7 +3920,7 @@ let charts = {};
         async function fetchAccessControlSettings() {
             try {
                 let url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                    "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,RNPSEligibilityEnabled&" +
+                    "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,POCDetailsEnabledTypes,RNPSEligibilityEnabled&" +
                     "$filter=(UserEmailID eq 'ubaid.mir@du.ae' or UserEmailID eq 'tehleel.lone@du.ae')&$top=2";
                 let res = await fetch(url, {
                     headers: {
@@ -3841,7 +3930,7 @@ let charts = {};
                 });
                 if (!res.ok) {
                     url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                        "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,RNPSEligibilityEnabled&" +
+                        "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,POCDetailsEnabledTypes,RNPSEligibilityEnabled&" +
                         "$filter=(UserEmailID eq 'ubaid.mir@du.ae' or UserEmailID eq 'tehleel.lone@du.ae')&$top=2";
                     res = await fetch(url, {
                         headers: {
@@ -3854,19 +3943,21 @@ let charts = {};
                 const data = await res.json();
                 const results = data.d.results;
                 window.REVENUE_ENABLED = results.some(r => parseAccessControlYesNo(r.RevenueEnabled));
-                window.POC_DETAILS_ENABLED = results.some(r => parseAccessControlYesNo(r.POCDetailsEnabled));
+                applyPocDetailsEnabledTypesFromRows(results);
                 window.RNPS_ELIGIBILITY_EDIT_ENABLED = results.some(r => parseAccessControlYesNo(r.RNPSEligibilityEnabled));
                 window.REVENUE_CONTROL_ITEMS = results;
                 console.log('[RevenueEnabled]', window.REVENUE_ENABLED);
-                console.log('[POCDetailsEnabled]', window.POC_DETAILS_ENABLED, '(global for all users)');
+                console.log('[POCDetailsEnabledTypes]', window.POC_DETAILS_ENABLED_TYPES, '(global for all users)');
+                console.log('[POCDetailsEnabled]', window.POC_DETAILS_ENABLED, '(legacy flag)');
                 console.log('[RNPSEligibilityEnabled]', window.RNPS_ELIGIBILITY_EDIT_ENABLED, '(global for all users in Edit screen)');
                 updateRevenueToggleBtn();
-                updatePocToggleBtn();
+                updatePocTypesControl();
                 updateRnpsEligibilityToggleBtn();
             } catch (e) {
                 console.warn('fetchAccessControlSettings failed:', e);
                 window.REVENUE_ENABLED = false;
                 window.POC_DETAILS_ENABLED = false;
+                window.POC_DETAILS_ENABLED_TYPES = { primary: false, secondary: false, technical: false };
                 window.RNPS_ELIGIBILITY_EDIT_ENABLED = false;
             }
         }
@@ -3952,13 +4043,20 @@ let charts = {};
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
-        async function togglePocDetailsEnabled() {
+        function getSelectedPocTypesFromUi() {
+            return Array.from(document.querySelectorAll('.poc-type-checkbox:checked')).map(function(el) {
+                return el.value;
+            });
+        }
+
+        async function savePocDetailsEnabledTypesFromUi() {
             if (!isAccessControlAdmin()) {
                 alert('Only authorised admins can change this setting.');
                 return;
             }
             try {
-                const newValue = !window.POC_DETAILS_ENABLED;
+                const selectedTypes = getSelectedPocTypesFromUi();
+                const anyEnabled = selectedTypes.length > 0;
                 const items = window.REVENUE_CONTROL_ITEMS || [];
                 if (items.length === 0) {
                     alert('Control rows not found');
@@ -3990,7 +4088,9 @@ let charts = {};
                             __metadata: {
                                 type: 'SP.Data.Access_x005f_ControlListItem'
                             }
-                        }, buildAccessControlYesNoPayload('POCDetailsEnabled', newValue, item)))
+                        },
+                        buildAccessControlMultiChoicePayload('POCDetailsEnabledTypes', selectedTypes, item),
+                        buildAccessControlYesNoPayload('POCDetailsEnabled', anyEnabled, item)))
                     });
                     if (!updateRes.ok) {
                         const errText = await updateRes.text();
@@ -3998,29 +4098,42 @@ let charts = {};
                     }
                 }
 
-                window.POC_DETAILS_ENABLED = newValue;
-                window.REVENUE_CONTROL_ITEMS = items.map(i => ({
-                    ...i,
-                    POCDetailsEnabled: newValue ? 'Yes' : 'No'
+                applyPocDetailsEnabledTypesFromRows(items.map(function(i) {
+                    return Object.assign({}, i, {
+                        POCDetailsEnabledTypes: { results: selectedTypes },
+                        POCDetailsEnabled: anyEnabled ? 'Yes' : 'No'
+                    });
                 }));
-                updatePocToggleBtn();
+                window.REVENUE_CONTROL_ITEMS = items.map(function(i) {
+                    return Object.assign({}, i, {
+                        POCDetailsEnabledTypes: { results: selectedTypes },
+                        POCDetailsEnabled: anyEnabled ? 'Yes' : 'No'
+                    });
+                });
+                updatePocTypesControl();
                 if (typeof renderEditPocFields === 'function' && EDIT_ACCOUNT_DATA) renderEditPocFields();
-                console.log('[POCDetailsEnabled] updated to', newValue);
+                console.log('[POCDetailsEnabledTypes] updated to', selectedTypes);
             } catch (e) {
                 alert('Error updating POC details setting: ' + e.message);
+                updatePocTypesControl();
             }
         }
 
-        function updatePocToggleBtn() {
-            const btn = document.getElementById('pocToggleBtn');
-            if (!btn) return;
-            if (window.POC_DETAILS_ENABLED) {
-                btn.innerHTML = '<i data-lucide="unlock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Enabled';
-                btn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
-            } else {
-                btn.innerHTML = '<i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Disabled';
-                btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
-            }
+        function updatePocTypesControl() {
+            const wrap = document.getElementById('pocTypesControl');
+            if (!wrap) return;
+            const enabled = window.POC_DETAILS_ENABLED_TYPES || {};
+            const typeMap = {
+                Primary: !!enabled.primary,
+                Secondary: !!enabled.secondary,
+                Technical: !!enabled.technical
+            };
+            wrap.querySelectorAll('.poc-type-checkbox').forEach(function(cb) {
+                cb.checked = !!typeMap[cb.value];
+            });
+            const anyEnabled = typeMap.Primary || typeMap.Secondary || typeMap.Technical;
+            wrap.style.borderColor = anyEnabled ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)';
+            wrap.style.background = anyEnabled ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)';
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
@@ -8353,8 +8466,8 @@ else if (sectionId === 'psdView') {
                 if (isAccessControlAdmin()) {
                     const btn = document.getElementById('revenueToggleBtn');
                     if (btn) btn.style.display = 'inline-flex';
-                    const pocBtn = document.getElementById('pocToggleBtn');
-                    if (pocBtn) pocBtn.style.display = 'inline-flex';
+                    const pocCtrl = document.getElementById('pocTypesControl');
+                    if (pocCtrl) pocCtrl.style.display = 'inline-flex';
                     const rnpsBtn = document.getElementById('rnpsEligibilityToggleBtn');
                     if (rnpsBtn) rnpsBtn.style.display = 'inline-flex';
                 }
@@ -9724,8 +9837,7 @@ async function ownerFetchUserRole(email) {
             const wrap = document.getElementById('editPocFields');
             if (!wrap) return;
             const values = window.EDIT_POC_VALUES;
-            // Global flag — when enabled by admin, all users with edit access can change POC fields
-            const editable = !!window.POC_DETAILS_ENABLED;
+            const editable = smIsPocCategoryEditable(cat);
 
             const configs = {
                 primary: {
@@ -9783,26 +9895,39 @@ async function ownerFetchUserRole(email) {
             wrap.innerHTML = html;
         }
 
+        function smGetPocFieldGroups() {
+            return {
+                primary: [
+                    ['POC Name', 'pocName'],
+                    ['POC Email', 'pocEmail'],
+                    ['POC Contact', 'pocPhone']
+                ],
+                secondary: [
+                    ['Secondary POC Name', 'secondaryPocName'],
+                    ['Secondary POC Email', 'secondaryPocEmail'],
+                    ['Secondary POC Contact', 'secondaryPocPhone']
+                ],
+                technical: [
+                    ['Technical POC Name', 'technicalPocName'],
+                    ['Technical POC Email', 'technicalPocEmail'],
+                    ['Technical POC Contact', 'technicalPocPhone']
+                ]
+            };
+        }
+
         function getEditPocChanges() {
             const changes = [];
-            if (!EDIT_ACCOUNT_DATA || !window.POC_DETAILS_ENABLED) return changes;
+            if (!EDIT_ACCOUNT_DATA) return changes;
             syncEditPocFromDom();
             const values = window.EDIT_POC_VALUES || {};
-            const pairs = [
-                ['POC Name', 'pocName'],
-                ['POC Email', 'pocEmail'],
-                ['POC Contact', 'pocPhone'],
-                ['Secondary POC Name', 'secondaryPocName'],
-                ['Secondary POC Email', 'secondaryPocEmail'],
-                ['Secondary POC Contact', 'secondaryPocPhone'],
-                ['Technical POC Name', 'technicalPocName'],
-                ['Technical POC Email', 'technicalPocEmail'],
-                ['Technical POC Contact', 'technicalPocPhone']
-            ];
-            pairs.forEach(function (p) {
-                const oldVal = EDIT_ACCOUNT_DATA[p[1]] || '';
-                const newVal = values[p[1]] || '';
-                if (newVal !== oldVal) changes.push({ label: p[0], oldVal: oldVal || '—', newVal: newVal || '—', field: p[1] });
+            const groups = smGetPocFieldGroups();
+            Object.keys(groups).forEach(function(cat) {
+                if (!smIsPocCategoryEditable(cat)) return;
+                groups[cat].forEach(function(p) {
+                    const oldVal = EDIT_ACCOUNT_DATA[p[1]] || '';
+                    const newVal = values[p[1]] || '';
+                    if (newVal !== oldVal) changes.push({ label: p[0], oldVal: oldVal || '—', newVal: newVal || '—', field: p[1] });
+                });
             });
             return changes;
         }
@@ -9901,7 +10026,7 @@ async function ownerFetchUserRole(email) {
 
             const pocChanges = getEditPocChanges();
             const pocChanged = pocChanges.length > 0;
-            if (window.POC_DETAILS_ENABLED && pocChanged) {
+            if (pocChanged) {
                 const phoneErr = smValidatePocPhoneFields(
                     window.EDIT_POC_VALUES,
                     pocChanges.map(function (c) { return c.field; })
@@ -10332,13 +10457,17 @@ async function ownerFetchUserRole(email) {
             }
 
             try {
-                // Fetch account from SharePoint
+                const pocFields = smCanViewAccountSearchPocDetails()
+                    ? ",POC_x0020_Name,POC_x0020_Email_x0020_ID,POC_x0020_Contact_x0020_No," +
+                      "Secondary_x0020_POC_x0020_Name,Secondary_x0020_POC_x0020_Email,Secondary_x0020_POC_x0020_Contac," +
+                      "Technical_x0020_POC_x0020_Name,Technical_x0020_POC_x0020_Email,Technical_x0020_POC_x0020_Contac"
+                    : "";
                 const url = SP_URL + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items?" +
                     "$select=Title,Parent_x0020_Code,Customer_x0020_Name,Team," +
                     "Line_x0020_Manager/Title,Service_x0020_Manager/Title," +
                     "Secondary_x0020_Service_x0020_Ma/Title," +
                     "Account_x0020_Manager/Title,Account_x0020_Director/Title," +
-                    "Service_x0020_Director/Title,Jan_x002d_26&" +
+                    "Service_x0020_Director/Title,Jan_x002d_26" + pocFields + "&" +
                     "$expand=Line_x0020_Manager,Service_x0020_Manager," +
                     "Secondary_x0020_Service_x0020_Ma,Account_x0020_Manager," +
                     "Account_x0020_Director,Service_x0020_Director&" +
@@ -10382,6 +10511,28 @@ async function ownerFetchUserRole(email) {
             }
         }
 
+        function smEscapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function smRenderAccountSearchPocSection(title, fields) {
+            let section = '<div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">';
+            section += '<div style="font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 12px;">' + smEscapeHtml(title) + '</div>';
+            section += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">';
+            fields.forEach(function(pair) {
+                section += '<div style="padding: 12px; background: rgba(168, 85, 247, 0.1); border-radius: 8px;">' +
+                    '<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;">' + smEscapeHtml(pair[0]) + '</div>' +
+                    '<div style="font-size: 14px; font-weight: 600;">' + smEscapeHtml(pair[1] || 'N/A') + '</div>' +
+                    '</div>';
+            });
+            section += '</div></div>';
+            return section;
+        }
+
         function displayAccountDetails(account) {
             const isGroup = (account.Title === account.Parent_x0020_Code) || !account.Parent_x0020_Code;
 
@@ -10412,6 +10563,24 @@ async function ownerFetchUserRole(email) {
             });
 
             html += '</div>';
+
+            if (smCanViewAccountSearchPocDetails()) {
+                html += smRenderAccountSearchPocSection('Primary POC Details', [
+                    ['POC Name', account.POC_x0020_Name],
+                    ['POC Email', account.POC_x0020_Email_x0020_ID],
+                    ['POC Contact', account.POC_x0020_Contact_x0020_No]
+                ]);
+                html += smRenderAccountSearchPocSection('Secondary POC Details', [
+                    ['Secondary POC Name', account.Secondary_x0020_POC_x0020_Name],
+                    ['Secondary POC Email', account.Secondary_x0020_POC_x0020_Email],
+                    ['Secondary POC Contact', account.Secondary_x0020_POC_x0020_Contac]
+                ]);
+                html += smRenderAccountSearchPocSection('Technical POC Details', [
+                    ['Technical POC Name', account.Technical_x0020_POC_x0020_Name],
+                    ['Technical POC Email', account.Technical_x0020_POC_x0020_Email],
+                    ['Technical POC Contact', account.Technical_x0020_POC_x0020_Contac]
+                ]);
+            }
 
             document.getElementById('accountDetailsContent').innerHTML = html;
             document.getElementById('accountDetailsSection').style.display = 'block';
