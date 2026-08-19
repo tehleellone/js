@@ -226,10 +226,19 @@ body[data-theme="dark"] .status-dot,body[data-theme="duralux-dark"] .status-dot{
 .nav-item.active{background:var(--nab);border-color:var(--nab2);color:var(--t1);font-weight:600}
 
 /* ═══════ CONTENT ═══════════════════════════════════════════════════════ */
-.content{flex:1;overflow-y:auto;min-width:0;background:var(--bg-content);padding:1.1rem 1.25rem}
+.content{flex:1;overflow-y:auto;min-width:0;background:var(--bg-content);padding:1.1rem 1.25rem;width:100%;box-sizing:border-box}
+.content.mq-view{padding:1rem 1.25rem;width:100%;max-width:100%}
+.portal-shell.mq-full{max-width:none;width:100%;margin:0}
+#mobile-qtd-view{width:100%;max-width:100%;margin:0;padding:0;box-sizing:border-box}
 .dashboard-section{animation:fadeSection .25s ease;padding:.5rem 0}
 @keyframes fadeSection{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.glk-spinner{width:52px;height:52px;border-radius:50%;border:4px solid rgba(255,255,255,.14);border-top-color:var(--acc,#c026d3);animation:glkSpin .8s linear infinite}
+#glkLoader{
+  display:none;position:fixed;inset:0;z-index:100000;
+  background:var(--bg-content,#f9f3ff);backdrop-filter:blur(8px);
+  align-items:center;justify-content:center;flex-direction:column;gap:1rem;
+}
+#glkLoaderText{font-size:.88rem;font-weight:700;color:var(--t2);letter-spacing:.02em}
+.glk-spinner{width:52px;height:52px;border-radius:50%;border:4px solid color-mix(in srgb,var(--acc,#c026d3) 16%,transparent);border-top-color:var(--acc,#c026d3);animation:glkSpin .8s linear infinite}
 @keyframes glkSpin{to{transform:rotate(360deg)}}
 
 /* ═══════ SECTION TITLE ══════════════════════════════════════════════════ */
@@ -727,9 +736,9 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
 </div>
 
 <!-- ═══════ PAGE LOAD SPINNER ═════════════════════════════════════════ -->
-<div id="glkLoader" style="display:none;position:fixed;inset:0;z-index:100000;background:var(--bg,#0b0714);backdrop-filter:blur(2px);align-items:center;justify-content:center;flex-direction:column;gap:1rem;">
+<div id="glkLoader">
   <div class="glk-spinner"></div>
-  <div id="glkLoaderText" style="font-size:.85rem;font-weight:700;color:var(--t2,#c9c6d6);letter-spacing:.02em;">Loading your pipeline…</div>
+  <div id="glkLoaderText">Loading your pipeline…</div>
 </div>
 
 <!-- ═══════ MAIN DASHBOARD ════════════════════════════════════════════ -->
@@ -970,10 +979,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
               </div>
             </div>
           </div>
-           
-          </div>
-        
-    </div>
+        </div>
+
       <div id="analytics-nav" style="display:none;"></div>
 
         <!-- TABLE -->
@@ -4242,6 +4249,8 @@ function glkShowDashboard(){
   el('analytics-nav').style.display='none';
   el('mobile-qtd-view').style.display='none';
   el('table-nav').style.display='block';
+  el('content').classList.remove('mq-view');
+  el('dashboardContent').classList.remove('mq-full');
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelectorAll('.nav-item')[0]?.classList.add('active');
 }
@@ -4259,6 +4268,8 @@ function glkShowMobileQtd(){
   el('analytics-nav').style.display='none';
   el('table-nav').style.display='none';
   el('mobile-qtd-view').style.display='block';
+  el('content').classList.add('mq-view');
+  el('dashboardContent').classList.add('mq-full');
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   el('navMobileQtd').classList.add('active');
   if(!GLK_MOBILE_REPORT){
@@ -4314,10 +4325,10 @@ window.glkSetMobileQtdVertical=function(v){
 function glkParseReportNum(v){
   if(v==null||v==='') return null;
   if(typeof v==='number') return isNaN(v)?null:v;
-  var s=String(v).trim();
+  var s=String(v).trim().replace(/\u00a0/g,' ');
   if(!s||s==='—'||s==='-') return null;
   var neg=/^\(.*\)$/.test(s);
-  s=s.replace(/[(),\s,]/g,'');
+  s=s.replace(/[(),\s]/g,'');
   var n=parseFloat(s);
   if(isNaN(n)) return null;
   return neg?-n:n;
@@ -4347,22 +4358,35 @@ function glkSheetToRows(sheet){
   }
   return rows;
 }
-function glkFindMobileNetAddsStart(rows){
+function glkFindMobileBlockEnd(rows,sec){
+  var sub=rows[sec.row+1]||[];
+  var end=sec.col;
+  for(var c=sec.col;c<sec.col+12;c++){
+    var t=glkNormCellTxt(sub[c]);
+    if(c>sec.col&&t==='actual') break;
+    if(sub[c]!=null&&String(sub[c]).trim()!=='') end=c;
+  }
+  return Math.max(end,sec.col+4);
+}
+function glkFindMobileNetAddsSection(rows){
+  var best=null,bestScore=0;
   for(var r=0;r<rows.length;r++){
     var row=rows[r]||[];
     for(var c=0;c<row.length;c++){
-      var t=glkNormCellTxt(row[c]);
-      if(/mobile\s*net\s*adds/.test(t)||/net\s*adds\s*lines?/.test(t)) return r;
+      var raw=String(row[c]||'').trim();
+      if(!raw) continue;
+      var t=glkNormCellTxt(raw);
+      var score=0;
+      if(/mobile/.test(t)&&/net adds/.test(t)) score+=15;
+      else if(/net adds/.test(t)) score+=8;
+      if(/lines/.test(t)) score+=25;
+      if(/points/.test(t)) score-=20;
+      if(/mrc|revenue|fixed gross|fixed net/.test(t)) score-=25;
+      if(score>bestScore){ bestScore=score; best={row:r,col:c,title:raw}; }
     }
-    var joined=glkNormCellTxt(row.join(' '));
-    if(/mobile\s*net\s*adds/.test(joined)||/net\s*adds\s*lines?/.test(joined)) return r;
   }
-  for(var r2=0;r2<rows.length-1;r2++){
-    var a=glkNormCellTxt((rows[r2]||[]).join(' '));
-    var b=glkNormCellTxt((rows[r2+1]||[]).join(' '));
-    if(a.indexOf('mobile')>=0&&b.indexOf('net adds')>=0) return r2;
-  }
-  return -1;
+  if(best&&bestScore>=20) return best;
+  return null;
 }
 function glkParseMonthHeader(cell){
   var s=String(cell||'').trim();
@@ -4397,27 +4421,19 @@ function glkParseMobileReportWorkbook(wb){
   return null;
 }
 function glkParseMobileNetAddsRows(rows){
-  var start=glkFindMobileNetAddsStart(rows);
-  if(start<0){
-    for(var r3=0;r3<rows.length;r3++){
-      var row3=rows[r3]||[], hits=0;
-      for(var c3=0;c3<row3.length;c3++){
-        if(glkParseMonthHeader(row3[c3])) hits++;
-      }
-      if(hits>=2){ start=Math.max(0,r3-2); break; }
-    }
-  }
-  if(start<0) return null;
+  var sec=glkFindMobileNetAddsSection(rows);
+  if(!sec) return null;
+  var startCol=sec.col, blockEnd=glkFindMobileBlockEnd(rows,sec);
   var headerRow=-1,monthCols=[],targetCol=-1,quarterLabel='',year=2026,quarter=3;
-  for(var hr=start;hr<Math.min(start+15,rows.length);hr++){
+  for(var hr=sec.row;hr<Math.min(sec.row+8,rows.length);hr++){
     var row=rows[hr]||[];
     var foundMonths=[],foundTarget=null,foundTargetCol=-1;
-    for(var c=0;c<row.length;c++){
+    for(var c=startCol;c<=blockEnd;c++){
       var cell=String(row[c]||'').trim();
       var mo=glkParseMonthHeader(cell);
       if(mo) foundMonths.push({col:c,label:mo.label,month:mo.month,year:mo.year});
       var tg=glkParseTargetHeader(cell);
-      if(tg&&!tg.targetOnly){ foundTarget=tg; foundTargetCol=c; }
+      if(tg&&!tg.targetOnly&&!foundTarget){ foundTarget=tg; foundTargetCol=c; }
       else if(/target/i.test(cell)&&foundTargetCol<0) foundTargetCol=c;
     }
     if(foundMonths.length>=1){
@@ -4429,14 +4445,18 @@ function glkParseMobileNetAddsRows(rows){
   }
   if(headerRow<0||!monthCols.length) return null;
   if(targetCol<0){
-    for(var tc=0;tc<(rows[headerRow]||[]).length;tc++){
-      var h=String(rows[headerRow][tc]||'');
-      if(/target|% achiev|Q\d/i.test(h)){ targetCol=tc; if(/Q\d/i.test(h)) quarterLabel=h; break; }
+    for(var tc=startCol;tc<=blockEnd;tc++){
+      var h=String((rows[headerRow]||[])[tc]||'');
+      if(/Q\d/i.test(h)){ targetCol=tc; quarterLabel=h; break; }
     }
-    if(targetCol<0&&rows[headerRow+1]){
-      for(var tc2=0;tc2<rows[headerRow+1].length;tc2++){
-        var h2=String(rows[headerRow+1][tc2]||'');
-        if(/target|% achiev|Q\d/i.test(h2)){ targetCol=tc2; if(/Q\d/i.test(h2)) quarterLabel=h2; break; }
+    if(targetCol<0){
+      for(var hr2=sec.row;hr2<=headerRow+1;hr2++){
+        for(var tc2=startCol;tc2<=blockEnd;tc2++){
+          var h2=String((rows[hr2]||[])[tc2]||'');
+          if(/target|% achiev/i.test(h2)&&targetCol<0) targetCol=tc2;
+          var tg2=glkParseTargetHeader(h2);
+          if(tg2&&!tg2.targetOnly){ targetCol=tc2; quarterLabel=tg2.label; quarter=tg2.quarter; year=tg2.year; }
+        }
       }
     }
   }
@@ -4456,19 +4476,16 @@ function glkParseMobileNetAddsRows(rows){
     var hdrTxt=glkNormCellTxt((rows[dataStart]||[]).join(' '));
     if(hdrTxt.indexOf('actual')>=0||hdrTxt.indexOf('achiev')>=0) dataStart++;
   }
+  var nameCol=0;
   var entries=[],overall=null;
   for(var dr=dataStart;dr<rows.length;dr++){
     var drow=rows[dr]||[];
     var joined=glkNormCellTxt(drow.join(' '));
     if(!joined&&!(drow.some(function(x){return glkParseReportNum(x)!=null;}))) continue;
     if(/mobile\s*net\s*adds|net\s*adds\s*lines?/.test(joined)) break;
-    if(/broadcast|datamena|fixed net|revenue trend|mrc trend/i.test(joined)) break;
-    var nameCol=-1;
-    for(var nc=0;nc<(monthCols[0]?monthCols[0].col:3);nc++){
-      if(String(drow[nc]||'').trim()){ nameCol=nc; break; }
-    }
-    if(nameCol<0) nameCol=0;
+    if(/broadcast|datamena|fixed net|revenue trend|mrc trend|^note$/i.test(joined)) break;
     var name=String(drow[nameCol]||'').trim();
+    if(/^note$/i.test(name)) break;
     var actuals={},actualSum=0,hasNum=false;
     qMonths.forEach(function(m){
       var v=glkParseReportNum(drow[m.col]);
@@ -4479,7 +4496,7 @@ function glkParseMobileNetAddsRows(rows){
     if(!hasNum&&!target&&!name) continue;
     if(/actual|target|achiev|Q\d/i.test(name)&&!hasNum) continue;
     var entry={name:name||'Overall',actuals:actuals,actualQtd:hasNum?actualSum:0,target:target||0,isOverall:false};
-    if(!overall&&(!name||/total|overall|^mobile$/i.test(name)||(!entries.length&&hasNum))){
+    if(!overall&&(/total|overall|^mobile$/i.test(name)||(!entries.length&&hasNum))){
       entry.isOverall=true; entry.name='GLK Overall'; overall=entry;
     }else entries.push(entry);
   }
