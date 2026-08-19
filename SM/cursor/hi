@@ -1025,8 +1025,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
             <div id="mobileReportMeta" style="font-size:.75rem;color:var(--t2);font-weight:600;">Loading from SharePoint…</div>
           </div>
 
-          <!-- Filters -->
-          <div class="filters-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+          <!-- Bridge controls -->
+          <div class="filters-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:.85rem;">
             <div class="filter-group">
               <label class="filter-label">Scenario</label>
               <div style="display:flex;gap:.35rem;">
@@ -1042,11 +1042,25 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
               </div>
             </div>
             <div class="filter-group">
-              <label class="filter-label">Level</label>
+              <label class="filter-label">Report level</label>
               <select id="mqVerticalSel" class="fb-select" onchange="glkSetMobileQtdVertical(this.value)" style="width:100%;">
                 <option value="">GLK Overall</option>
               </select>
             </div>
+          </div>
+
+          <div class="filters-date-divider">Pipeline filters</div>
+          <p style="font-size:.72rem;color:var(--t3);margin:-.35rem 0 .65rem;">All default to <strong>All</strong> — select what you need. Applies to Won, in-flight gross, and churn bars (not Excel actuals).</p>
+          <div class="filters-grid" id="mqFiltersGrid"></div>
+
+          <div class="filters-date-divider">Date filters</div>
+          <div id="mqDateRulesWrap"></div>
+          <button type="button" class="glk-add-rule-btn" onclick="mqAddDateRule()">+ Add date criterion</button>
+          <div class="filter-actions" style="margin-top:.65rem;">
+            <button type="button" class="reset-btn" onclick="mqResetAllFilters()">
+              <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+              Reset Bridge Filters
+            </button>
           </div>
         </div>
 
@@ -1147,6 +1161,18 @@ let GLK_MOBILE_REPORT_META=null;
 let mqCase='worst';
 let mqVertical='';
 let mqPeriod='qtd';
+let mqDateRules=[];
+let mqRuleSeq=0;
+const MQ_FILTER_DEFS=[
+  {key:'productFamily',label:'Product Family'},
+  {key:'vertical',label:'Vertical'},
+  {key:'status',label:'Opp. Status'},
+  {key:'mnp',label:'MNP'},
+  {key:'typeOfContract',label:'Type of Contract'},
+  {key:'services',label:'Services'},
+  {key:'typeOfRequest',label:'Type of Request'},
+  {key:'closureProb',label:'Closure Probability'},
+];
 window.setBridgeCase=function(c){
   bridgeCase=c==='best'?'best':'worst';
   renderBridge(getViewBids(),getChartColors());
@@ -2154,6 +2180,7 @@ function loadData(){
         ALL_BIDS=[];
         remapBlankHD();
         buildFilters();
+        buildMqFilters();
         applyAll();
         glkHideLoader();
         return;
@@ -2168,6 +2195,7 @@ function loadData(){
         ALL_BIDS=allResults.map(mapItem);
         remapBlankHD();
         buildFilters();
+        buildMqFilters();
         applyAll();
         glkHideLoader();
       }
@@ -4270,6 +4298,8 @@ function glkShowMobileQtd(){
   el('mobile-qtd-view').style.display='block';
   el('content').classList.add('mq-view');
   el('dashboardContent').classList.add('mq-full');
+  if(!el('mqFiltersGrid')?.children?.length) buildMqFilters();
+  else mqDateRules.forEach(function(r){mqPopulateRulePeriodDropdowns(r,ALL_BIDS);});
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   el('navMobileQtd').classList.add('active');
   if(!GLK_MOBILE_REPORT){
@@ -4593,21 +4623,243 @@ function glkMobileQtdRefreshUI(){
     sel.value=cur;
   }
 }
+function mqRulePrefix(id){ return 'mqR_'+id; }
+function mqDefaultDateRule(field){
+  return {id:'mq'+(mqRuleSeq++),dateField:field||'expectedActivation',dateMode:'any',from:'',to:'',specific:'',ytdYear:'',years:[],quarters:[],months:[],weeks:[]};
+}
+function mqGetRuleChecked(ruleId,part){
+  var drop=el(mqRulePrefix(ruleId)+'_'+part);
+  if(!drop) return [];
+  return Array.from(drop.querySelectorAll('input:checked')).map(function(c){return c.value;});
+}
+function mqUpdateRuleMsText(ruleId,part,label){
+  var checked=mqGetRuleChecked(ruleId,part);
+  var te=el(mqRulePrefix(ruleId)+'_'+part+'Text'); if(!te) return;
+  if(!checked.length){ te.textContent='All '+label; return; }
+  if(checked.length===1){
+    if(part==='quarter') te.textContent='Q'+checked[0];
+    else if(part==='month') te.textContent=MONTH_NAMES[+checked[0]]||checked[0];
+    else if(part==='week') te.textContent='W'+checked[0];
+    else te.textContent=checked[0];
+    return;
+  }
+  te.textContent=checked.length+' selected';
+}
+function mqToggleRuleMs(ruleId,part){
+  var drop=el(mqRulePrefix(ruleId)+'_'+part),trig=el(mqRulePrefix(ruleId)+'_'+part+'Trig');
+  if(!drop||!trig) return;
+  var isOpen=drop.classList.contains('open');
+  document.querySelectorAll('#mqDateRulesWrap .ms-dropdown.open').forEach(function(d){d.classList.remove('open');if(d.previousElementSibling)d.previousElementSibling.classList.remove('open');});
+  if(!isOpen){
+    var rect=trig.getBoundingClientRect();
+    drop.style.top=(rect.bottom+4)+'px';drop.style.left=rect.left+'px';
+    drop.style.width=Math.max(rect.width,180)+'px';
+    drop.classList.add('open');trig.classList.add('open');
+  }
+}
+function mqBuildRuleMs(ruleId,part,label,values,selected,labelFn){
+  var drop=el(mqRulePrefix(ruleId)+'_'+part); if(!drop) return;
+  var selSet={}; (selected||[]).forEach(function(v){selSet[String(v)]=true;});
+  drop.innerHTML=values.map(function(val){
+    var disp=labelFn?labelFn(val):val;
+    var cid=mqRulePrefix(ruleId)+'_'+part+'_'+String(val).replace(/\W/g,'_');
+    return '<div class="ms-option" onclick="event.stopPropagation()"><input type="checkbox" id="'+cid+'" value="'+val+'"'+(selSet[String(val)]?' checked':'')+' onchange="mqUpdateRuleMsText(\''+ruleId+'\',\''+part+'\',\''+label+'\');mqOnDateFilterChange()"><label for="'+cid+'">'+disp+'</label></div>';
+  }).join('');
+  mqUpdateRuleMsText(ruleId,part,label);
+}
+function mqPopulateRulePeriodDropdowns(rule,items){
+  var field=rule.dateField||'expectedActivation';
+  var metas=glkCollectDateMetas(items,field);
+  var ySel=rule.years||[], qSel=rule.quarters||[], mSel=rule.months||[];
+  var years=[],quarters=[],months=[],weeks=[];
+  metas.forEach(function(m){ var ys=String(m.year); if(years.indexOf(ys)<0) years.push(ys); });
+  years.sort(function(a,b){return parseInt(b,10)-parseInt(a,10);});
+  metas.forEach(function(m){
+    if(ySel.length&&ySel.indexOf(String(m.year))<0) return;
+    var qs=String(m.quarter); if(quarters.indexOf(qs)<0) quarters.push(qs);
+  });
+  quarters.sort(function(a,b){return parseInt(a,10)-parseInt(b,10);});
+  metas.forEach(function(m){
+    if(ySel.length&&ySel.indexOf(String(m.year))<0) return;
+    if(qSel.length&&qSel.indexOf(String(m.quarter))<0) return;
+    var ms=String(m.monthIndex); if(months.indexOf(ms)<0) months.push(ms);
+  });
+  months.sort(function(a,b){return parseInt(a,10)-parseInt(b,10);});
+  metas.forEach(function(m){
+    if(ySel.length&&ySel.indexOf(String(m.year))<0) return;
+    if(qSel.length&&qSel.indexOf(String(m.quarter))<0) return;
+    if(mSel.length&&mSel.indexOf(String(m.monthIndex))<0) return;
+    if(m.week!=null){ var ws=String(m.week); if(weeks.indexOf(ws)<0) weeks.push(ws); }
+  });
+  weeks.sort(function(a,b){return parseInt(a,10)-parseInt(b,10);});
+  mqBuildRuleMs(rule.id,'year','Years',years,rule.years);
+  mqBuildRuleMs(rule.id,'quarter','Quarters',quarters,rule.quarters,function(v){return 'Q'+v;});
+  mqBuildRuleMs(rule.id,'month','Months',months,rule.months,function(v){return MONTH_NAMES[+v]||v;});
+  mqBuildRuleMs(rule.id,'week','Weeks',weeks,rule.weeks,function(v){return 'W'+v;});
+}
+function mqReadDateRuleFromDom(ruleId){
+  var p=mqRulePrefix(ruleId);
+  return {
+    id:ruleId,
+    dateField:glkGetSelectVal(p+'Field')||'expectedActivation',
+    dateMode:glkGetSelectVal(p+'Mode')||'any',
+    from:glkGetSelectVal(p+'From'),to:glkGetSelectVal(p+'To'),specific:glkGetSelectVal(p+'Specific'),
+    ytdYear:glkGetSelectVal(p+'YtdYear'),
+    years:mqGetRuleChecked(ruleId,'year'),quarters:mqGetRuleChecked(ruleId,'quarter'),
+    months:mqGetRuleChecked(ruleId,'month'),weeks:mqGetRuleChecked(ruleId,'week'),
+  };
+}
+function mqReadAllDateRules(){ return mqDateRules.map(function(r){return mqReadDateRuleFromDom(r.id);}); }
+function mqSyncRuleModeUI(ruleId){
+  var p=mqRulePrefix(ruleId), mode=glkGetSelectVal(p+'Mode')||'any';
+  ['Range','Single','Period','Ytd'].forEach(function(suffix){
+    var g=el(p+suffix+'Group'); if(g) g.style.display=(mode===suffix.toLowerCase()?'grid':'none');
+  });
+  var hint=el(p+'Hint'); if(hint) hint.textContent=glkDateModeHint(mode);
+}
+function mqRenderDateRuleCard(rule,index){
+  var p=mqRulePrefix(rule.id), mode=rule.dateMode||'any';
+  var fieldOpts=GLK_DATE_FIELD_OPTS.map(function(o){return '<option value="'+o.key+'"'+(rule.dateField===o.key?' selected':'')+'>'+o.label+'</option>';}).join('');
+  var modeOpts=[
+    {v:'any',l:'Any date'},{v:'ytd',l:'Year to date'},{v:'range',l:'Date range'},
+    {v:'single',l:'Specific day'},{v:'period',l:'Year / quarter / month'},
+  ].map(function(o){return '<option value="'+o.v+'"'+(mode===o.v?' selected':'')+'>'+o.l+'</option>';}).join('');
+  var years=[...new Set(ALL_BIDS.map(function(b){var m=glkDateMeta(glkBidDateValue(b,rule.dateField));return m?String(m.year):null;}).filter(Boolean))].sort(function(a,b){return parseInt(b,10)-parseInt(a,10);});
+  var ytdOpts=years.map(function(y){return '<option value="'+y+'"'+(String(rule.ytdYear||new Date().getFullYear())===y?' selected':'')+'>'+y+'</option>';}).join('');
+  var ms=function(part,label){
+    return '<div class="filter-group"><div class="filter-label">'+label+'</div><div class="ms-wrap"><div class="ms-trigger" id="'+p+'_'+part+'Trig" onclick="event.stopPropagation();mqToggleRuleMs(\''+rule.id+'\',\''+part+'\')"><span id="'+p+'_'+part+'Text">All '+label+'</span><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div><div class="ms-dropdown" id="'+p+'_'+part+'"></div></div></div>';
+  };
+  return '<div class="glk-date-rule" id="'+p+'Card">'+
+    '<div class="glk-rule-header"><span class="glk-rule-title">Date criterion '+(index+1)+'</span>'+
+      (mqDateRules.length>1?'<button type="button" class="glk-rule-remove" onclick="mqRemoveDateRule(\''+rule.id+'\')">Remove</button>':'')+
+    '</div>'+
+    '<div class="filter-bar-grid">'+
+      '<div class="fb-group"><div class="fb-group-label">Date field</div><select class="fb-select" id="'+p+'Field" onchange="mqOnDateFilterChange()">'+fieldOpts+'</select></div>'+
+      '<div class="fb-group"><div class="fb-group-label">Filter by</div><select class="fb-select" id="'+p+'Mode" onchange="mqSyncRuleModeUI(\''+rule.id+'\');mqOnDateFilterChange()">'+modeOpts+'</select></div>'+
+    '</div>'+
+    '<div class="glk-date-hint" id="'+p+'Hint">'+glkDateModeHint(mode)+'</div>'+
+    '<div id="'+p+'RangeGroup" class="filter-bar-grid" style="display:'+(mode==='range'?'grid':'none')+';margin-top:.4rem;">'+
+      '<div class="fb-group"><div class="fb-group-label">From</div><input type="date" class="fb-select" id="'+p+'From" value="'+(rule.from||'')+'" onchange="mqOnDateFilterChange()"></div>'+
+      '<div class="fb-group"><div class="fb-group-label">To</div><input type="date" class="fb-select" id="'+p+'To" value="'+(rule.to||'')+'" onchange="mqOnDateFilterChange()"></div></div>'+
+    '<div id="'+p+'SingleGroup" class="filter-bar-grid" style="display:'+(mode==='single'?'grid':'none')+';margin-top:.4rem;">'+
+      '<div class="fb-group"><div class="fb-group-label">Day</div><input type="date" class="fb-select" id="'+p+'Specific" value="'+(rule.specific||'')+'" onchange="mqOnDateFilterChange()"></div></div>'+
+    '<div id="'+p+'YtdGroup" class="filter-bar-grid" style="display:'+(mode==='ytd'?'grid':'none')+';margin-top:.4rem;">'+
+      '<div class="fb-group"><div class="fb-group-label">YTD year</div><select class="fb-select" id="'+p+'YtdYear" onchange="mqOnDateFilterChange()">'+ytdOpts+'</select></div></div>'+
+    '<div id="'+p+'PeriodGroup" class="filter-bar-grid" style="display:'+(mode==='period'?'grid':'none')+';margin-top:.4rem;">'+
+      ms('year','Years')+ms('quarter','Quarters')+ms('month','Months')+ms('week','Weeks')+'</div></div>';
+}
+function mqBuildDateFilters(){
+  if(!mqDateRules.length) mqDateRules=[mqDefaultDateRule('expectedActivation')];
+  var wrap=el('mqDateRulesWrap'); if(!wrap) return;
+  wrap.innerHTML=mqDateRules.map(function(r,i){return mqRenderDateRuleCard(r,i);}).join('');
+  mqDateRules.forEach(function(r){
+    mqSyncRuleModeUI(r.id);
+    mqPopulateRulePeriodDropdowns(mqReadDateRuleFromDom(r.id),ALL_BIDS);
+  });
+}
+window.mqAddDateRule=function(){ mqDateRules.push(mqDefaultDateRule('expectedActivation')); mqBuildDateFilters(); };
+window.mqRemoveDateRule=function(ruleId){
+  mqDateRules=mqDateRules.filter(function(r){return r.id!==ruleId;});
+  if(!mqDateRules.length) mqDateRules=[mqDefaultDateRule('expectedActivation')];
+  mqBuildDateFilters(); mqOnDateFilterChange();
+};
+window.mqOnDateFilterChange=function(){
+  mqDateRules=mqReadAllDateRules();
+  mqDateRules.forEach(function(r){mqPopulateRulePeriodDropdowns(r,ALL_BIDS);});
+  renderMobileQtdBridge();
+};
+function mqGetFilterVals(key){
+  if(key==='closureProb') return PROB_ORDER.slice();
+  if(key==='status') return [...new Set(ALL_BIDS.map(function(b){return b.status;}).filter(Boolean))].sort();
+  var vals=new Set();
+  ALL_BIDS.forEach(function(b){
+    var v=b[key];
+    if(v==null||v===''||v==='—') vals.add('(Blank)');
+    else vals.add(v);
+  });
+  return [...vals].sort();
+}
+function mqBidFieldVal(bid,key){
+  var v=bid[key];
+  if(v==null||v===''||v==='—') return '(Blank)';
+  return v;
+}
+function mqGetChecked(key){
+  var drop=el('mqmsd_'+key); if(!drop) return [];
+  return Array.from(drop.querySelectorAll('input:checked')).map(function(c){return c.value;});
+}
+function mqUpdateMsText(key){
+  var checked=mqGetChecked(key); var e=el('mqmstext_'+key); if(!e) return;
+  if(!checked.length) e.textContent='All';
+  else if(checked.length===1) e.textContent=checked[0];
+  else e.textContent=checked.length+' selected';
+}
+window.mqToggleMs=function(key){
+  var drop=el('mqmsd_'+key),trig=el('mqmst_'+key);
+  if(!drop||!trig) return;
+  var isOpen=drop.classList.contains('open');
+  document.querySelectorAll('#mqFiltersGrid .ms-dropdown.open').forEach(function(d){
+    d.classList.remove('open');
+    var k=d.id.replace('mqmsd_','');
+    var t=el('mqmst_'+k); if(t) t.classList.remove('open');
+  });
+  if(!isOpen){
+    var rect=trig.getBoundingClientRect();
+    drop.style.top=(rect.bottom+4)+'px';
+    drop.style.left=rect.left+'px';
+    drop.style.width=Math.max(rect.width,180)+'px';
+    drop.classList.add('open');
+    trig.classList.add('open');
+  }
+};
+window.mqOnFilterChange=function(key){
+  mqUpdateMsText(key);
+  renderMobileQtdBridge();
+};
+function buildMqFilters(){
+  var grid=el('mqFiltersGrid'); if(!grid) return;
+  grid.innerHTML='';
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var div=document.createElement('div'); div.className='filter-group';
+    div.innerHTML='<div class="filter-label">'+fd.label+'</div>';
+    var wrap=document.createElement('div'); wrap.className='ms-wrap'; wrap.id='mqms_'+fd.key;
+    var trig=document.createElement('div'); trig.className='ms-trigger'; trig.id='mqmst_'+fd.key;
+    trig.innerHTML='<span id="mqmstext_'+fd.key+'">All</span><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
+    trig.onclick=function(e){e.stopPropagation();mqToggleMs(fd.key);};
+    var drop=document.createElement('div'); drop.className='ms-dropdown'; drop.id='mqmsd_'+fd.key;
+    mqGetFilterVals(fd.key).forEach(function(v){
+      if(!v) return;
+      var opt=document.createElement('div'); opt.className='ms-option';
+      var cid='mqcb_'+fd.key+'_'+v.toString().replace(/[^a-zA-Z0-9]/g,'_');
+      opt.innerHTML='<input type="checkbox" id="'+cid+'" value="'+v+'" onchange="mqOnFilterChange(\''+fd.key+'\')"><label for="'+cid+'">'+v+'</label>';
+      drop.appendChild(opt);
+    });
+    wrap.appendChild(trig); wrap.appendChild(drop); div.appendChild(wrap); grid.appendChild(div);
+  });
+  mqBuildDateFilters();
+}
+window.mqResetAllFilters=function(){
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var drop=el('mqmsd_'+fd.key);
+    if(drop) drop.querySelectorAll('input').forEach(function(c){c.checked=false;});
+    mqUpdateMsText(fd.key);
+  });
+  mqDateRules=[mqDefaultDateRule('expectedActivation')];
+  mqBuildDateFilters();
+  renderMobileQtdBridge();
+};
+function mqApplyFilters(){
+  var bids=ALL_BIDS.slice();
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var vals=mqGetChecked(fd.key);
+    if(!vals.length) return;
+    bids=bids.filter(function(b){return vals.indexOf(mqBidFieldVal(b,fd.key))>=0;});
+  });
+  bids=glkApplyDateRules(bids,mqReadAllDateRules());
+  return bids;
+}
 function glkMobilePipelineBids(){
-  return ALL_BIDS.filter(function(b){ return PF_FAMILIES['Mobile'](b.productFamily); });
-}
-function glkMobileMatchVertical(bid,vertName){
-  if(!vertName) return true;
-  var bv=(bid.vertical||'').trim().toLowerCase();
-  var vn=vertName.trim().toLowerCase();
-  return bv===vn||bv.indexOf(vn)>=0||vn.indexOf(bv)>=0;
-}
-function glkMobileQtdActivationFilter(bid,year,quarter){
-  var iso=bid.expectedActivation;
-  if(!iso) return false;
-  var d=new Date(iso); if(isNaN(d)) return false;
-  var q=Math.floor(d.getMonth()/3)+1;
-  return d.getFullYear()===year&&q===quarter;
+  return mqApplyFilters();
 }
 function glkMobileProbOk(prob,isBest){
   if(isBest) return prob==='50%'||prob==='75%';
@@ -4640,16 +4892,14 @@ function glkMobileQtdCalc(){
     : report?.overall;
   var actualsQtd=scope?num(scope.actualQtd):0;
   var target=scope?num(scope.target):0;
-  var allBids=glkMobilePipelineBids().filter(function(b){
-    return glkMobileQtdActivationFilter(b,year,quarter)&&glkMobileMatchVertical(b,mqVertical);
-  });
-  var wonBids=allBids.filter(function(b){ return b.status==='Won'&&b.closureProb==='100%'; });
+  var pool=glkMobilePipelineBids();
+  var wonBids=pool.filter(function(b){ return b.status==='Won'; });
   var wonTotal=wonBids.reduce(function(s,b){return s+num(b.gaLines);},0);
-  var inflightBids=allBids.filter(function(b){
+  var inflightBids=pool.filter(function(b){
     return STATUS_IP.includes(b.status)&&glkMobileProbOk(b.closureProb,isBest)&&num(b.gaLines)>0;
   });
   var grossPool=glkMobileTopNByCustomer(inflightBids,function(b){return num(b.gaLines);},5);
-  var churnBids=allBids.filter(function(b){
+  var churnBids=pool.filter(function(b){
     if(STATUS_LOST.includes(b.status)) return true;
     if(!glkMobileProbOk(b.closureProb,isBest)) return false;
     return num(b.gaLines)<0||(b.churnReason&&b.churnReason!=='—');
@@ -4723,14 +4973,15 @@ function renderMobileQtdBridge(){
   }
   var bars=[],barMeta=[],churnStartIdx=-1;
   var trueCum=0,dispTop=0;
-  var minStep=Math.max(200,calc.target*0.015);
+  var scaleMax=Math.max(calc.target,calc.actualsQtd,calc.forecast,1);
+  var minStep=Math.max(120,scaleMax*0.022);
   function dispH(v){ return Math.max(Math.abs(v),minStep); }
   function pushBar(b,meta){
     var idx=bars.length; bars.push(b); barMeta.push({label:meta||''}); return idx;
   }
   trueCum=calc.actualsQtd; dispTop=calc.actualsQtd;
-  pushBar({value:calc.actualsQtd,trueCum:trueCum,displayStart:0,displayEnd:dispTop,color:'#1d4ed8',type:'base',custName:'Actuals QTD'},'Actuals QTD · '+fmtLines(calc.actualsQtd));
-  if(calc.wonTotal>0){
+  pushBar({value:calc.actualsQtd,trueCum:trueCum,displayStart:0,displayEnd:Math.max(dispTop,minStep),color:'#1d4ed8',type:'base',custName:'Actuals QTD'},'Actuals QTD · '+fmtLines(calc.actualsQtd));
+  if(calc.wonTotal!==0){
     trueCum+=calc.wonTotal;
     var ws=dispTop,we=dispTop+dispH(calc.wonTotal); dispTop=we;
     pushBar({value:calc.wonTotal,trueCum:trueCum,displayStart:ws,displayEnd:we,color:'#2563eb',type:'increase',custName:'Gross Adds (Won)'},'Gross Adds Won · '+fmtLines(calc.wonTotal));
@@ -4739,36 +4990,43 @@ function renderMobileQtdBridge(){
     if(!p.value) return;
     trueCum+=p.value;
     var ds=dispTop,de=dispTop+dispH(p.value); dispTop=de;
-    pushBar({value:p.value,trueCum:trueCum,displayStart:ds,displayEnd:de,color:['#3b82f6','#60a5fa','#6366f1','#818cf8','#a5b4fc'][i%5],type:'increase',custName:p.name},p.name+' · '+fmtLines(p.value));
+    pushBar({value:p.value,trueCum:trueCum,displayStart:ds,displayEnd:de,color:['#3b82f6','#60a5fa','#6366f1','#818cf8','#a5b4fc'][i%5],type:'increase',custName:'Top '+(i+1)+': '+p.name},p.name+' · '+fmtLines(p.value));
   });
-  if(calc.grossPool.others>0){
+  if(calc.grossPool.others!==0){
     trueCum+=calc.grossPool.others;
     var gs=dispTop,ge=dispTop+dispH(calc.grossPool.others); dispTop=ge;
-    pushBar({value:calc.grossPool.others,trueCum:trueCum,displayStart:gs,displayEnd:ge,color:'#93c5fd',type:'increase',custName:'Others Gross'},'Others Gross · '+fmtLines(calc.grossPool.others));
+    pushBar({value:calc.grossPool.others,trueCum:trueCum,displayStart:gs,displayEnd:ge,color:'#93c5fd',type:'increase',custName:'Others Gross Adds'},'Others Gross Adds · '+fmtLines(calc.grossPool.others));
   }
-  calc.churnPool.top.forEach(function(p,i){
+  var churnTopCount=calc.churnPool.top.filter(function(p){return p.value;}).length;
+  calc.churnPool.top.slice(0,Math.max(churnTopCount,0)).forEach(function(p,i){
     if(!p.value) return;
     if(churnStartIdx<0) churnStartIdx=bars.length;
     trueCum+=p.value;
     var cs=dispTop,ce=dispTop-dispH(Math.abs(p.value)); dispTop=ce;
-    pushBar({value:p.value,trueCum:trueCum,displayStart:cs,displayEnd:ce,color:'#ea580c',type:'decrease',custName:p.name},p.name+' · '+fmtLines(p.value));
+    pushBar({value:p.value,trueCum:trueCum,displayStart:cs,displayEnd:ce,color:'#ea580c',type:'decrease',custName:'Top '+(i+1)+': '+p.name},'Churn · '+p.name+' · '+fmtLines(p.value));
   });
-  if(calc.churnPool.others<0){
+  if(calc.churnPool.others!==0){
+    if(churnStartIdx<0) churnStartIdx=bars.length;
     trueCum+=calc.churnPool.others;
     var os=dispTop,oe=dispTop-dispH(Math.abs(calc.churnPool.others)); dispTop=oe;
     pushBar({value:calc.churnPool.others,trueCum:trueCum,displayStart:os,displayEnd:oe,color:'#f97316',type:'decrease',custName:'Others Churn'},'Others Churn · '+fmtLines(calc.churnPool.others));
   }
   var fc=calc.forecast;
-  pushBar({value:fc,trueCum:fc,displayStart:0,displayEnd:fc,color:'#16a34a',type:'total',custName:'Net Forecast'},'Net Adds Forecast · '+fmtLines(fc));
-  if(calc.gap>0){
-    var gs2=fc,ge2=fc+dispH(calc.gap);
-    pushBar({value:calc.gap,trueCum:calc.target,displayStart:gs2,displayEnd:ge2,color:'#f59e0b',type:'gap',custName:'Gap'},'Gap · '+fmtLines(calc.gap));
-  }else if(calc.growth>0){
-    var gs3=fc,ge3=fc+dispH(calc.growth);
-    pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:'#0ea5e9',type:'growth',custName:'Growth'},'Growth · +'+fmtLines(calc.growth));
+  var fcDisp=Math.max(fc,minStep);
+  pushBar({value:fc,trueCum:fc,displayStart:0,displayEnd:fcDisp,color:'#16a34a',type:'total',custName:'Net Forecast'},'Net Forecast · '+fmtLines(fc));
+  if(calc.target>0){
+    if(calc.gap>0){
+      var gs2=fcDisp,ge2=fcDisp+dispH(calc.gap);
+      pushBar({value:calc.gap,trueCum:calc.target,displayStart:gs2,displayEnd:ge2,color:'#f59e0b',type:'gap',custName:'Gap to Target'},'Gap · '+fmtLines(calc.gap));
+    }else if(calc.growth>0){
+      var gs3=fcDisp,ge3=fcDisp+dispH(calc.growth);
+      pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:'#0ea5e9',type:'growth',custName:'Growth vs Target'},'Growth · +'+fmtLines(calc.growth));
+    }else{
+      pushBar({value:0,trueCum:fc,displayStart:fcDisp,displayEnd:fcDisp+minStep*0.35,color:'#94a3b8',type:'gap',custName:'On Target'},'On Target');
+    }
   }
   var targetDisp=calc.target;
-  var yMax=Math.max(dispTop,targetDisp,fc)*1.12;
+  var yMax=Math.max(dispTop,targetDisp,fcDisp)*1.15;
   var canvas=el('chartMobileQtd');
   if(!canvas) return;
   var plugins=[glkMobileQtdLabelPlugin(bars),glkMobileQtdSepPlugin(churnStartIdx,c)];
@@ -4789,7 +5047,7 @@ function renderMobileQtdBridge(){
       data:{labels:bars.map(function(b){return b.custName||'';}),datasets:[{
         data:bars.map(glkMobileQtdFloatBar),
         backgroundColor:bars.map(function(b){return b.color;}),
-        borderRadius:5,borderSkipped:false,barPercentage:.82,categoryPercentage:.78,maxBarThickness:56
+        borderRadius:5,borderSkipped:false,barPercentage:.85,categoryPercentage:.82,minBarLength:8,maxBarThickness:64
       }]},
       options:{responsive:true,maintainAspectRatio:false,
         layout:{padding:{bottom:72,top:16,left:0,right:6}},
@@ -4818,6 +5076,7 @@ function renderMobileQtdBridge(){
   }
 }
 function glkMobileQtdInit(){
+  buildMqFilters();
   glkSpLoadMobileReport(function(err){
     if(err){
       console.log('[GLK] No mobile report in SharePoint yet (or cannot read):',err.message);
