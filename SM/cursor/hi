@@ -153,6 +153,8 @@ select,input,textarea,button{font-family:inherit}
   box-shadow:0 0 14px var(--glow);flex-shrink:0;
 }
 .logo svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+.du-logo-svg{display:block;width:100%;height:100%}
+.du-logo-wrap{background:transparent!important;box-shadow:none!important;border-radius:0!important;overflow:visible!important}
 .header-title{
   font-size:1.05rem;font-weight:800;white-space:nowrap;
   background:var(--grad);-webkit-background-clip:text;
@@ -617,12 +619,12 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
   <div class="landing-left animate-fade-in">
     <div class="landing-branding">
       <div style="margin-bottom:.85rem">
-        <div class="logo-icon" style="width:60px;height:60px;">
-          <img src="http://sharedspaces:8086/sites/GKA/Shared%20Documents/Image%20(1).png" style="width:60px;height:60px;object-fit:cover;border-radius:15px;transform:scale(1.4);" alt="GLK">
+        <div class="logo-icon du-logo-wrap" style="width:72px;height:36px;">
+          <svg class="du-logo-svg" viewBox="0 0 72 36" aria-label="du"><text x="2" y="28" font-family="Inter,Arial Black,sans-serif" font-size="30" font-weight="900" fill="#753BBD">du</text></svg>
         </div>
       </div>
-      <h1 class="landing-brand-title">Salim Khoussas' Legacy...<br>GLK<br><span>Pipeline</span><br>Dashboard</h1>
-      <p class="landing-brand-subtitle">Real-time bid tracking, revenue analytics, and team performance insights across your entire sales hierarchy.</p>
+      <h1 class="landing-brand-title">GLK<br><span>Pipeline</span> Dashboard</h1>
+      <p class="landing-brand-subtitle">Enterprise bid tracking, revenue analytics, and team performance insights across your sales hierarchy.</p>
       <div class="landing-features">
         <div class="landing-feature">
           <div class="landing-feature-icon"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div>
@@ -654,8 +656,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
     <div class="landing-container">
       <div class="landing-header animate-slide-up">
         <div class="landing-logo">
-          <div class="logo-icon">
-           <img src="http://sharedspaces:8086/sites/GKA/Shared%20Documents/Image%20(1).png" style="width:60px;height:60px;object-fit:cover;border-radius:15px;transform:scale(1.4);" alt="GLK">
+          <div class="logo-icon du-logo-wrap" style="width:64px;height:32px;">
+            <svg class="du-logo-svg" viewBox="0 0 72 36" aria-label="du"><text x="2" y="28" font-family="Inter,Arial Black,sans-serif" font-size="30" font-weight="900" fill="#753BBD">du</text></svg>
           </div>
         </div>
         <h1 class="landing-title">Welcome Back</h1>
@@ -735,8 +737,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
   <!-- Header -->
   <div class="header">
     <div class="logo-section">
-      <div class="logo">
-      <img src="http://sharedspaces:8086/sites/GKA/Shared%20Documents/Image%20(1).png" style="width:36px;height:36px;object-fit:cover;border-radius:10px;" alt="GLK">
+      <div class="logo du-logo-wrap" style="width:40px;height:28px;background:transparent;box-shadow:none;">
+        <svg class="du-logo-svg" viewBox="0 0 72 36" aria-label="du"><text x="2" y="28" font-family="Inter,Arial Black,sans-serif" font-size="30" font-weight="900" fill="#753BBD">du</text></svg>
       </div>
       <span class="header-title">GLK Pipeline Dashboard</span>
     </div>
@@ -1659,6 +1661,7 @@ function set(id,val){ const e=el(id); if(e) e.textContent=val; }
 function spGet(url,cb){
   const xhr=new XMLHttpRequest();
   xhr.open('GET',url,true);
+  xhr.timeout=20000;
   xhr.setRequestHeader('Accept','application/json;odata=verbose');
   xhr.onreadystatechange=function(){
     if(xhr.readyState!==4) return;
@@ -1666,6 +1669,7 @@ function spGet(url,cb){
     else { cb(new Error('HTTP '+xhr.status),null); }
   };
   xhr.onerror=function(){ cb(new Error('Network error'),null); };
+  xhr.ontimeout=function(){ cb(new Error('Request timed out'),null); };
   xhr.send();
 }
 function spEscPath(p){ return String(p||'').replace(/'/g,"''"); }
@@ -1787,28 +1791,64 @@ function spGetMobileReportMeta(cb){
 //  ACCESS CONTROL
 // ══════════════════════════════════════════════════════════════════
 function initAccess(){
+  var accessDone=false;
+  function finishAccess(fn){ if(!accessDone){ accessDone=true; fn(); } }
+  var accessTimer=setTimeout(function(){
+    finishAccess(function(){
+      var btn=el('launchBtn');
+      if(btn&&btn.disabled) showDenied('Connection timed out. Open this page from the GKA SharePoint site (not a local file) and ensure you are signed in.');
+    });
+  },18000);
   spGet(SP_SITE+'/_api/web/currentuser?$select=Title,Email',function(err,data){
-    if(err){ showDenied('Cannot reach SharePoint'); return; }
-    USER.email=data.d.Email; USER.name=data.d.Title;
-    spGet(SP_SITE+"/_api/web/lists/getbytitle('"+SP_ACCESS+"')/items?$select=UserEmailID,Role&$filter=UserEmailID eq '"+USER.email+"'",function(err2,data2){
-if(err2||!data2.d.results.length){ 
-    showDenied('You are not authorised. Contact tehleel.lone@du.ae');
-    return; 
-}
-const role=(data2.d.results[0].Role||'').trim();
-const ALLOWED=['Admin','CEO','Head Director','Account Director','Account Manager','Viewer'];
-if(!ALLOWED.includes(role)){
-    showDenied('Your role "'+role+'" has no access. Contact tehleel.lone@du.ae');
-    return;
-}
-USER.role=role;
-      console.log('[GLK] Role:', JSON.stringify(data2.d.results[0]));
-      populateLanding();
+    if(err){
+      clearTimeout(accessTimer);
+      finishAccess(function(){ showDenied('Cannot reach SharePoint: '+err.message); });
+      return;
+    }
+    if(!data||!data.d){
+      clearTimeout(accessTimer);
+      finishAccess(function(){ showDenied('Unexpected SharePoint response. Please refresh.'); });
+      return;
+    }
+    USER.email=(data.d.Email||'').trim();
+    USER.name=(data.d.Title||'User').trim();
+    if(!USER.email){
+      clearTimeout(accessTimer);
+      finishAccess(function(){ showDenied('Could not read your SharePoint email.'); });
+      return;
+    }
+    var safeEmail=USER.email.replace(/'/g,"''");
+    spGet(SP_SITE+"/_api/web/lists/getbytitle('"+SP_ACCESS+"')/items?$select=UserEmailID,Role&$filter=UserEmailID eq '"+safeEmail+"'",function(err2,data2){
+      clearTimeout(accessTimer);
+      if(err2){
+        finishAccess(function(){ showDenied('Access list error: '+err2.message); });
+        return;
+      }
+      var results=(data2&&data2.d&&data2.d.results)?data2.d.results:[];
+      if(!results.length){
+        finishAccess(function(){ showDenied('You are not authorised. Contact tehleel.lone@du.ae'); });
+        return;
+      }
+      var role=(results[0].Role||'').trim();
+      var ALLOWED=['Admin','CEO','Head Director','Account Director','Account Manager','Viewer'];
+      if(!ALLOWED.includes(role)){
+        finishAccess(function(){ showDenied('Your role "'+role+'" has no access. Contact tehleel.lone@du.ae'); });
+        return;
+      }
+      USER.role=role;
+      console.log('[GLK] Role:', JSON.stringify(results[0]));
+      finishAccess(populateLanding);
     });
   });
 }
 function showDenied(msg){
   set('lName','Access Denied'); set('lEmail',msg); set('lRole','No Access');
+  var btn=el('launchBtn');
+  if(btn){
+    btn.disabled=true;
+    var txt=btn.querySelector('.btn-text');
+    if(txt) txt.textContent='Access Denied';
+  }
   el('accessNote').innerHTML='<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#dc2626;fill:none;stroke-width:2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg><span style="color:#dc2626;">'+msg+'</span>';
 }
 function populateLanding(){
