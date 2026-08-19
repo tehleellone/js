@@ -4436,23 +4436,24 @@ window.glkMobileReportUpload=function(file){
       if(err){ alert(err.message); return; }
       glkShowLoader('Uploading report to SharePoint…');
       spUploadMobileReport(buf,file.name,function(err2,meta){
-      if(err2){
-        glkHideLoader();
-        console.error('[GLK] SP upload error:',err2);
-        alert('Failed to save to SharePoint: '+err2.message+'\n\nCheck you have Contribute access to Shared Documents.');
-        return;
-      }
-      GLK_MOBILE_REPORT_META=meta;
-      glkSpLoadMobileReport(function(err3){
-        glkHideLoader();
-        if(err3){
-          GLK_MOBILE_REPORT_META=meta;
-          glkMobileQtdRefreshUI();
-          renderMobileQtdBridge();
+        if(err2){
+          glkHideLoader();
+          console.error('[GLK] SP upload error:',err2);
+          alert('Failed to save to SharePoint: '+err2.message+'\n\nCheck you have Contribute access to Shared Documents.');
           return;
         }
-        glkMobileQtdRefreshUI();
-        renderMobileQtdBridge();
+        GLK_MOBILE_REPORT_META=meta;
+        glkSpLoadMobileReport(function(err3){
+          glkHideLoader();
+          if(err3){
+            GLK_MOBILE_REPORT_META=meta;
+            glkMobileQtdRefreshUI();
+            renderMobileQtdBridge();
+            return;
+          }
+          glkMobileQtdRefreshUI();
+          renderMobileQtdBridge();
+        });
       });
     });
   };
