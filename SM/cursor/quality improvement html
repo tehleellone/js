@@ -549,6 +549,7 @@ function taNormalizeRow(r){
   Object.keys(TA_SP).forEach(function(k){
     var f=TA_SP[k], v=r[f];
     if (k === 'Owner') v = qiaPersonTitle(r.Owner) || v;
+    if (TA_BOOL_KEYS.indexOf(k) >= 0) { row[f] = taFromSpBool(v); return; }
     if(['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'].indexOf(k)>=0)
       row[f]=Number(v||0);
     else row[f]=v==null?'':v;
@@ -856,6 +857,20 @@ function taRenderCharts(data){
 }
 
 var TA_NUM_KEYS = ['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'];
+var TA_BOOL_KEYS = ['Identified_Gap_Process','Identified_Gap_Agent','Repeated_Call'];
+
+function taToSpBool(v) {
+  if (v === true || v === false) return v;
+  var s = String(v || '').toLowerCase().trim();
+  if (s === 'yes' || s === 'true' || s === '1') return true;
+  if (s === 'no' || s === 'false' || s === '0') return false;
+  return undefined;
+}
+function taFromSpBool(v) {
+  if (v === true) return 'Yes';
+  if (v === false) return 'No';
+  return v == null ? '' : String(v);
+}
 
 function taF(k, label, type, req) {
   var id = taFieldId(k), star = req ? ' *' : '';
@@ -938,6 +953,11 @@ function taBuildSubmitPayload() {
     if (!el) return;
     var v = el.value;
     if (v === '' || v === null || v === undefined) return;
+    if (TA_BOOL_KEYS.indexOf(k) >= 0) {
+      var b = taToSpBool(v);
+      if (b !== undefined) body[TA_SP[k]] = b;
+      return;
+    }
     if (TA_NUM_KEYS.indexOf(k) >= 0) body[TA_SP[k]] = Number(v);
     else body[TA_SP[k]] = v;
   });
