@@ -1060,7 +1060,7 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
               </div>
             </div>
             <div class="filter-group">
-              <label class="filter-label">Report level</label>
+              <label class="filter-label">Report level <span style="font-weight:500;color:var(--t3);">(verticals from GLK Excel)</span></label>
               <div class="ms-wrap" id="mqms_reportLevel">
                 <div class="ms-trigger" id="mqmst_reportLevel" onclick="event.stopPropagation();mqToggleReportLevel()">
                   <span id="mqmstext_reportLevel">GLK Overall</span>
@@ -4479,7 +4479,7 @@ function mqGetReportLevelsChecked(){
 function mqUpdateReportLevelText(){
   var checked=mqGetReportLevelsChecked();
   var te=el('mqmstext_reportLevel'); if(!te) return;
-  if(!checked.length){ te.textContent='GLK Overall'; return; }
+  if(!checked.length){ te.textContent='GLK Overall (all verticals)'; return; }
   if(checked.length===1) te.textContent=checked[0];
   else te.textContent=checked.length+' verticals';
   mqReportLevels=checked.slice();
@@ -5572,7 +5572,10 @@ function renderMobileQtdBridge(){
   var c=getChartColors();
   var calc=glkMobileQtdCalc();
   var badge=el('mqTargetBadge');
-  if(badge) badge.textContent='Target: '+fmtLines(calc.target)+' · '+calc.vertical;
+  if(badge){
+    var scope=calc.vertical==='GLK Overall'?'GLK Overall':'Vertical: '+calc.vertical;
+    badge.textContent=scope+' · Actuals '+fmtLines(calc.actualsQtd)+' · Target '+fmtLines(calc.target);
+  }
   var sub=el('mqBridgeSubtitle');
   if(sub) sub.textContent=(calc.isBest?'Best Case · Proposed + Opportunity':'Worst Case · Proposed only')+' · Q'+calc.quarter+' '+calc.year+' · GA Lines · Act: current month → quarter-end';
   if(!GLK_MOBILE_REPORT){
@@ -5584,18 +5587,22 @@ function renderMobileQtdBridge(){
   var top5GrossStart=-1,top5GrossEnd=-1,top5ChurnStart=-1,top5ChurnEnd=-1;
   var trueCum=0,dispTop=0;
   var scaleMax=Math.max(calc.target,calc.actualsQtd,calc.forecast,1);
-  var minStep=Math.max(120,scaleMax*0.022);
-  function dispH(v){ return Math.max(Math.abs(v),minStep); }
+  function dispH(v,isPlaceholder){
+    var a=Math.abs(num(v));
+    if(isPlaceholder) return Math.max(scaleMax*0.012,24);
+    return a;
+  }
   function pushBar(b,meta){
     var idx=bars.length; bars.push(b); barMeta.push({label:meta||'',bar:b}); return idx;
   }
   var actualsVert=(!calc.activeReportLevels.length&&calc.actualsByVertical)?calc.actualsByVertical.map(function(v){return {name:v.name,value:v.actualQtd};}):null;
   trueCum=calc.actualsQtd; dispTop=calc.actualsQtd;
   pushBar({
-    value:calc.actualsQtd,trueCum:trueCum,displayStart:0,displayEnd:Math.max(dispTop,minStep),
+    value:calc.actualsQtd,trueCum:trueCum,displayStart:0,displayEnd:dispH(calc.actualsQtd,calc.actualsQtd===0),
     color:'#1d4ed8',type:'base',custName:'Actuals QTD',section:'actuals',bids:[],
     vertBreakdown:actualsVert
   },'Actuals QTD · '+fmtLines(calc.actualsQtd)+(calc.reportScopeMissing?' (vertical not in report!)':''));
+  dispTop=dispH(calc.actualsQtd,calc.actualsQtd===0);
   if(calc.gross100!==0){
     trueCum+=calc.gross100;
     var g0s=dispTop,g0e=dispTop+dispH(calc.gross100); dispTop=g0e;
@@ -5628,7 +5635,8 @@ function renderMobileQtdBridge(){
   churnSepIdx=bars.length;
   if(!calc.hasChurn){
     pushBar({
-      value:0,trueCum:trueCum,displayStart:dispTop,displayEnd:dispTop+minStep*0.4,color:'#cbd5e1',type:'empty',
+      value:0,trueCum:trueCum,displayStart:dispTop,displayEnd:dispTop+dispH(0,true),
+      color:'#cbd5e1',type:'empty',
       custName:'No Churn',section:'empty',bids:[],groupLabel:'Churn'
     },'No Churn in pipeline for selected filters');
   }else{
@@ -5653,9 +5661,9 @@ function renderMobileQtdBridge(){
     }
   }
   var fc=calc.forecast;
-  var fcDisp=Math.max(fc,minStep);
+  var fcDisp=fc;
   pushBar({value:fc,trueCum:fc,displayStart:0,displayEnd:fcDisp,color:'#16a34a',type:'total',custName:'Net Forecast',section:'outcome'},'Net Forecast · '+fmtLines(fc));
-  var tgtDisp=Math.max(calc.target,minStep);
+  var tgtDisp=calc.target;
   pushBar({value:calc.target,trueCum:calc.target,displayStart:0,displayEnd:tgtDisp,color:'#059669',type:'target',custName:'Target',section:'outcome'},'Target · '+fmtLines(calc.target));
   if(calc.target>0){
     if(calc.gap>0){
@@ -5667,17 +5675,22 @@ function renderMobileQtdBridge(){
       pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:'#0ea5e9',type:'growth',custName:'Growth vs Target',section:'outcome'},'Growth · +'+fmtLines(calc.growth));
     }
   }
-  var yMax=0;
-  bars.forEach(function(b){ yMax=Math.max(yMax,b.displayStart,b.displayEnd,Math.abs(b.value)); });
-  yMax=Math.max(yMax,calc.target,calc.forecast,fcDisp,tgtDisp,1)*1.08;
+  var yMax=Math.max(calc.forecast,calc.target,calc.actualsQtd,1);
+  bars.forEach(function(b){
+    yMax=Math.max(yMax,b.displayStart,b.displayEnd,Math.abs(b.trueCum||0),Math.abs(b.value));
+  });
+  yMax*=1.08;
+  var maxNameLen=0;
+  bars.forEach(function(b){ maxNameLen=Math.max(maxNameLen,String(b.custName||'').length); });
+  var scrollWrap=el('mqBridgeScroll');
+  var parentW=scrollWrap?scrollWrap.clientWidth:900;
+  var barSlot=Math.max(76,Math.min(104,Math.floor(parentW/Math.max(bars.length,1))));
+  if(maxNameLen>14) barSlot=Math.max(barSlot,Math.min(112,maxNameLen*5.5));
+  if(bars.length>14) barSlot=Math.max(barSlot,84);
+  var minChartW=Math.max(parentW,bars.length*barSlot+48);
   var axisPad=8;
   var chartOuter=el('mqChartOuter');
   var chartWrap=el('mqChartWrap');
-  var scrollWrap=el('mqBridgeScroll');
-  var parentW=scrollWrap?scrollWrap.clientWidth:900;
-  var barSlot=Math.max(72,Math.min(96,Math.floor(parentW/Math.max(bars.length,1))));
-  if(bars.length>14) barSlot=Math.max(barSlot,80);
-  var minChartW=Math.max(parentW,bars.length*barSlot+48);
   if(chartOuter) chartOuter.style.minWidth=minChartW+'px';
   GLK_MQ_LAST_BAR_SLOT=barSlot;
   GLK_MQ_LAST_CHART_W=minChartW;
@@ -5697,7 +5710,7 @@ function renderMobileQtdBridge(){
         data:bars.map(glkMobileQtdFloatBar),
         backgroundColor:bars.map(function(b){return b.color;}),
         borderRadius:6,borderSkipped:false,
-        barPercentage:.82,categoryPercentage:.88,minBarLength:10,maxBarThickness:56
+        barPercentage:.82,categoryPercentage:.88,minBarLength:0,maxBarThickness:56
       }]},
       options:{responsive:true,maintainAspectRatio:false,
         layout:{padding:{bottom:axisPad,top:16,left:4,right:8}},
