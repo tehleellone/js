@@ -1,21 +1,9 @@
-C01_Welcoming
-C03_FormOfAppeal
-C04_OfficialSpeech
-C06_HoldTechniques
-C07_ActiveListening
-C10_HandlingTime
-C12_CustomerID
-C14_Transaction
-C16_CorrectInfo
-C20_ClarifyingQuestions
-Used when Audit_Type = Call. Other call columns stay blank on email audits.
-
-Email criteria — add 8 Number columns
-E01_FormOfAppeal
-E02_OfficialText
-E03_ReadingAttentively
-E05_HandlingTime
-E07_CustomerID
-E09_Transaction
-E11_CorrectInfo
-E13_ClarifyingQuestions
+{
+    "error": {
+        "code": "-1, Microsoft.SharePoint.Client.InvalidClientQueryException",
+        "message": {
+            "lang": "en-US",
+            "value": "An entry without a type name was found, but no expected type was specified. To allow entries without type information, the expected type must also be specified when the model is specified."
+        }
+    }
+}
