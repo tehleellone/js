@@ -1,9 +1,1 @@
-{
-    "error": {
-        "code": "-1, Microsoft.SharePoint.Client.InvalidClientQueryException",
-        "message": {
-            "lang": "en-US",
-            "value": "Cannot convert a primitive value to the expected type 'Edm.Boolean'. See the inner exception for more details."
-        }
-    }
-}
+http://sharedspaces:8086/sites/GKA/Shared%20Documents/Forms/AllItems.aspx?RootFolder=%2Fsites%2FGKA%2FShared%20Documents%2FGLK%20Mobile%20QTD&FolderCTID=0x01200033B3C0ABA88E8D4095E55E8F88E56E66&View=%7B4E8B0BA8%2D9FBF%2D4F24%2DB7E3%2D905CA007F282%7D
