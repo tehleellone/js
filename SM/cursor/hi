@@ -392,14 +392,16 @@ body[data-theme="dark"] .status-dot,body[data-theme="duralux-dark"] .status-dot{
 #mqChartOuter{display:flex;flex-direction:column;min-width:100%}
 #mqChartWrap{position:relative;height:340px;min-width:100%;flex-shrink:0}
 #mqChartWrap canvas{display:block;width:100%!important;height:100%!important}
-#mqBracketRow{display:flex;align-items:flex-end;min-height:20px;margin-top:4px}
-.mq-bracket-cell{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex-shrink:0}
-.mq-bracket-line{display:block;width:calc(100% - 6px);height:0;border-top:1.5px solid rgba(100,116,139,.55);margin-bottom:2px}
+#mqBracketRow{position:relative;height:22px;margin-top:4px;min-height:20px}
+.mq-bracket-abs{position:absolute;top:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:22px}
+.mq-bracket-line{display:block;width:calc(100% - 4px);height:0;border-top:1.5px solid rgba(100,116,139,.55);margin-bottom:2px}
 .mq-bracket-label{font-size:8px;font-weight:700;color:#64748b;line-height:1.2;text-align:center;padding:0 2px}
-#mqXAxisStrip{display:flex;align-items:flex-start;margin-top:2px;padding-bottom:4px}
-.mq-x-cell{text-align:center;font-size:9px;font-weight:600;color:var(--t3);line-height:1.3;padding:0 3px;word-break:break-word;hyphens:auto;cursor:pointer;flex-shrink:0;border-radius:4px;transition:color .15s,background .15s}
-.mq-x-cell:hover{color:var(--acc);background:var(--nab)}
-.mq-x-cell.sel{color:var(--acc);font-weight:800;background:var(--nab);border:1px solid var(--nab2)}
+#mqXAxisStrip{position:relative;height:54px;margin-top:2px;padding-bottom:4px}
+.mq-x-abs{position:absolute;top:0;text-align:center;font-size:9px;font-weight:600;color:var(--t3);line-height:1.3;padding:0 2px;word-break:break-word;hyphens:auto;cursor:pointer;transition:color .15s,background .15s}
+.mq-x-abs:hover{color:var(--acc);background:var(--nab)}
+.mq-x-abs.sel{color:var(--acc);font-weight:800;background:var(--nab);border:1px solid var(--nab2);border-radius:4px}
+.mq-x-abs.growth-lbl{color:#16a34a;font-weight:700}
+.mq-x-abs.gap-lbl{color:#dc2626;font-weight:700}
 #mqBridgeLegend{display:flex;flex-wrap:wrap;gap:.35rem .65rem;margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border)}
 .mq-leg-chip{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;font-weight:600;color:var(--t3)}
 .mq-leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
@@ -5284,6 +5286,8 @@ function mqShortXLabel(b,idx,bars){
 }
 function mqAxisLabelLines(b){
   if(!b) return [''];
+  if(b.type==='growth') return ['Growth','(+'+fmtLines(Math.abs(b.value))+')'];
+  if(b.type==='gap') return ['Gap','('+fmtLines(Math.abs(b.value))+')'];
   var name=String(b.axisName||b.custName||b.groupLabel||'').trim();
   if(!name) return [''];
   if(name.length<=16) return [name];
@@ -5300,39 +5304,63 @@ function mqAxisLabelLines(b){
   var mid=Math.ceil(name.length/2);
   return [name.slice(0,mid), name.slice(mid)];
 }
-function mqCalcAxisBottomPad(bars){
-  return 8;
+function mqSyncChartLabels(chart,bars){
+  if(!chart) return;
+  var meta=chart.getDatasetMeta(0);
+  if(!meta||!meta.data||!meta.data.length) return;
+  var canvas=chart.canvas;
+  var cw=canvas?canvas.clientWidth:0;
+  if(!cw) return;
+  var brow=el('mqBracketRow');
+  if(brow){
+    brow.style.width=cw+'px';
+    brow.style.minWidth=cw+'px';
+    brow.innerHTML='';
+    var groups=[];
+    bars.forEach(function(b,i){
+      if(!b.bracketGroup) return;
+      var g=groups.find(function(x){return x.id===b.bracketGroup;});
+      if(!g) groups.push(g={id:b.bracketGroup,label:b.bracketLabel||'',start:i,end:i});
+      else g.end=i;
+    });
+    groups.forEach(function(g){
+      var b0=meta.data[g.start], b1=meta.data[g.end];
+      if(!b0||!b1) return;
+      var cell=document.createElement('div');
+      cell.className='mq-bracket-abs';
+      var x1=b0.x-(b0.width||14)/2-2;
+      var w=b1.x+(b1.width||14)/2+2-x1;
+      cell.style.left=x1+'px';
+      cell.style.width=Math.max(w,20)+'px';
+      cell.innerHTML='<span class="mq-bracket-line"></span><span class="mq-bracket-label">'+mqEscHtml(g.label)+'</span>';
+      brow.appendChild(cell);
+    });
+  }
+  var strip=el('mqXAxisStrip');
+  if(!strip) return;
+  strip.style.width=cw+'px';
+  strip.style.minWidth=cw+'px';
+  strip.innerHTML='';
+  meta.data.forEach(function(bar,i){
+    var b=bars[i]; if(!b) return;
+    var cell=document.createElement('div');
+    var extra=b.type==='growth'?' growth-lbl':(b.type==='gap'?' gap-lbl':'');
+    cell.className='mq-x-abs'+(GLK_MQ_DETAIL_IDX===i?' sel':'')+extra;
+    cell.style.left=bar.x+'px';
+    cell.style.transform='translateX(-50%)';
+    cell.style.maxWidth=Math.max(72,(bar.width||18)+48)+'px';
+    var lines=mqAxisLabelLines(b);
+    cell.innerHTML=lines.map(function(l){return mqEscHtml(l);}).join('<br>');
+    cell.title=b.custName||lines.join(' ');
+    cell.onclick=function(){mqClickAxisCell(i);};
+    strip.appendChild(cell);
+  });
 }
 function mqEscHtml(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 }
-function mqRenderBracketRow(bars,barSlot,minChartW){
-  var brow=el('mqBracketRow'); if(!brow) return;
-  brow.style.minWidth=minChartW+'px';
-  var html='', i=0;
-  while(i<bars.length){
-    var b=bars[i];
-    if(b.bracketGroup){
-      var label=b.bracketLabel||'';
-      var start=i;
-      while(i<bars.length&&bars[i].bracketGroup===b.bracketGroup) i++;
-      var w=(i-start)*barSlot;
-      html+='<div class="mq-bracket-cell" style="width:'+w+'px;min-width:'+w+'px"><span class="mq-bracket-line"></span><span class="mq-bracket-label">'+mqEscHtml(label)+'</span></div>';
-    }else{
-      html+='<div class="mq-bracket-cell" style="width:'+barSlot+'px;min-width:'+barSlot+'px"></div>';
-      i++;
-    }
-  }
-  brow.innerHTML=html;
-}
-function mqRenderAxisStrip(bars,barSlot,minChartW){
-  var strip=el('mqXAxisStrip'); if(!strip) return;
-  strip.style.minWidth=minChartW+'px';
-  strip.innerHTML=bars.map(function(b,i){
-    var lines=mqAxisLabelLines(b);
-    var cls='mq-x-cell'+(GLK_MQ_DETAIL_IDX===i?' sel':'');
-    return '<div class="'+cls+'" style="width:'+barSlot+'px;min-width:'+barSlot+'px" onclick="mqClickAxisCell('+i+')" title="'+mqEscHtml(b.custName||'')+'">'+lines.map(function(l){return mqEscHtml(l);}).join('<br>')+'</div>';
-  }).join('');
+function mqCalcAxisBottomPad(bars){
+  return 8;
 }
 window.mqClickAxisCell=function(idx){
   if(!GLK_MQ_LAST_BARS) return;
@@ -5347,8 +5375,8 @@ function mqRenderBridgeLegend(){
     {c:'#ea580c',l:'Churn / Downgrade'},
     {c:'#16a34a',l:'Net Forecast'},
     {c:'#059669',l:'Target'},
-    {c:'#0ea5e9',l:'Growth vs Target'},
-    {c:'#f59e0b',l:'Gap to Target'}
+    {c:'#16a34a',l:'Growth vs Target'},
+    {c:'#dc2626',l:'Gap to Target'}
   ];
   leg.innerHTML=chips.map(function(x){
     return '<span class="mq-leg-chip"><span class="mq-leg-dot" style="background:'+x.c+';"></span>'+x.l+'</span>';
@@ -5477,7 +5505,7 @@ function mqBuildBarDetailHtml(b,metaLabel){
 window.mqCloseBarDetail=function(){
   GLK_MQ_DETAIL_IDX=-1;
   var p=el('mqBarDetailPanel'); if(p) p.style.display='none';
-  if(GLK_MQ_LAST_BARS) mqRenderAxisStrip(GLK_MQ_LAST_BARS,GLK_MQ_LAST_BAR_SLOT||72,GLK_MQ_LAST_CHART_W||900);
+  if(GLK_MQ_LAST_BARS) mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS);
   if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
 };
 function mqToggleBarDetail(idx,bars,barMeta){
@@ -5487,7 +5515,7 @@ function mqToggleBarDetail(idx,bars,barMeta){
   var b=bars[idx], m=barMeta[idx];
   p.style.display='block';
   p.innerHTML=mqBuildBarDetailHtml(b,m?m.label:'');
-  mqRenderAxisStrip(bars,GLK_MQ_LAST_BAR_SLOT||72,GLK_MQ_LAST_CHART_W||900);
+  mqSyncChartLabels(CHARTS.mobileQtd,bars);
   if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
   p.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -5669,10 +5697,10 @@ function renderMobileQtdBridge(){
     if(calc.gap>0){
       var gs2=Math.min(fcDisp,tgtDisp),ge2=Math.max(fcDisp,tgtDisp);
       if(ge2===gs2) ge2=gs2+dispH(calc.gap);
-      pushBar({value:calc.gap,trueCum:calc.target,displayStart:gs2,displayEnd:ge2,color:'#f59e0b',type:'gap',custName:'Gap to Target',section:'outcome'},'Gap · '+fmtLines(calc.gap));
+      pushBar({value:calc.gap,trueCum:calc.target,displayStart:gs2,displayEnd:ge2,color:'#dc2626',type:'gap',custName:'Gap to Target',section:'outcome'},'Gap · '+fmtLines(calc.gap));
     }else if(calc.growth>0){
       var gs3=tgtDisp,ge3=tgtDisp+dispH(calc.growth);
-      pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:'#0ea5e9',type:'growth',custName:'Growth vs Target',section:'outcome'},'Growth · +'+fmtLines(calc.growth));
+      pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:'#16a34a',type:'growth',custName:'Growth vs Target',section:'outcome'},'Growth · +'+fmtLines(calc.growth));
     }
   }
   var yMax=Math.max(calc.forecast,calc.target,calc.actualsQtd,1);
@@ -5714,6 +5742,7 @@ function renderMobileQtdBridge(){
       }]},
       options:{responsive:true,maintainAspectRatio:false,
         layout:{padding:{bottom:axisPad,top:16,left:4,right:8}},
+        animation:{onComplete:function(){ mqSyncChartLabels(CHARTS.mobileQtd,bars); }},
         onClick:function(evt,elements){
           if(!elements.length){ mqCloseBarDetail(); return; }
           mqToggleBarDetail(elements[0].index,bars,barMeta);
@@ -5740,15 +5769,14 @@ function renderMobileQtdBridge(){
   }catch(err){ console.error('[GLK] Mobile QTD chart error:',err); }
   GLK_MQ_LAST_BARS=bars;
   GLK_MQ_LAST_BAR_META=barMeta;
-  mqRenderBracketRow(bars,barSlot,minChartW);
-  mqRenderAxisStrip(bars,barSlot,minChartW);
+  mqSyncChartLabels(CHARTS.mobileQtd,bars);
   mqRenderBridgeLegend();
   mqRenderBridgeInfoPanel(calc);
   var sum=el('mobileQtdSummaryWrap');
   if(sum){
     var gapTxt=calc.gap>0
-      ?'<span style="color:#f59e0b;">'+fmtLines(calc.gap)+' short of target</span>'
-      :'<span style="color:#0ea5e9;">+'+fmtLines(calc.growth)+' ahead of target</span>';
+      ?'<span style="color:#dc2626;">'+fmtLines(calc.gap)+' short of target</span>'
+      :'<span style="color:#16a34a;">+'+fmtLines(calc.growth)+' ahead of target</span>';
     sum.innerHTML='<strong>'+(calc.isBest?'Best':'Worst')+' Case</strong> · Actuals QTD '+fmtLines(calc.actualsQtd)+
       ' · Gross 100% '+fmtLines(calc.gross100)+
       ' · In-flight Gross '+fmtLines(calc.inflightGross)+
