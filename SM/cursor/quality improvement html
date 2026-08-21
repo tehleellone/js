@@ -180,7 +180,7 @@ body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-b
 </div>
 <script>
 // CONFIG
-var QIA_DUMMY_MODE = true;
+var QIA_DUMMY_MODE = false;
 var SP_URL = 'http://sharedspaces:8116/sites/QIA';
 var LIST_TOPIC = 'Topic Analysis';
 var LIST_QA = 'QIA_QA_Audit';
@@ -198,13 +198,40 @@ document.addEventListener('DOMContentLoaded', function() {
 async function qiaInit() {
   document.getElementById('modeBadge').innerHTML = QIA_DUMMY_MODE
     ? '<span class="status-dot"></span> Demo Mode' : '<span class="status-dot"></span> Live';
-  await Promise.all([qiaFetchTopics(), qiaFetchQaAudits()]);
-  await qiaLoadTeamChoices();
-  document.getElementById('taLoading').style.display = 'none';
-  document.getElementById('taContent').style.display = 'block';
-  document.getElementById('qaLoading').style.display = 'none';
-  document.getElementById('qaContent').style.display = 'block';
-  taRenderShell(); qaRenderShell();
+  try {
+    await Promise.all([qiaFetchTopics(), qiaFetchQaAudits()]);
+    await qiaLoadTeamChoices();
+    document.getElementById('taLoading').style.display = 'none';
+    document.getElementById('taContent').style.display = 'block';
+    document.getElementById('qaLoading').style.display = 'none';
+    document.getElementById('qaContent').style.display = 'block';
+    taRenderShell(); qaRenderShell();
+  } catch(e) {
+    console.error('[QIA]', e);
+    var msg = e.message || String(e);
+    document.getElementById('taLoading').innerHTML =
+      '<div style="text-align:center;padding:40px;max-width:520px;margin:0 auto;">' +
+      '<div style="font-size:2rem;margin-bottom:12px;">⚠️</div>' +
+      '<div style="font-weight:700;margin-bottom:8px;">Could not load QIA data</div>' +
+      '<div style="font-size:.82rem;color:var(--t3);margin-bottom:16px;">' + qiaEsc(msg) + '</div>' +
+      '<button type="button" class="export-btn" onclick="qiaInit()">Retry</button></div>';
+    document.getElementById('qaLoading').style.display = 'none';
+  }
+}
+
+function qiaPersonTitle(v) {
+  if (!v) return '';
+  if (typeof v === 'string') return v;
+  if (v.Title) return v.Title;
+  if (v.results && v.results[0]) return v.results[0].Title || '';
+  return '';
+}
+
+function qiaFirstKey(obj, keys) {
+  for (var i = 0; i < keys.length; i++) {
+    if (obj[keys[i]] !== undefined && obj[keys[i]] !== null && obj[keys[i]] !== '') return obj[keys[i]];
+  }
+  return '';
 }
 
 async function qiaLoadTeamChoices() {
@@ -227,9 +254,12 @@ async function qiaLoadTeamChoices() {
 
 async function qiaFetchTopics() {
   if (QIA_DUMMY_MODE) { qiaTopics = taGenDummyTopics(); return; }
-  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_TOPIC + "')/items?$select=ID,Title," + TA_SELECT + "&$top=2000&$orderby=Created desc";
+  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_TOPIC + "')/items?$top=2000&$orderby=Created desc";
   var res = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
-  if (!res.ok) throw new Error('Topic Analysis fetch failed');
+  if (!res.ok) {
+    var errText = await res.text();
+    throw new Error('Topic Analysis fetch failed: ' + errText.substring(0, 300));
+  }
   qiaTopics = (await res.json()).d.results.map(taNormalizeRow);
 }
 
@@ -238,6 +268,7 @@ function taNormalizeRow(r){
   var row={ ID:r.ID, Title:r.Title };
   Object.keys(TA_SP).forEach(function(k){
     var f=TA_SP[k], v=r[f];
+    if (k === 'Owner') v = qiaPersonTitle(r.Owner) || v;
     if(['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'].indexOf(k)>=0)
       row[f]=Number(v||0);
     else row[f]=v==null?'':v;
@@ -286,11 +317,35 @@ function taGenDummyTopics() {
 
 async function qiaFetchQaAudits() {
   if (QIA_DUMMY_MODE) { qiaQaAudits = qaGenDummyAudits(); return; }
-  var cols = QA_CALL_CRITERIA.map(function(c){return c.id;}).concat(QA_EMAIL_CRITERIA.map(function(c){return c.id;})).join(',');
-  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_QA + "')/items?$select=ID,Title,Reference_ID,Audit_Type,Team,Agent_Name,Evaluator/Title,Date_of_Eval,Date_of_Call,Call_Duration,Call_Duration_Type,MSISDN,Call_Reason,Date_of_Email,Email_Reason,Email_Subject,Avg_Score,Outcome,Comments,NA_Fields," + cols + "&$expand=Evaluator&$orderby=Created desc&$top=1000";
+  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_QA + "')/items?$expand=Evaluator&$orderby=Created desc&$top=1000";
   var res = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
-  if (!res.ok) throw new Error('QA fetch failed');
-  qiaQaAudits = (await res.json()).d.results.map(function(a){ a.Evaluator = a.Evaluator ? a.Evaluator.Title : ''; return a; });
+  if (!res.ok) {
+    var errText = await res.text();
+    throw new Error('QA fetch failed: ' + errText.substring(0, 300));
+  }
+  qiaQaAudits = (await res.json()).d.results.map(qaNormalizeRow);
+}
+
+function qaNormalizeRow(a) {
+  a.Evaluator = qiaPersonTitle(a.Evaluator);
+  a.Reference_ID = qiaFirstKey(a, ['Reference_ID','Reference_x0020_ID','ReferenceID','ReferenceId']) || '';
+  a.Audit_Type = qiaFirstKey(a, ['Audit_Type','Audit_x0020_Type','AuditType']) || a.Audit_Type || '';
+  a.Agent_Name = qiaFirstKey(a, ['Agent_Name','Agent_x0020_Name','AgentName']) || '';
+  a.Date_of_Eval = qiaFirstKey(a, ['Date_of_Eval','Date_x0020_of_x0020_Eval','DateOfEval']) || a.Date_of_Eval;
+  a.Date_of_Call = qiaFirstKey(a, ['Date_of_Call','Date_x0020_of_x0020_Call','DateOfCall']) || a.Date_of_Call;
+  a.Date_of_Email = qiaFirstKey(a, ['Date_of_Email','Date_x0020_of_x0020_Email','DateOfEmail']) || a.Date_of_Email;
+  a.Call_Reason = qiaFirstKey(a, ['Call_Reason','Call_x0020_Reason','CallReason']) || a.Call_Reason;
+  a.Email_Reason = qiaFirstKey(a, ['Email_Reason','Email_x0020_Reason','EmailReason']) || a.Email_Reason;
+  a.Email_Subject = qiaFirstKey(a, ['Email_Subject','Email_x0020_Subject','EmailSubject']) || a.Email_Subject;
+  a.Avg_Score = Number(qiaFirstKey(a, ['Avg_Score','Avg_x0020_Score','AvgScore']) || 0);
+  a.NA_Fields = qiaFirstKey(a, ['NA_Fields','NA_x0020_Fields','NAFields','NAFileds']) || '';
+  QA_CALL_CRITERIA.concat(QA_EMAIL_CRITERIA).forEach(function(c) {
+    if (a[c.id] === undefined || a[c.id] === null) {
+      var alts = [c.id.replace(/_/g,'_x0020_'), c.id.replace(/_/g,'')];
+      for (var i = 0; i < alts.length; i++) { if (a[alts[i]] !== undefined) { a[c.id] = a[alts[i]]; break; } }
+    }
+  });
+  return a;
 }
 
 function qiaShowModule(mod) {
