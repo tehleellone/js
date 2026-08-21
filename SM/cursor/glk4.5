@@ -6,6 +6,9 @@
 <title>GLK Enterprise Pipeline Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/32.0.2/ag-grid-community.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-grid.css">
 <link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-theme-alpine.css">
 <style>
@@ -152,6 +155,8 @@ select,input,textarea,button{font-family:inherit}
   box-shadow:0 0 14px var(--glow);flex-shrink:0;
 }
 .logo svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+.du-logo-svg{display:block;width:100%;height:100%}
+.du-logo-wrap{background:transparent!important;box-shadow:none!important;border-radius:0!important;overflow:visible!important}
 .header-title{
   font-size:1.05rem;font-weight:800;white-space:nowrap;
   background:var(--grad);-webkit-background-clip:text;
@@ -223,10 +228,19 @@ body[data-theme="dark"] .status-dot,body[data-theme="duralux-dark"] .status-dot{
 .nav-item.active{background:var(--nab);border-color:var(--nab2);color:var(--t1);font-weight:600}
 
 /* ═══════ CONTENT ═══════════════════════════════════════════════════════ */
-.content{flex:1;overflow-y:auto;min-width:0;background:var(--bg-content);padding:1.1rem 1.25rem}
+.content{flex:1;overflow-y:auto;min-width:0;background:var(--bg-content);padding:1.1rem 1.25rem;width:100%;box-sizing:border-box}
+.content.mq-view{padding:1rem 1.25rem;width:100%;max-width:100%}
+.portal-shell.mq-full{max-width:none;width:100%;margin:0}
+#mobile-qtd-view{width:100%;max-width:100%;margin:0;padding:0;box-sizing:border-box}
 .dashboard-section{animation:fadeSection .25s ease;padding:.5rem 0}
 @keyframes fadeSection{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.glk-spinner{width:52px;height:52px;border-radius:50%;border:4px solid rgba(255,255,255,.14);border-top-color:var(--acc,#c026d3);animation:glkSpin .8s linear infinite}
+#glkLoader{
+  display:none;position:fixed;inset:0;z-index:100000;
+  background:var(--bg-content,#f9f3ff);backdrop-filter:blur(8px);
+  align-items:center;justify-content:center;flex-direction:column;gap:1rem;
+}
+#glkLoaderText{font-size:.88rem;font-weight:700;color:var(--t2);letter-spacing:.02em}
+.glk-spinner{width:52px;height:52px;border-radius:50%;border:4px solid color-mix(in srgb,var(--acc,#c026d3) 16%,transparent);border-top-color:var(--acc,#c026d3);animation:glkSpin .8s linear infinite}
 @keyframes glkSpin{to{transform:rotate(360deg)}}
 
 /* ═══════ SECTION TITLE ══════════════════════════════════════════════════ */
@@ -374,6 +388,26 @@ body[data-theme="dark"] .status-dot,body[data-theme="duralux-dark"] .status-dot{
 .chart-title{font-size:.8rem;font-weight:700;color:var(--t2);margin-bottom:.65rem;display:flex;align-items:center;gap:.35rem}
 .chart-title svg{width:16px;height:16px;stroke:var(--acc);fill:none;stroke-width:2}
 .chart-container{position:relative;height:260px}
+.mq-bridge-scroll{overflow-x:auto;overflow-y:visible;margin:0 -.15rem;padding:0 .15rem .15rem;border-radius:10px}
+.mq-bridge-scroll::-webkit-scrollbar{height:8px}
+.mq-bridge-scroll::-webkit-scrollbar-thumb{background:var(--border-s);border-radius:4px}
+#mqChartOuter{display:flex;flex-direction:column;min-width:100%}
+#mqChartWrap{position:relative;height:340px;min-width:100%;flex-shrink:0}
+#mqChartWrap canvas{display:block;width:100%!important;height:100%!important}
+#mqBracketRow{position:relative;height:22px;margin-top:4px;min-height:20px}
+.mq-bracket-abs{position:absolute;top:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:22px}
+.mq-bracket-line{display:block;width:calc(100% - 4px);height:0;border-top:1.5px solid rgba(100,116,139,.55);margin-bottom:2px}
+.mq-bracket-label{font-size:8px;font-weight:700;color:#64748b;line-height:1.2;text-align:center;padding:0 2px}
+#mqXAxisStrip{position:relative;height:54px;margin-top:2px;padding-bottom:4px}
+.mq-x-abs{position:absolute;top:0;text-align:center;font-size:9px;font-weight:600;color:var(--t3);line-height:1.3;padding:0 2px;word-break:break-word;hyphens:auto;cursor:pointer;transition:color .15s,background .15s}
+.mq-x-abs:hover{color:var(--acc);background:var(--nab)}
+.mq-x-abs.sel{color:var(--acc);font-weight:800;background:var(--nab);border:1px solid var(--nab2);border-radius:4px}
+.mq-x-abs.growth-lbl{color:#22c55e;font-weight:700}
+.mq-x-abs.gap-lbl{color:#ef4444;font-weight:700}
+#mqBridgeLegend{display:flex;flex-wrap:wrap;gap:.35rem .65rem;margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border)}
+.mq-leg-chip{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;font-weight:600;color:var(--t3)}
+.mq-leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+#mqBarDetailHint{font-size:.64rem;color:var(--t3);margin-top:.4rem}
 
 /* ═══════ TABLE SECTION ═════════════════════════════════════════════════ */
 .table-section{
@@ -616,12 +650,12 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
   <div class="landing-left animate-fade-in">
     <div class="landing-branding">
       <div style="margin-bottom:.85rem">
-        <div class="logo-icon" style="width:60px;height:60px;">
-          <img src="http://sharedspaces:8086/sites/GKA/Shared%20Documents/Image%20(1).png" style="width:60px;height:60px;object-fit:cover;border-radius:15px;transform:scale(1.4);" alt="GLK">
+        <div class="logo-icon du-logo-wrap" style="width:72px;height:36px;">
+          <svg class="du-logo-svg" viewBox="0 0 72 36" aria-label="du"><text x="2" y="28" font-family="Inter,Arial Black,sans-serif" font-size="30" font-weight="900" fill="#753BBD">du</text></svg>
         </div>
       </div>
-      <h1 class="landing-brand-title">Salim Khoussas' Legacy...<br>GLK<br><span>Pipeline</span><br>Dashboard</h1>
-      <p class="landing-brand-subtitle">Real-time bid tracking, revenue analytics, and team performance insights across your entire sales hierarchy.</p>
+      <h1 class="landing-brand-title">GLK<br><span>Pipeline</span> Dashboard</h1>
+      <p class="landing-brand-subtitle">Enterprise bid tracking, revenue analytics, and team performance insights across your sales hierarchy.</p>
       <div class="landing-features">
         <div class="landing-feature">
           <div class="landing-feature-icon"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div>
@@ -653,8 +687,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
     <div class="landing-container">
       <div class="landing-header animate-slide-up">
         <div class="landing-logo">
-          <div class="logo-icon">
-           <img src="http://sharedspaces:8086/sites/GKA/Shared%20Documents/Image%20(1).png" style="width:60px;height:60px;object-fit:cover;border-radius:15px;transform:scale(1.4);" alt="GLK">
+          <div class="logo-icon du-logo-wrap" style="width:64px;height:32px;">
+            <svg class="du-logo-svg" viewBox="0 0 72 36" aria-label="du"><text x="2" y="28" font-family="Inter,Arial Black,sans-serif" font-size="30" font-weight="900" fill="#753BBD">du</text></svg>
           </div>
         </div>
         <h1 class="landing-title">Welcome Back</h1>
@@ -724,9 +758,9 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
 </div>
 
 <!-- ═══════ PAGE LOAD SPINNER ═════════════════════════════════════════ -->
-<div id="glkLoader" style="display:none;position:fixed;inset:0;z-index:100000;background:var(--bg,#0b0714);backdrop-filter:blur(2px);align-items:center;justify-content:center;flex-direction:column;gap:1rem;">
+<div id="glkLoader">
   <div class="glk-spinner"></div>
-  <div id="glkLoaderText" style="font-size:.85rem;font-weight:700;color:var(--t2,#c9c6d6);letter-spacing:.02em;">Loading your pipeline…</div>
+  <div id="glkLoaderText">Loading your pipeline…</div>
 </div>
 
 <!-- ═══════ MAIN DASHBOARD ════════════════════════════════════════════ -->
@@ -734,8 +768,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
   <!-- Header -->
   <div class="header">
     <div class="logo-section">
-      <div class="logo">
-      <img src="http://sharedspaces:8086/sites/GKA/Shared%20Documents/Image%20(1).png" style="width:36px;height:36px;object-fit:cover;border-radius:10px;" alt="GLK">
+      <div class="logo du-logo-wrap" style="width:40px;height:28px;background:transparent;box-shadow:none;">
+        <svg class="du-logo-svg" viewBox="0 0 72 36" aria-label="du"><text x="2" y="28" font-family="Inter,Arial Black,sans-serif" font-size="30" font-weight="900" fill="#753BBD">du</text></svg>
       </div>
       <span class="header-title">GLK Pipeline Dashboard</span>
     </div>
@@ -768,12 +802,16 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
       </div>
       <div class="nav-items">
        <div class="nav-section-label">Overview</div>
-<div class="nav-item active"onclick="document.getElementById('dashboard-view').style.display='block';document.getElementById('analytics-nav').style.display='none';document.getElementById('table-nav').style.display='block';document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));this.classList.add('active');">
+<div class="nav-item active"onclick="glkShowDashboard();">
   <div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
   <div class="nav-label">Dashboard</div>
 </div><div class="nav-item" id="navAnalytics" style="display:none;" onclick="glkShowAnalytics();">
   <div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg></div>
   <div class="nav-label">Portal Analytics</div>
+</div>
+<div class="nav-item" id="navMobileQtd" style="display:none;" onclick="glkShowMobileQtd();">
+  <div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+  <div class="nav-label">QTD Bridge</div>
 </div>
       </div>
     </div>
@@ -877,7 +915,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
               </div>
             </div>
 
-            <!-- ROW 2c: Forecast Bridge full width (same size as Revenue Trend) -->
+            <!-- ROW 2c: Forecast Bridge — hidden (replaced by Mobile QTD Bridge nav) -->
+            <div id="bridgeSectionWrap" style="display:none!important;">
             <div style="display:grid;grid-template-columns:1fr;gap:.85rem;margin-bottom:.85rem;">
               <div class="chart-card">
                 <div class="chart-title" style="justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
@@ -894,6 +933,7 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
                 <div id="bridgeControlsWrap"></div>
               </div>
             </div>
+            </div><!-- /bridgeSectionWrap -->
 
             <!-- ROW 2: Billed/Lost/Pipeline (half) | TCV by Probability donut (half) -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-bottom:.85rem;">
@@ -961,10 +1001,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
               </div>
             </div>
           </div>
-           
-          </div>
-        
-    </div>
+        </div>
+
       <div id="analytics-nav" style="display:none;"></div>
 
         <!-- TABLE -->
@@ -986,6 +1024,109 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
         </div>
 
       </div><!-- /dashboard-view -->
+
+      <!-- MOBILE QTD BRIDGE VIEW -->
+      <div id="mobile-qtd-view" class="dashboard-section" style="display:none;margin:0;padding:0;">
+        <div class="filters-section" style="margin-bottom:1rem;">
+          <h2 class="section-title" style="margin-top:0;">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            <span id="mqSectionTitle">QTD Bridge</span>
+          </h2>
+          <p id="mqSectionDesc" style="font-size:.78rem;color:var(--t3);margin:-.5rem 0 .85rem;">Upload the daily GLK report — saved to <strong>SharePoint › Shared Documents › GLK Mobile QTD</strong>. Supports Mobile Net Adds and Fixed Net MRC.</p>
+
+          <!-- Upload -->
+          <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.85rem;padding:.75rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;">
+            <input type="file" id="mobileReportInp" accept=".xlsx,.xls,.xlsm,.csv" style="display:none;" onchange="glkMobileReportUpload(this.files[0])">
+            <button type="button" class="export-btn" onclick="document.getElementById('mobileReportInp').click()">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Upload GLK Report
+            </button>
+            <button type="button" class="reset-btn" id="mobileReportReplaceBtn" style="display:none;" onclick="document.getElementById('mobileReportInp').click()">
+              Replace File
+            </button>
+            <div id="mobileReportMeta" style="font-size:.75rem;color:var(--t2);font-weight:600;">Loading from SharePoint…</div>
+          </div>
+
+          <!-- Bridge controls -->
+          <div class="filters-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:.85rem;">
+            <div class="filter-group">
+              <label class="filter-label">Product Family</label>
+              <div style="display:flex;gap:.35rem;">
+                <button type="button" id="mqPfMobile" class="pf-tab active" onclick="glkSetMqProductFamily('mobile')" style="flex:1;font-size:.78rem;padding:.4rem .5rem;">Mobile</button>
+                <button type="button" id="mqPfFixed" class="pf-tab" onclick="glkSetMqProductFamily('fixed')" style="flex:1;font-size:.78rem;padding:.4rem .5rem;">Fixed</button>
+              </div>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Scenario</label>
+              <div style="display:flex;gap:.35rem;">
+                <button type="button" id="mqCaseWorst" class="pf-tab active" onclick="glkSetMobileQtdCase('worst')" style="flex:1;font-size:.78rem;padding:.4rem .5rem;">Worst Case</button>
+                <button type="button" id="mqCaseBest" class="pf-tab" onclick="glkSetMobileQtdCase('best')" style="flex:1;font-size:.78rem;padding:.4rem .5rem;">Best Case</button>
+              </div>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Period</label>
+              <div style="display:flex;gap:.35rem;">
+                <button type="button" id="mqPeriodQtd" class="pf-tab active" style="flex:1;font-size:.78rem;padding:.4rem .5rem;cursor:default;">QTD</button>
+                <button type="button" id="mqPeriodYtd" class="pf-tab" disabled title="Coming soon" style="flex:1;font-size:.78rem;padding:.4rem .5rem;opacity:.45;cursor:not-allowed;">YTD (soon)</button>
+              </div>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Report level <span style="font-weight:500;color:var(--t3);">(verticals from GLK Excel)</span></label>
+              <div class="ms-wrap" id="mqms_reportLevel">
+                <div class="ms-trigger" id="mqmst_reportLevel" onclick="event.stopPropagation();mqToggleReportLevel()">
+                  <span id="mqmstext_reportLevel">GLK Overall</span>
+                  <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <div class="ms-dropdown" id="mqmsd_reportLevel"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="filters-date-divider">Pipeline filters</div>
+          <p id="mqPipelineHint" style="font-size:.72rem;color:var(--t3);margin:-.35rem 0 .65rem;">Mobile pipeline · QTD activation window built in. Filter by MNP, Services, Type of Request.</p>
+          <div class="filters-grid" id="mqFiltersGrid"></div>
+          <div class="filter-actions" style="margin-top:.65rem;">
+            <button type="button" class="reset-btn" onclick="mqResetAllFilters()">
+              <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+              Reset Filters
+            </button>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title" style="justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+            <span style="display:flex;flex-direction:column;gap:.15rem;">
+              <span style="display:flex;align-items:center;gap:.35rem;">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span id="mqChartTitle">Mobile Net Adds — QTD Bridge</span>
+                <button type="button" id="mqBridgeInfoBtn" onclick="mqToggleBridgeInfo()" title="Applied rules &amp; filters" style="width:22px;height:22px;border-radius:50%;border:1px solid var(--border-s);background:var(--nab);color:var(--acc);font-weight:800;font-size:.72rem;cursor:pointer;line-height:1;padding:0;">i</button>
+              </span>
+              <span id="mqBridgeSubtitle" style="font-size:.68rem;font-weight:600;color:var(--t3);">Actuals → Gross 100% → Top 5 → Others → | Churn Top 5 → Others → Net Forecast → Gap</span>
+            </span>
+            <div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;">
+              <div id="mqTargetBadge" style="font-size:.72rem;font-weight:700;color:var(--acc);padding:.25rem .65rem;background:var(--nab);border:1px solid var(--nab2);border-radius:8px;">Target: —</div>
+              <button type="button" class="export-btn" onclick="mqExportBridgePpt()" title="Download bridge chart as PowerPoint" style="font-size:.72rem;padding:.35rem .65rem;">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                Export PPT
+              </button>
+            </div>
+          </div>
+          <div class="mq-bridge-scroll" id="mqBridgeScroll">
+            <div id="mqChartOuter">
+              <div class="chart-container" id="mqChartWrap"><canvas id="chartMobileQtd"></canvas></div>
+              <div id="mqBracketRow"></div>
+              <div id="mqXAxisStrip"></div>
+            </div>
+          </div>
+          <div id="mqBridgeLegend"></div>
+          <div id="mqBarDetailHint">Click any bar for account details · click again to close</div>
+          <div id="mqBarDetailPanel" style="display:none;margin-top:.55rem;padding:.75rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--t2);line-height:1.55;max-height:220px;overflow-y:auto;"></div>
+          <div id="mqBridgeInfoPanel" style="display:none;margin-top:.65rem;padding:.85rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--t2);line-height:1.65;max-height:280px;overflow-y:auto;"></div>
+          <div id="mobileQtdControlsWrap"></div>
+          <div id="mobileQtdSummaryWrap" style="font-size:.68rem;color:var(--t3);font-weight:600;line-height:1.6;margin-top:.45rem;"></div>
+        </div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /main-container -->
 </div><!-- /portal-shell -->
@@ -1008,8 +1149,21 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
 //  CONFIG
 // ══════════════════════════════════════════════════════════════════
 const SP_SITE   = 'http://sharedspaces:8086/sites/GKA';
+const SP_SITE_ROOT='/sites/GKA';
 const SP_LIST   = 'GLK Pipeline Portal';
 const SP_ACCESS = 'GKLA_ACCESS';
+const SP_MOBILE_REPORT_FOLDER='/sites/GKA/Shared Documents/GLK Mobile QTD';
+const SP_MOBILE_REPORT_FILE='GLK_Mobile_QTD_Report.xlsx';
+const SP_MOBILE_REPORT_PATH=SP_MOBILE_REPORT_FOLDER+'/'+SP_MOBILE_REPORT_FILE;
+const MQ_IDB_NAME='GLKMobileQtdCache';
+const MQ_IDB_STORE='report';
+const MQ_LS_META_KEY='glk_mobile_qtd_meta';
+const MQ_LS_DATA_KEY='glk_mobile_qtd_b64';
+const MQ_LS_MAX_B64=1800000;
+const MQ_CLR_NET='#6366f1';
+const MQ_CLR_TARGET='#0891b2';
+const MQ_CLR_GROWTH='#22c55e';
+const MQ_CLR_GAP='#ef4444';
 const STATUS_WON  = ['Won','Billed'];
 const STATUS_IP   = ['Lead','Opportunity','On Hold','Proposed'];
 const STATUS_LOST = ['Lost','Cancelled','No Bid'];
@@ -1057,6 +1211,27 @@ let bridgeTarget=10000000;
 let bridgeCase='worst';
 let bridgeDrill='all';
 let bridgeDrillVal='';
+// QTD Bridge state (Mobile + Fixed)
+let GLK_QTD_REPORT={mobile:null,fixed:null};
+let GLK_MOBILE_REPORT=null;
+let GLK_MOBILE_REPORT_META=null;
+let mqProductFamily='mobile';
+let mqCase='worst';
+let mqReportLevels=[];
+let GLK_MQ_DETAIL_IDX=-1;
+let mqPeriod='qtd';
+let mqDateRules=[];
+let mqRuleSeq=0;
+let GLK_MQ_CALC_LAST=null;
+let GLK_MQ_LAST_BARS=null;
+let GLK_MQ_LAST_BAR_META=null;
+let GLK_MQ_LAST_BAR_SLOT=72;
+let GLK_MQ_LAST_CHART_W=900;
+const MQ_FILTER_DEFS=[
+  {key:'mnp',label:'MNP'},
+  {key:'services',label:'Services'},
+  {key:'typeOfRequest',label:'Type of Request'},
+];
 window.setBridgeCase=function(c){
   bridgeCase=c==='best'?'best':'worst';
   renderBridge(getViewBids(),getChartColors());
@@ -1130,6 +1305,7 @@ function fmt(v){
 }
 function fmtGA(v){ const n=num(v); return n%1===0?n.toFixed(0):n.toFixed(2); }
 function fmtExportNum(v){ const n=num(v); return n%1===0?n.toFixed(0):n.toFixed(2); }
+function fmtLines(v){ const n=num(v); if(isNaN(n)) return '—'; return Math.round(n).toLocaleString('en-US'); }
 const fmtDate = iso => { if(!iso) return '—'; const d=new Date(iso); return isNaN(d)?'—':d.toLocaleDateString('en-GB'); };
   function fmtYearImpact(v) {
   if (v === null || v === undefined) return '—';
@@ -1577,6 +1753,7 @@ function set(id,val){ const e=el(id); if(e) e.textContent=val; }
 function spGet(url,cb){
   const xhr=new XMLHttpRequest();
   xhr.open('GET',url,true);
+  xhr.timeout=20000;
   xhr.setRequestHeader('Accept','application/json;odata=verbose');
   xhr.onreadystatechange=function(){
     if(xhr.readyState!==4) return;
@@ -1584,35 +1761,316 @@ function spGet(url,cb){
     else { cb(new Error('HTTP '+xhr.status),null); }
   };
   xhr.onerror=function(){ cb(new Error('Network error'),null); };
+  xhr.ontimeout=function(){ cb(new Error('Request timed out'),null); };
   xhr.send();
+}
+function spEscPath(p){ return String(p||'').replace(/'/g,"''"); }
+function spGetRequestDigest(cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('POST',SP_SITE+'/_api/contextinfo',true);
+  xhr.setRequestHeader('Accept','application/json;odata=verbose');
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4) return;
+    if(xhr.status>=200&&xhr.status<300){
+      try{ cb(null,JSON.parse(xhr.responseText).d.GetContextWebInformation.FormDigestValue); }
+      catch(e){ cb(e,null); }
+    }else cb(new Error('Digest HTTP '+xhr.status),null);
+  };
+  xhr.onerror=function(){ cb(new Error('Network error'),null); };
+  xhr.send();
+}
+function spPostJson(url,body,digest,cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('POST',url,true);
+  xhr.setRequestHeader('Accept','application/json;odata=verbose');
+  xhr.setRequestHeader('Content-Type','application/json;odata=verbose');
+  xhr.setRequestHeader('X-RequestDigest',digest);
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4) return;
+    if(xhr.status>=200&&xhr.status<300){
+      try{ cb(null,JSON.parse(xhr.responseText)); }catch(e){ cb(e,null); }
+    }else cb(new Error('HTTP '+xhr.status+(xhr.responseText?': '+xhr.responseText.slice(0,120):'')),null);
+  };
+  xhr.onerror=function(){ cb(new Error('Network error'),null); };
+  xhr.send(JSON.stringify(body));
+}
+function spGetBinary(url,cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET',url,true);
+  xhr.responseType='arraybuffer';
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4) return;
+    if(xhr.status>=200&&xhr.status<300) cb(null,xhr.response);
+    else cb(new Error('HTTP '+xhr.status),null);
+  };
+  xhr.onerror=function(){ cb(new Error('Network error'),null); };
+  xhr.send();
+}
+function spUploadBinary(url,arrayBuffer,digest,cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('POST',url,true);
+  xhr.setRequestHeader('Accept','application/json;odata=verbose');
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.setRequestHeader('X-RequestDigest',digest);
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4) return;
+    if(xhr.status>=200&&xhr.status<300){
+      try{ cb(null,JSON.parse(xhr.responseText)); }catch(e){ cb(null,{}); }
+    }else cb(new Error('Upload HTTP '+xhr.status),null);
+  };
+  xhr.onerror=function(){ cb(new Error('Network error'),null); };
+  xhr.send(arrayBuffer);
+}
+function spPostEmpty(url,digest,cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('POST',url,true);
+  xhr.setRequestHeader('Accept','application/json;odata=verbose');
+  xhr.setRequestHeader('X-RequestDigest',digest);
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4) return;
+    if(xhr.status>=200&&xhr.status<300) cb(null);
+    else if(xhr.status===409||xhr.status===500&&/already exists|duplicate/i.test(xhr.responseText||'')) cb(null);
+    else cb(new Error('HTTP '+xhr.status+(xhr.responseText?': '+String(xhr.responseText).slice(0,160):'')),null);
+  };
+  xhr.onerror=function(){ cb(new Error('Network error'),null); };
+  xhr.send();
+}
+function spEnsureMobileReportFolder(cb){
+  var folderCheck=SP_SITE+"/_api/web/GetFolderByServerRelativeUrl('"+spEscPath(SP_MOBILE_REPORT_FOLDER)+"')";
+  spGet(folderCheck,function(err){
+    if(!err) return cb(null);
+    var sharedDocs=SP_SITE_ROOT+'/Shared Documents';
+    spGetRequestDigest(function(err2,digest){
+      if(err2) return cb(err2);
+      var addUrl=SP_SITE+"/_api/web/GetFolderByServerRelativeUrl('"+spEscPath(sharedDocs)+"')/Folders/add('GLK Mobile QTD')";
+      spPostEmpty(addUrl,digest,function(err3){
+        if(err3){
+          console.warn('[GLK] Folder add failed, trying web.folders:',err3.message);
+          spPostJson(SP_SITE+'/_api/web/folders',{__metadata:{type:'SP.Folder'},ServerRelativeUrl:SP_MOBILE_REPORT_FOLDER},digest,function(err4){
+            if(err4&&err4.message.indexOf('409')<0&&!/already exists|duplicate/i.test(err4.message)) return cb(err4);
+            cb(null);
+          });
+        }else cb(null);
+      });
+    });
+  });
+}
+function spUploadMobileReport(arrayBuffer,originalName,cb){
+  spEnsureMobileReportFolder(function(err){
+    if(err) return cb(err);
+    spGetRequestDigest(function(err2,digest){
+      if(err2) return cb(err2);
+      var uploadUrl=SP_SITE+"/_api/web/GetFolderByServerRelativeUrl('"+spEscPath(SP_MOBILE_REPORT_FOLDER)+"')/Files/add(url='"+SP_MOBILE_REPORT_FILE.replace(/'/g,"''")+"',overwrite=true)";
+      spUploadBinary(uploadUrl,arrayBuffer,digest,function(err3,data){
+        if(err3) return cb(err3);
+        spGetMobileReportMeta(function(err4,meta){
+          if(meta){
+            meta.originalName=originalName||meta.originalName;
+            meta.storage='sharepoint';
+            return cb(null,meta);
+          }
+          var modified=null;
+          try{ modified=data.d.TimeLastModified||data.d.Modified||null; }catch(e){}
+          cb(null,{
+            filename:SP_MOBILE_REPORT_FILE,
+            originalName:originalName||SP_MOBILE_REPORT_FILE,
+            uploadedAt:modified||new Date().toISOString(),
+            serverPath:SP_MOBILE_REPORT_PATH,
+            spUrl:SP_SITE+'/Shared Documents/GLK Mobile QTD/'+SP_MOBILE_REPORT_FILE,
+            storage:'sharepoint'
+          });
+        });
+      });
+    });
+  });
+}
+function spDownloadMobileReport(cb){
+  var fileUrl=SP_SITE+"/_api/web/GetFileByServerRelativeUrl('"+spEscPath(SP_MOBILE_REPORT_PATH)+"')/$value";
+  spGetBinary(fileUrl,cb);
+}
+function spGetMobileReportMeta(cb){
+  var metaUrl=SP_SITE+"/_api/web/GetFileByServerRelativeUrl('"+spEscPath(SP_MOBILE_REPORT_PATH)+"')?$select=Name,TimeLastModified,Length";
+  spGet(metaUrl,function(err,data){
+    if(err) return cb(err,null);
+    try{
+      var d=data.d;
+      cb(null,{
+        filename:d.Name,
+        uploadedAt:d.TimeLastModified,
+        size:d.Length,
+        serverPath:SP_MOBILE_REPORT_PATH,
+        spUrl:SP_SITE+'/Shared Documents/GLK Mobile QTD/'+SP_MOBILE_REPORT_FILE
+      });
+    }catch(e){ cb(e,null); }
+  });
+}
+function mqIdbOpen(cb){
+  if(typeof indexedDB==='undefined') return cb(new Error('IndexedDB unavailable'));
+  var req=indexedDB.open(MQ_IDB_NAME,1);
+  req.onerror=function(){ cb(req.error||new Error('IndexedDB open failed')); };
+  req.onupgradeneeded=function(e){
+    var db=e.target.result;
+    if(!db.objectStoreNames.contains(MQ_IDB_STORE)) db.createObjectStore(MQ_IDB_STORE);
+  };
+  req.onsuccess=function(){ cb(null,req.result); };
+}
+function mqArrayBufferCopy(buf){
+  if(!buf) return null;
+  try{ return buf.slice(0); }catch(e){
+    var u=new Uint8Array(buf);
+    return u.buffer.slice(u.byteOffset,u.byteOffset+u.byteLength);
+  }
+}
+function mqBufToB64(buf){
+  var bytes=new Uint8Array(buf);
+  var CHUNK=0x8000,parts=[];
+  for(var i=0;i<bytes.length;i+=CHUNK) parts.push(String.fromCharCode.apply(null,bytes.subarray(i,i+CHUNK)));
+  return btoa(parts.join(''));
+}
+function mqB64ToBuf(b64){
+  var bin=atob(b64),len=bin.length,buf=new ArrayBuffer(len),u=new Uint8Array(buf);
+  for(var i=0;i<len;i++) u[i]=bin.charCodeAt(i);
+  return buf;
+}
+function mqCacheSaveReport(arrayBuffer,meta,cb){
+  cb=cb||function(){};
+  var metaOut=Object.assign({},meta||{},{storage:meta&&meta.storage?meta.storage:'local',cachedAt:new Date().toISOString()});
+  var bufCopy=mqArrayBufferCopy(arrayBuffer);
+  try{ localStorage.setItem(MQ_LS_META_KEY,JSON.stringify(metaOut)); }catch(e){}
+  try{
+    if(bufCopy&&bufCopy.byteLength<=MQ_LS_MAX_B64) localStorage.setItem(MQ_LS_DATA_KEY,mqBufToB64(bufCopy));
+    else localStorage.removeItem(MQ_LS_DATA_KEY);
+  }catch(e2){ try{ localStorage.removeItem(MQ_LS_DATA_KEY); }catch(e3){} }
+  mqIdbOpen(function(err,db){
+    if(err){
+      console.warn('[GLK] IDB cache save skipped:',err.message);
+      return cb(null,metaOut);
+    }
+    var tx=db.transaction(MQ_IDB_STORE,'readwrite');
+    tx.objectStore(MQ_IDB_STORE).put({buffer:bufCopy,meta:metaOut},'latest');
+    tx.oncomplete=function(){ cb(null,metaOut); };
+    tx.onerror=function(){ cb(null,metaOut); };
+  });
+}
+function mqCacheLoadReport(cb){
+  var meta=null;
+  try{ meta=JSON.parse(localStorage.getItem(MQ_LS_META_KEY)||'null'); }catch(e){}
+  function tryLsB64(){
+    try{
+      var b64=localStorage.getItem(MQ_LS_DATA_KEY);
+      if(b64&&b64.length>20) return cb(null,mqB64ToBuf(b64),meta);
+    }catch(e){}
+    return cb(new Error('No cached report'),null,null);
+  }
+  mqIdbOpen(function(err,db){
+    if(err) return tryLsB64();
+    var tx=db.transaction(MQ_IDB_STORE,'readonly');
+    var req=tx.objectStore(MQ_IDB_STORE).get('latest');
+    req.onsuccess=function(){
+      if(!req.result||!req.result.buffer) return tryLsB64();
+      cb(null,mqArrayBufferCopy(req.result.buffer),req.result.meta||meta);
+    };
+    req.onerror=function(){ tryLsB64(); };
+  });
+}
+function glkSpLoadMobileReport(cb){
+  cb=cb||function(){};
+  var gotReport=false;
+  mqCacheLoadReport(function(errC,bufferC,metaC){
+    if(!errC&&bufferC&&bufferC.byteLength>0){
+      glkParseAndSetMobileReport(bufferC,function(e,parsed){
+        if(!e&&parsed){
+          gotReport=true;
+          GLK_MOBILE_REPORT_META=Object.assign({},metaC||{},{storage:(metaC&&metaC.storage)||'local-cache'});
+          cb(null,parsed,GLK_MOBILE_REPORT_META);
+        }
+      });
+    }
+    spDownloadMobileReport(function(err,buffer){
+      if(!err&&buffer&&buffer.byteLength>0){
+        spGetMobileReportMeta(function(e2,meta){
+          var m=Object.assign({},meta||{},{storage:'sharepoint'});
+          mqCacheSaveReport(buffer,m,function(){
+            glkParseAndSetMobileReport(buffer,function(e3,parsed){
+              if(e3) return;
+              GLK_MOBILE_REPORT_META=m;
+              if(gotReport){
+                glkMobileQtdRefreshUI();
+                var mqView=el('mobile-qtd-view');
+                if(mqView&&mqView.style.display!=='none') renderMobileQtdBridge();
+              }else cb(null,parsed,m);
+            });
+          });
+        });
+        return;
+      }
+      if(!gotReport) cb(err||errC||new Error('No mobile report found. Upload the daily GLK Excel once — it will be saved on SharePoint and this browser.'),null,null);
+    });
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════
 //  ACCESS CONTROL
 // ══════════════════════════════════════════════════════════════════
 function initAccess(){
+  var accessDone=false;
+  function finishAccess(fn){ if(!accessDone){ accessDone=true; fn(); } }
+  var accessTimer=setTimeout(function(){
+    finishAccess(function(){
+      var btn=el('launchBtn');
+      if(btn&&btn.disabled) showDenied('Connection timed out. Open this page from the GKA SharePoint site (not a local file) and ensure you are signed in.');
+    });
+  },18000);
   spGet(SP_SITE+'/_api/web/currentuser?$select=Title,Email',function(err,data){
-    if(err){ showDenied('Cannot reach SharePoint'); return; }
-    USER.email=data.d.Email; USER.name=data.d.Title;
-    spGet(SP_SITE+"/_api/web/lists/getbytitle('"+SP_ACCESS+"')/items?$select=UserEmailID,Role&$filter=UserEmailID eq '"+USER.email+"'",function(err2,data2){
-if(err2||!data2.d.results.length){ 
-    showDenied('You are not authorised. Contact tehleel.lone@du.ae');
-    return; 
-}
-const role=(data2.d.results[0].Role||'').trim();
-const ALLOWED=['Admin','CEO','Head Director','Account Director','Account Manager','Viewer'];
-if(!ALLOWED.includes(role)){
-    showDenied('Your role "'+role+'" has no access. Contact tehleel.lone@du.ae');
-    return;
-}
-USER.role=role;
-      console.log('[GLK] Role:', JSON.stringify(data2.d.results[0]));
-      populateLanding();
+    if(err){
+      clearTimeout(accessTimer);
+      finishAccess(function(){ showDenied('Cannot reach SharePoint: '+err.message); });
+      return;
+    }
+    if(!data||!data.d){
+      clearTimeout(accessTimer);
+      finishAccess(function(){ showDenied('Unexpected SharePoint response. Please refresh.'); });
+      return;
+    }
+    USER.email=(data.d.Email||'').trim();
+    USER.name=(data.d.Title||'User').trim();
+    if(!USER.email){
+      clearTimeout(accessTimer);
+      finishAccess(function(){ showDenied('Could not read your SharePoint email.'); });
+      return;
+    }
+    var safeEmail=USER.email.replace(/'/g,"''");
+    spGet(SP_SITE+"/_api/web/lists/getbytitle('"+SP_ACCESS+"')/items?$select=UserEmailID,Role&$filter=UserEmailID eq '"+safeEmail+"'",function(err2,data2){
+      clearTimeout(accessTimer);
+      if(err2){
+        finishAccess(function(){ showDenied('Access list error: '+err2.message); });
+        return;
+      }
+      var results=(data2&&data2.d&&data2.d.results)?data2.d.results:[];
+      if(!results.length){
+        finishAccess(function(){ showDenied('You are not authorised. Contact tehleel.lone@du.ae'); });
+        return;
+      }
+      var role=(results[0].Role||'').trim();
+      var ALLOWED=['Admin','CEO','Head Director','Account Director','Account Manager','Viewer'];
+      if(!ALLOWED.includes(role)){
+        finishAccess(function(){ showDenied('Your role "'+role+'" has no access. Contact tehleel.lone@du.ae'); });
+        return;
+      }
+      USER.role=role;
+      console.log('[GLK] Role:', JSON.stringify(results[0]));
+      finishAccess(populateLanding);
     });
   });
 }
 function showDenied(msg){
   set('lName','Access Denied'); set('lEmail',msg); set('lRole','No Access');
+  var btn=el('launchBtn');
+  if(btn){
+    btn.disabled=true;
+    var txt=btn.querySelector('.btn-text');
+    if(txt) txt.textContent='Access Denied';
+  }
   el('accessNote').innerHTML='<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#dc2626;fill:none;stroke-width:2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg><span style="color:#dc2626;">'+msg+'</span>';
 }
 function populateLanding(){
@@ -1640,6 +2098,7 @@ el('dashboardContent').style.flexDirection='column';
   // Portal Intelligence — Admin, HD, AD only
   if(role==='Admin'||role==='CEO'||role==='Head Director'||role==='Account Director'){
     el('navAnalytics').style.display='flex';
+    el('navMobileQtd').style.display='flex';
   }
   
   // HD section — hide completely for AD and AM
@@ -1653,9 +2112,11 @@ el('dashboardContent').style.flexDirection='column';
 if(typeof glkStartSession === 'function') glkStartSession();
 setTimeout(function(){
     if(USER.role==='Admin'||USER.role==='CEO'||USER.role.toLowerCase().includes('admin')){
-        document.getElementById('navAnalytics').style.display='flex';
+        el('navAnalytics').style.display='flex';
+        el('navMobileQtd').style.display='flex';
     }
 }, 500);
+  glkMobileQtdInit();
   // restore saved theme
   try{
     const bt=localStorage.getItem('glk_base_theme')||'magenta';
@@ -1908,6 +2369,7 @@ function loadData(){
         ALL_BIDS=[];
         remapBlankHD();
         buildFilters();
+        buildMqFilters();
         applyAll();
         glkHideLoader();
         return;
@@ -1922,6 +2384,7 @@ function loadData(){
         ALL_BIDS=allResults.map(mapItem);
         remapBlankHD();
         buildFilters();
+        buildMqFilters();
         applyAll();
         glkHideLoader();
       }
@@ -2953,7 +3416,7 @@ function renderCharts(){
   safe(renderTrend,'Trend');
   safe(renderProbTCV,'ProbTCV');
   safe(renderForecastPie,'ForecastPie');
-  safe(renderBridge,'Bridge');
+  // Forecast Bridge hidden — use Mobile QTD Bridge nav instead
   safe(renderLeaderboard,'Leaderboard');
   safe(renderVertical,'Vertical');
   safe(renderTopChart,'TopCust');
@@ -3998,13 +4461,47 @@ function applyTheme(base,dark){
     '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>':
     '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
 }
+function glkShowDashboard(){
+  el('dashboard-view').style.display='block';
+  el('analytics-nav').style.display='none';
+  el('mobile-qtd-view').style.display='none';
+  el('table-nav').style.display='block';
+  el('content').classList.remove('mq-view');
+  el('dashboardContent').classList.remove('mq-full');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.nav-item')[0]?.classList.add('active');
+}
 function glkShowAnalytics() {
-    document.getElementById('dashboard-view').style.display = 'none';
-    document.getElementById('table-nav').style.display = 'none';
-    document.getElementById('analytics-nav').style.display = 'block';
+    el('dashboard-view').style.display = 'none';
+    el('mobile-qtd-view').style.display='none';
+    el('table-nav').style.display = 'none';
+    el('analytics-nav').style.display = 'block';
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-    document.getElementById('navAnalytics').classList.add('active');
+    el('navAnalytics').classList.add('active');
     glkLoadAnalytics();
+}
+function glkShowMobileQtd(){
+  el('dashboard-view').style.display='none';
+  el('analytics-nav').style.display='none';
+  el('table-nav').style.display='none';
+  el('mobile-qtd-view').style.display='block';
+  el('content').classList.add('mq-view');
+  el('dashboardContent').classList.add('mq-full');
+  if(!el('mqFiltersGrid')?.children?.length) buildMqFilters();
+  mqUpdateProductFamilyUi();
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el('navMobileQtd').classList.add('active');
+  if(!mqGetActiveReport()){
+    glkSpLoadMobileReport(function(err){
+      glkMobileQtdRefreshUI();
+      renderMobileQtdBridge();
+    });
+  }else{
+    glkSpLoadMobileReport(function(){
+      glkMobileQtdRefreshUI();
+      renderMobileQtdBridge();
+    });
+  }
 }
 function changeTheme(event){
   const base=event.target.value;
@@ -4032,6 +4529,1651 @@ function updateSelectionBadge(){
   if(parts.length){ b.textContent=parts.join(' › '); b.style.display='flex'; }
   else { b.textContent=''; b.style.display='none'; }
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  MOBILE QTD BRIDGE
+// ══════════════════════════════════════════════════════════════════
+window.glkSetMobileQtdCase=function(c){
+  mqCase=c==='best'?'best':'worst';
+  el('mqCaseWorst')?.classList.toggle('active',mqCase==='worst');
+  el('mqCaseBest')?.classList.toggle('active',mqCase==='best');
+  renderMobileQtdBridge();
+};
+window.glkSetMqProductFamily=function(pf){
+  mqProductFamily=pf==='fixed'?'fixed':'mobile';
+  el('mqPfMobile')?.classList.toggle('active',mqProductFamily==='mobile');
+  el('mqPfFixed')?.classList.toggle('active',mqProductFamily==='fixed');
+  GLK_MOBILE_REPORT=mqGetActiveReport();
+  mqUpdateProductFamilyUi();
+  mqBuildReportLevelFilter();
+  GLK_MQ_DETAIL_IDX=-1;
+  renderMobileQtdBridge();
+};
+function mqGetActiveReport(){
+  return GLK_QTD_REPORT[mqProductFamily]||null;
+}
+function mqSyncActiveReport(){
+  GLK_MOBILE_REPORT=mqGetActiveReport();
+}
+function mqBidMetric(b){
+  return mqProductFamily==='fixed'?num(b.mrc):num(b.gaLines);
+}
+function mqMetricUnit(){
+  return mqProductFamily==='fixed'?'MRC':'GA Lines';
+}
+function mqMetricShort(){
+  return mqProductFamily==='fixed'?'MRC':'Lines';
+}
+function mqBidMatchesPf(b){
+  var pf=String(b.productFamily||'').trim().toLowerCase();
+  if(mqProductFamily==='fixed') return pf==='fixed'||pf.indexOf('fixed')>=0;
+  return pf==='mobile'||pf.indexOf('mobile')>=0;
+}
+function mqUpdateProductFamilyUi(){
+  var isFixed=mqProductFamily==='fixed';
+  var st=el('mqSectionTitle'); if(st) st.textContent=isFixed?'Fixed Net MRC — QTD Bridge':'Mobile Net Adds — QTD Bridge';
+  var ct=el('mqChartTitle'); if(ct) ct.textContent=isFixed?'Fixed Net MRC — QTD Bridge':'Mobile Net Adds — QTD Bridge';
+  var hint=el('mqPipelineHint');
+  if(hint) hint.textContent=(isFixed?'Fixed':'Mobile')+' pipeline · QTD activation window built in. Filter by MNP, Services, Type of Request.';
+}
+function mqGetReportLevelsChecked(){
+  var drop=el('mqmsd_reportLevel');
+  if(!drop) return mqReportLevels.slice();
+  return Array.from(drop.querySelectorAll('input:checked')).map(function(c){return c.value;});
+}
+function mqUpdateReportLevelText(){
+  var checked=mqGetReportLevelsChecked();
+  var te=el('mqmstext_reportLevel'); if(!te) return;
+  if(!checked.length){ te.textContent='GLK Overall (all verticals)'; return; }
+  if(checked.length===1) te.textContent=checked[0];
+  else te.textContent=checked.length+' verticals';
+  mqReportLevels=checked.slice();
+}
+window.mqToggleReportLevel=function(){
+  var drop=el('mqmsd_reportLevel'),trig=el('mqmst_reportLevel');
+  if(!drop||!trig) return;
+  var isOpen=drop.classList.contains('open');
+  document.querySelectorAll('#mobile-qtd-view .ms-dropdown.open').forEach(function(d){
+    d.classList.remove('open');
+    var t=el('mqmst_reportLevel'); if(t) t.classList.remove('open');
+  });
+  document.querySelectorAll('#mqFiltersGrid .ms-dropdown.open').forEach(function(d){d.classList.remove('open');});
+  if(!isOpen){
+    var rect=trig.getBoundingClientRect();
+    drop.style.top=(rect.bottom+4)+'px';
+    drop.style.left=rect.left+'px';
+    drop.style.width=Math.max(rect.width,200)+'px';
+    drop.classList.add('open');
+    trig.classList.add('open');
+  }
+};
+window.mqOnReportLevelChange=function(){
+  mqUpdateReportLevelText();
+  GLK_MQ_DETAIL_IDX=-1;
+  renderMobileQtdBridge();
+};
+function mqBuildReportLevelFilter(){
+  var drop=el('mqmsd_reportLevel'); if(!drop) return;
+  var prev=mqGetReportLevelsChecked();
+  drop.innerHTML='';
+  (mqGetActiveReport()?.verticals||[]).forEach(function(v){
+    if(!v.name) return;
+    var opt=document.createElement('div'); opt.className='ms-option';
+    var cid='mqrl_'+v.name.replace(/[^a-zA-Z0-9]/g,'_');
+    var checked=prev.indexOf(v.name)>=0;
+    opt.innerHTML='<input type="checkbox" id="'+cid+'" value="'+v.name+'"'+(checked?' checked':'')+' onchange="mqOnReportLevelChange()"><label for="'+cid+'">'+v.name+'</label>';
+    drop.appendChild(opt);
+  });
+  mqUpdateReportLevelText();
+}
+function mqGetActiveReportLevels(){
+  return mqGetReportLevelsChecked();
+}
+function mqResolveReportScope(report,levelNames){
+  if(!report) return {actualsQtd:0,target:0,label:'GLK Overall',scopes:[],missing:[]};
+  if(!levelNames||!levelNames.length){
+    var ov=report.overall||null;
+    return {
+      actualsQtd:ov?num(ov.actualQtd):0,
+      target:ov?num(ov.target):0,
+      label:'GLK Overall',
+      scopes:ov?[ov]:[],
+      missing:[]
+    };
+  }
+  var scopes=[],missing=[],actuals=0,target=0;
+  levelNames.forEach(function(name){
+    var sc=mqFindReportScope(report,name);
+    if(sc){ scopes.push(sc); actuals+=num(sc.actualQtd); target+=num(sc.target); }
+    else missing.push(name);
+  });
+  return {
+    actualsQtd:actuals,
+    target:target,
+    label:levelNames.length===1?levelNames[0]:levelNames.length+' verticals',
+    scopes:scopes,
+    missing:missing
+  };
+}
+function mqBidMatchesReportLevels(bid,levelNames){
+  if(!levelNames||!levelNames.length) return true;
+  return levelNames.some(function(v){return mqMatchVerticalName(bid.vertical,v);});
+}
+function mqIsMobileBid(b){ return mqBidMatchesPf(b); }
+function glkParseFixedNetMrcRows(rows){
+  var cands=glkFindFixedNetMrcCandidates(rows);
+  var withHdr=cands.filter(function(c){return glkSecHasQtdMonthHeaders(rows,c);});
+  var tryList=withHdr.length?withHdr:cands;
+  for(var ci=0;ci<tryList.length;ci++){
+    var parsed=glkParseFixedNetMrcBlock(rows,tryList[ci]);
+    if(parsed) return parsed;
+  }
+  return null;
+}
+function glkParseFixedNetMrcBlock(rows,sec){
+  var startCol=sec.col, blockEnd=glkFindMobileBlockEnd(rows,sec);
+  var headerRow=-1,monthCols=[],targetCol=-1,quarterLabel='',year=2026,quarter=3;
+  for(var hr=sec.row;hr<Math.min(sec.row+8,rows.length);hr++){
+    var row=rows[hr]||[];
+    var foundMonths=[],foundTarget=null,foundTargetCol=-1;
+    for(var c=startCol;c<=blockEnd;c++){
+      var cell=row[c];
+      var mo=glkParseMonthHeader(cell);
+      if(mo) foundMonths.push({col:c,label:mo.label,month:mo.month,year:mo.year});
+      var tg=glkParseTargetHeader(String(cell||'').trim());
+      if(tg&&!tg.targetOnly&&!foundTarget){ foundTarget=tg; foundTargetCol=c; }
+      else if(/target/i.test(cell)&&foundTargetCol<0) foundTargetCol=c;
+    }
+    if(foundMonths.length>=1){
+      headerRow=hr; monthCols=foundMonths;
+      if(foundTarget){ targetCol=foundTargetCol; quarterLabel=foundTarget.label; quarter=foundTarget.quarter; year=foundTarget.year; }
+      else if(foundTargetCol>=0) targetCol=foundTargetCol;
+      break;
+    }
+  }
+  if(headerRow<0||!monthCols.length) return null;
+  if(targetCol<0){
+    for(var tc=startCol;tc<=blockEnd;tc++){
+      var h=String((rows[headerRow]||[])[tc]||'');
+      if(/Q\d/i.test(h)){ targetCol=tc; quarterLabel=h; break; }
+    }
+  }
+  if(!quarterLabel&&monthCols.length){
+    var qm=monthCols[0].month;
+    quarter=Math.floor(qm/3)+1;
+    year=monthCols[0].year;
+    quarterLabel='Q'+quarter+"'"+String(year).slice(-2);
+  }
+  var qMonths=monthCols.filter(function(m){
+    return Math.floor(m.month/3)+1===quarter&&m.year===year;
+  });
+  if(!qMonths.length) qMonths=monthCols;
+  var dataStart=headerRow+1;
+  if(rows[dataStart]){
+    var hdrTxt=glkNormCellTxt((rows[dataStart]||[]).join(' '));
+    if(hdrTxt.indexOf('actual')>=0||hdrTxt.indexOf('achiev')>=0) dataStart++;
+  }
+  var entries=[],overall=null;
+  for(var dr=dataStart;dr<rows.length;dr++){
+    var drow=rows[dr]||[];
+    var joined=glkNormCellTxt(drow.join(' '));
+    if(!joined&&!(drow.some(function(x){return glkParseReportNum(x)!=null;}))) continue;
+    if(/fixed\s*net\s*mrc|mobile\s*net\s*adds|fixed\s*net\s*adds|fixed\s*gross|broadcast|datamena|revenue trend|mrc trend|^note$/i.test(joined)) break;
+    var name=glkRowVertName(drow,startCol,monthCols);
+    if(/^note$/i.test(name)) break;
+    var actualSum=0,hasNum=false;
+    qMonths.forEach(function(m){
+      var v=glkParseReportNum(drow[m.col]);
+      if(v!=null){ actualSum+=v; hasNum=true; }
+    });
+    var target=targetCol>=0?glkParseReportNum(drow[targetCol]):null;
+    if(!hasNum&&!target&&!name) continue;
+    if(/actual|target|achiev|Q\d/i.test(name)&&!hasNum) continue;
+    var entry={name:name||'Overall',actualQtd:hasNum?actualSum:0,target:target||0,isOverall:false};
+    if(!overall&&(/total|overall|^fixed$/i.test(name)||(!entries.length&&hasNum))){
+      entry.isOverall=true; entry.name='GLK Overall'; overall=entry;
+    }else entries.push(entry);
+  }
+  if(!overall&&entries.length){ overall=entries.shift(); overall.isOverall=true; overall.name='GLK Overall'; }
+  if(!overall) return null;
+  return {
+    blockType:'fixed',metric:'mrc',title:sec.title,
+    quarter:quarter,year:year,quarterLabel:quarterLabel||('Q'+quarter+"'"+String(year).slice(-2)),
+    months:qMonths.map(function(m){return m.label;}),
+    overall:overall,verticals:entries
+  };
+}
+function glkParseQtdWorkbook(wb){
+  if(!wb||!wb.SheetNames||!wb.SheetNames.length) return null;
+  var mobile=null,fixed=null;
+  for(var si=0;si<wb.SheetNames.length;si++){
+    var rows=glkSheetToRows(wb.Sheets[wb.SheetNames[si]]);
+    if(!mobile) mobile=glkParseMobileNetAddsRows(rows);
+    if(!fixed) fixed=glkParseFixedNetMrcRows(rows);
+  }
+  if(!mobile&&!fixed) return null;
+  return {mobile:mobile,fixed:fixed};
+}
+function mqNormVertKey(s){
+  return String(s||'').trim().toLowerCase().replace(/[\s\-–—_]+/g,'');
+}
+function glkRowVertName(drow,startCol,monthCols){
+  var prefer=monthCols.length?monthCols[0].col-1:Math.max(0,startCol-1);
+  if(prefer>=0){
+    var n=String(drow[prefer]||'').trim();
+    if(n&&!/actual|target|achiev|mobile|net adds|Q\d/i.test(n)) return n;
+  }
+  for(var c=0;c<startCol;c++){
+    var cand=String(drow[c]||'').trim();
+    if(cand&&!/actual|target|achiev|mobile|net adds|Q\d/i.test(cand)) return cand;
+  }
+  return String(drow[0]||'').trim();
+}
+function glkParseReportNum(v){
+  if(v==null||v==='') return null;
+  if(typeof v==='number') return isNaN(v)?null:v;
+  var s=String(v).trim().replace(/\u00a0/g,' ');
+  if(!s||s==='—'||s==='-') return null;
+  var neg=/^\(.*\)$/.test(s);
+  s=s.replace(/[(),\s,]/g,'');
+  var n=parseFloat(s);
+  if(isNaN(n)) return null;
+  return neg?-n:n;
+}
+function glkNormCellTxt(v){
+  return String(v==null?'':v).toLowerCase().replace(/[\s\-–—_]+/g,' ').trim();
+}
+function glkSheetToRows(sheet){
+  if(!sheet||!sheet['!ref']) return [];
+  var range=XLSX.utils.decode_range(sheet['!ref']);
+  var rows=[];
+  for(var R=range.s.r;R<=range.e.r;R++){
+    var row=[];
+    for(var C=range.s.c;C<=range.e.c;C++){
+      var addr=XLSX.utils.encode_cell({r:R,c:C});
+      var cell=sheet[addr];
+      if(!cell){ row.push(''); continue; }
+      if(cell.w!=null&&String(cell.w).trim()!=='') row.push(String(cell.w).trim());
+      else if(cell.t==='n'&&cell.v!=null){
+        if(typeof XLSX!=='undefined'&&XLSX.SSF&&cell.z&&/[dmy]/i.test(String(cell.z)))
+          row.push(XLSX.SSF.format(cell.z,cell.v));
+        else row.push(cell.v);
+      }else row.push(cell.v!=null?String(cell.v):'');
+    }
+    while(row.length&&row[row.length-1]==='') row.pop();
+    rows.push(row);
+  }
+  return rows;
+}
+function glkFindMobileBlockEnd(rows,sec){
+  var sub=rows[sec.row+1]||[];
+  var end=sec.col;
+  for(var c=sec.col;c<sec.col+12;c++){
+    var t=glkNormCellTxt(sub[c]);
+    if(c>sec.col&&t==='actual') break;
+    if(sub[c]!=null&&String(sub[c]).trim()!=='') end=c;
+  }
+  return Math.max(end,sec.col+4);
+}
+function glkFindMobileNetAddsSection(rows){
+  var best=null,bestScore=0;
+  for(var r=0;r<rows.length;r++){
+    var row=rows[r]||[];
+    for(var c=0;c<row.length;c++){
+      var raw=String(row[c]||'').trim();
+      if(!raw) continue;
+      var t=glkNormCellTxt(raw);
+      var score=0;
+      if(/mobile/.test(t)&&/net adds/.test(t)) score+=15;
+      else if(/net adds/.test(t)) score+=8;
+      if(/lines/.test(t)) score+=25;
+      if(/points/.test(t)) score-=20;
+      if(/mrc|revenue|fixed gross|fixed net/.test(t)) score-=25;
+      if(score>bestScore){ bestScore=score; best={row:r,col:c,title:raw}; }
+    }
+  }
+  if(best&&bestScore>=20) return best;
+  return null;
+}
+function glkParseMonthHeader(cell){
+  var s=String(cell||'').trim();
+  if(!s) return null;
+  var m=s.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\s'\.\-/]*(\d{2,4})$/i);
+  if(!m){
+    var n=typeof cell==='number'?cell:parseFloat(s.replace(/,/g,''));
+    if(!isNaN(n)&&n>40000&&n<60000){
+      var epoch=Date.UTC(1899,11,30);
+      var d=new Date(epoch+n*86400000);
+      if(!isNaN(d.getTime())){
+        var mo=d.getUTCMonth(), yr=d.getUTCFullYear();
+        var label=MONTH_NAMES[mo]+'-'+String(yr).slice(-2);
+        return {month:mo,year:yr,label:label};
+      }
+    }
+    return null;
+  }
+  var mo=MONTH_NAMES.findIndex(function(x){return x.toLowerCase()===m[1].toLowerCase();});
+  if(mo<0) return null;
+  var yr=parseInt(m[2],10); if(yr<100) yr+=2000;
+  return {month:mo,year:yr,label:s};
+}
+function glkSecHasQtdMonthHeaders(rows,sec){
+  var blockEnd=glkFindMobileBlockEnd(rows,sec);
+  for(var hr=sec.row;hr<Math.min(sec.row+8,rows.length);hr++){
+    var found=0;
+    for(var c=sec.col;c<=blockEnd;c++){
+      if(glkParseMonthHeader((rows[hr]||[])[c])) found++;
+    }
+    if(found>=2) return true;
+  }
+  return false;
+}
+function glkFindFixedNetMrcCandidates(rows){
+  var out=[];
+  for(var r=0;r<rows.length;r++){
+    var row=rows[r]||[];
+    for(var c=0;c<row.length;c++){
+      var raw=String(row[c]||'').trim();
+      if(!raw) continue;
+      var t=glkNormCellTxt(raw);
+      var score=0;
+      if(/fixed/.test(t)&&/net/.test(t)&&/mrc/.test(t)) score+=35;
+      else if(/fixed/.test(t)&&/mrc/.test(t)) score+=22;
+      if(/mobile/.test(t)) score-=25;
+      if(/lines/.test(t)||/points/.test(t)||/adds/.test(t)) score-=18;
+      if(/revenue trend|mrc trend|fixed gross/.test(t)) score-=20;
+      if(c>40) score-=12;
+      if(score>=20) out.push({row:r,col:c,title:raw,score:score});
+    }
+  }
+  out.sort(function(a,b){
+    if(b.score!==a.score) return b.score-a.score;
+    if(a.col!==b.col) return a.col-b.col;
+    return a.row-b.row;
+  });
+  return out;
+}
+function glkFindFixedNetMrcSection(rows){
+  var cands=glkFindFixedNetMrcCandidates(rows);
+  for(var i=0;i<cands.length;i++){
+    if(glkSecHasQtdMonthHeaders(rows,cands[i])) return cands[i];
+  }
+  return cands.length?cands[0]:null;
+}
+function glkParseTargetHeader(cell){
+  var s=String(cell||'').trim();
+  if(!s) return null;
+  var tq=s.match(/Q(\d)[\s'’`]*(?:[''])?(\d{4}|\d{2})/i);
+  if(tq){
+    var quarter=parseInt(tq[1],10), year=parseInt(tq[2],10);
+    if(year<100) year+=2000;
+    return {quarter:quarter,year:year,label:s};
+  }
+  if(/target/i.test(s)) return {label:s,targetOnly:true};
+  return null;
+}
+function glkParseMobileReportWorkbook(wb){
+  return glkParseQtdWorkbook(wb);
+}
+function glkParseMobileNetAddsRows(rows){
+  var sec=glkFindMobileNetAddsSection(rows);
+  if(!sec) return null;
+  var startCol=sec.col, blockEnd=glkFindMobileBlockEnd(rows,sec);
+  var headerRow=-1,monthCols=[],targetCol=-1,quarterLabel='',year=2026,quarter=3;
+  for(var hr=sec.row;hr<Math.min(sec.row+8,rows.length);hr++){
+    var row=rows[hr]||[];
+    var foundMonths=[],foundTarget=null,foundTargetCol=-1;
+    for(var c=startCol;c<=blockEnd;c++){
+      var cell=row[c];
+      var mo=glkParseMonthHeader(cell);
+      if(mo) foundMonths.push({col:c,label:mo.label,month:mo.month,year:mo.year});
+      var tg=glkParseTargetHeader(String(cell||'').trim());
+      if(tg&&!tg.targetOnly&&!foundTarget){ foundTarget=tg; foundTargetCol=c; }
+      else if(/target/i.test(cell)&&foundTargetCol<0) foundTargetCol=c;
+    }
+    if(foundMonths.length>=1){
+      headerRow=hr; monthCols=foundMonths;
+      if(foundTarget){ targetCol=foundTargetCol; quarterLabel=foundTarget.label; quarter=foundTarget.quarter; year=foundTarget.year; }
+      else if(foundTargetCol>=0) targetCol=foundTargetCol;
+      break;
+    }
+  }
+  if(headerRow<0||!monthCols.length) return null;
+  if(targetCol<0){
+    for(var tc=startCol;tc<=blockEnd;tc++){
+      var h=String((rows[headerRow]||[])[tc]||'');
+      if(/Q\d/i.test(h)){ targetCol=tc; quarterLabel=h; break; }
+    }
+    if(targetCol<0){
+      for(var hr2=sec.row;hr2<=headerRow+1;hr2++){
+        for(var tc2=startCol;tc2<=blockEnd;tc2++){
+          var h2=String((rows[hr2]||[])[tc2]||'');
+          if(/target|% achiev/i.test(h2)&&targetCol<0) targetCol=tc2;
+          var tg2=glkParseTargetHeader(h2);
+          if(tg2&&!tg2.targetOnly){ targetCol=tc2; quarterLabel=tg2.label; quarter=tg2.quarter; year=tg2.year; }
+        }
+      }
+    }
+  }
+  if(!quarterLabel&&monthCols.length){
+    var qm=monthCols[0].month;
+    quarter=Math.floor(qm/3)+1;
+    year=monthCols[0].year;
+    quarterLabel='Q'+quarter+"'"+String(year).slice(-2);
+  }
+  var qMonths=monthCols.filter(function(m){
+    var mq=Math.floor(m.month/3)+1;
+    return mq===quarter&&m.year===year;
+  });
+  if(!qMonths.length) qMonths=monthCols;
+  var dataStart=headerRow+1;
+  if(rows[dataStart]){
+    var hdrTxt=glkNormCellTxt((rows[dataStart]||[]).join(' '));
+    if(hdrTxt.indexOf('actual')>=0||hdrTxt.indexOf('achiev')>=0) dataStart++;
+  }
+  var nameCol=monthCols.length?Math.max(0,monthCols[0].col-1):Math.max(0,startCol-1);
+  var entries=[],overall=null;
+  for(var dr=dataStart;dr<rows.length;dr++){
+    var drow=rows[dr]||[];
+    var joined=glkNormCellTxt(drow.join(' '));
+    if(!joined&&!(drow.some(function(x){return glkParseReportNum(x)!=null;}))) continue;
+    if(/mobile\s*net\s*adds|net\s*adds\s*lines?/.test(joined)) break;
+    if(/fixed\s*net\s*mrc|broadcast|datamena|fixed gross|revenue trend|mrc trend|^note$/i.test(joined)) break;
+    var name=glkRowVertName(drow,startCol,monthCols);
+    if(/^note$/i.test(name)) break;
+    var actuals={},actualSum=0,hasNum=false;
+    qMonths.forEach(function(m){
+      var v=glkParseReportNum(drow[m.col]);
+      actuals[m.label]=v;
+      if(v!=null){ actualSum+=v; hasNum=true; }
+    });
+    var target=targetCol>=0?glkParseReportNum(drow[targetCol]):null;
+    if(!hasNum&&!target&&!name) continue;
+    if(/actual|target|achiev|Q\d/i.test(name)&&!hasNum) continue;
+    var entry={name:name||'Overall',actuals:actuals,actualQtd:hasNum?actualSum:0,target:target||0,isOverall:false};
+    if(!overall&&(/total|overall|^mobile$/i.test(name)||(!entries.length&&hasNum))){
+      entry.isOverall=true; entry.name='GLK Overall'; overall=entry;
+    }else entries.push(entry);
+  }
+  if(!overall&&entries.length){ overall=entries.shift(); overall.isOverall=true; overall.name='GLK Overall'; }
+  if(!overall) return null;
+  return {
+    blockType:'mobile',metric:'gaLines',title:sec.title,
+    quarter:quarter,year:year,quarterLabel:quarterLabel||('Q'+quarter+"'"+String(year).slice(-2)),
+    months:qMonths.map(function(m){return m.label;}),
+    overall:overall,
+    verticals:entries
+  };
+}
+function glkParseAndSetMobileReport(arrayBuffer,cb){
+  try{
+    var wb=XLSX.read(arrayBuffer,{type:'array',cellDates:true,cellNF:true,cellStyles:true});
+    var parsed=glkParseQtdWorkbook(wb);
+    if(!parsed||(!parsed.mobile&&!parsed.fixed))
+      return cb(new Error('Could not find Mobile Net Adds or Fixed Net MRC sections. Use the daily GLK Excel template (.xlsx/.xlsm).'));
+    GLK_QTD_REPORT={mobile:parsed.mobile||null,fixed:parsed.fixed||null};
+    mqSyncActiveReport();
+    if(!mqGetActiveReport()){
+      var alt=mqProductFamily==='fixed'?'mobile':'fixed';
+      if(GLK_QTD_REPORT[alt]) mqProductFamily=alt;
+      mqSyncActiveReport();
+      el('mqPfMobile')?.classList.toggle('active',mqProductFamily==='mobile');
+      el('mqPfFixed')?.classList.toggle('active',mqProductFamily==='fixed');
+      mqUpdateProductFamilyUi();
+    }
+    cb(null,parsed);
+  }catch(err){ cb(err); }
+}
+window.glkMobileReportUpload=function(file){
+  if(!file) return;
+  if(typeof XLSX==='undefined'){ alert('Excel parser not loaded. Refresh the page.'); return; }
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var buf=e.target.result;
+    glkParseAndSetMobileReport(buf,function(err){
+      if(err){ alert(err.message); return; }
+      glkShowLoader('Saving report…');
+      mqCacheSaveReport(buf,{filename:SP_MOBILE_REPORT_FILE,originalName:file.name,uploadedAt:new Date().toISOString(),storage:'local-cache'},function(){
+        spUploadMobileReport(buf,file.name,function(err2,meta){
+          if(err2){
+            console.error('[GLK] SP upload error:',err2);
+            GLK_MOBILE_REPORT_META={filename:SP_MOBILE_REPORT_FILE,originalName:file.name,uploadedAt:new Date().toISOString(),storage:'local-cache',spError:err2.message};
+            glkHideLoader();
+            glkMobileQtdRefreshUI();
+            renderMobileQtdBridge();
+            alert('Report saved on this browser, but SharePoint upload failed:\n'+err2.message+'\n\nOther users will not see it until SharePoint save works. Check Contribute access to Shared Documents.');
+            return;
+          }
+          meta=Object.assign({},meta||{},{storage:'sharepoint',originalName:file.name});
+          mqCacheSaveReport(buf,meta,function(){
+            GLK_MOBILE_REPORT_META=meta;
+            glkHideLoader();
+            glkMobileQtdRefreshUI();
+            renderMobileQtdBridge();
+          });
+        });
+      });
+    });
+  };
+  reader.onerror=function(){ alert('Could not read file.'); };
+  reader.readAsArrayBuffer(file);
+  var inp=el('mobileReportInp'); if(inp) inp.value='';
+};
+function glkMobileQtdRefreshUI(){
+  var meta=GLK_MOBILE_REPORT_META;
+  var metaEl=el('mobileReportMeta');
+  var repBtn=el('mobileReportReplaceBtn');
+  if(metaEl){
+    if(GLK_MOBILE_REPORT&&meta){
+      var dt=meta.uploadedAt?new Date(meta.uploadedAt).toLocaleString('en-GB'):'—';
+      var src=meta.originalName&&meta.originalName!==meta.filename?' (from '+meta.originalName+')':'';
+      var store=meta.storage==='sharepoint'
+        ?'<span style="color:#16a34a;">✓ SharePoint</span> + browser backup'
+        :'<span style="color:#16a34a;">✓ Saved on this browser</span> (auto-loads on refresh)'+(meta.spError?' · SP upload failed':'');
+      metaEl.innerHTML=store+' · <strong>'+meta.filename+'</strong>'+src+' · '+dt+' · '+(mqGetActiveReport()?.quarterLabel||'—');
+      if(repBtn) repBtn.style.display='inline-flex';
+    }else if(GLK_MOBILE_REPORT){
+      metaEl.innerHTML='<span style="color:#f59e0b;">Report loaded in memory — re-upload to save permanently.</span>';
+    }else{
+      metaEl.textContent='No saved report — upload the daily GLK Excel (stored in SharePoint + this browser).';
+      if(repBtn) repBtn.style.display='none';
+    }
+  }
+  mqBuildReportLevelFilter();
+}
+function mqRulePrefix(id){ return 'mqR_'+id; }
+function mqDefaultDateRule(field){
+  return {id:'mq'+(mqRuleSeq++),dateField:field||'expectedActivation',dateMode:'any',from:'',to:'',specific:'',ytdYear:'',years:[],quarters:[],months:[],weeks:[]};
+}
+function mqGetRuleChecked(ruleId,part){
+  var drop=el(mqRulePrefix(ruleId)+'_'+part);
+  if(!drop) return [];
+  return Array.from(drop.querySelectorAll('input:checked')).map(function(c){return c.value;});
+}
+function mqUpdateRuleMsText(ruleId,part,label){
+  var checked=mqGetRuleChecked(ruleId,part);
+  var te=el(mqRulePrefix(ruleId)+'_'+part+'Text'); if(!te) return;
+  if(!checked.length){ te.textContent='All '+label; return; }
+  if(checked.length===1){
+    if(part==='quarter') te.textContent='Q'+checked[0];
+    else if(part==='month') te.textContent=MONTH_NAMES[+checked[0]]||checked[0];
+    else if(part==='week') te.textContent='W'+checked[0];
+    else te.textContent=checked[0];
+    return;
+  }
+  te.textContent=checked.length+' selected';
+}
+function mqToggleRuleMs(ruleId,part){
+  var drop=el(mqRulePrefix(ruleId)+'_'+part),trig=el(mqRulePrefix(ruleId)+'_'+part+'Trig');
+  if(!drop||!trig) return;
+  var isOpen=drop.classList.contains('open');
+  document.querySelectorAll('#mqDateRulesWrap .ms-dropdown.open').forEach(function(d){d.classList.remove('open');if(d.previousElementSibling)d.previousElementSibling.classList.remove('open');});
+  if(!isOpen){
+    var rect=trig.getBoundingClientRect();
+    drop.style.top=(rect.bottom+4)+'px';drop.style.left=rect.left+'px';
+    drop.style.width=Math.max(rect.width,180)+'px';
+    drop.classList.add('open');trig.classList.add('open');
+  }
+}
+function mqBuildRuleMs(ruleId,part,label,values,selected,labelFn){
+  var drop=el(mqRulePrefix(ruleId)+'_'+part); if(!drop) return;
+  var selSet={}; (selected||[]).forEach(function(v){selSet[String(v)]=true;});
+  drop.innerHTML=values.map(function(val){
+    var disp=labelFn?labelFn(val):val;
+    var cid=mqRulePrefix(ruleId)+'_'+part+'_'+String(val).replace(/\W/g,'_');
+    return '<div class="ms-option" onclick="event.stopPropagation()"><input type="checkbox" id="'+cid+'" value="'+val+'"'+(selSet[String(val)]?' checked':'')+' onchange="mqUpdateRuleMsText(\''+ruleId+'\',\''+part+'\',\''+label+'\');mqOnDateFilterChange()"><label for="'+cid+'">'+disp+'</label></div>';
+  }).join('');
+  mqUpdateRuleMsText(ruleId,part,label);
+}
+function mqPopulateRulePeriodDropdowns(rule,items){
+  var field=rule.dateField||'expectedActivation';
+  var metas=glkCollectDateMetas(items,field);
+  var ySel=rule.years||[], qSel=rule.quarters||[], mSel=rule.months||[];
+  var years=[],quarters=[],months=[],weeks=[];
+  metas.forEach(function(m){ var ys=String(m.year); if(years.indexOf(ys)<0) years.push(ys); });
+  years.sort(function(a,b){return parseInt(b,10)-parseInt(a,10);});
+  metas.forEach(function(m){
+    if(ySel.length&&ySel.indexOf(String(m.year))<0) return;
+    var qs=String(m.quarter); if(quarters.indexOf(qs)<0) quarters.push(qs);
+  });
+  quarters.sort(function(a,b){return parseInt(a,10)-parseInt(b,10);});
+  metas.forEach(function(m){
+    if(ySel.length&&ySel.indexOf(String(m.year))<0) return;
+    if(qSel.length&&qSel.indexOf(String(m.quarter))<0) return;
+    var ms=String(m.monthIndex); if(months.indexOf(ms)<0) months.push(ms);
+  });
+  months.sort(function(a,b){return parseInt(a,10)-parseInt(b,10);});
+  metas.forEach(function(m){
+    if(ySel.length&&ySel.indexOf(String(m.year))<0) return;
+    if(qSel.length&&qSel.indexOf(String(m.quarter))<0) return;
+    if(mSel.length&&mSel.indexOf(String(m.monthIndex))<0) return;
+    if(m.week!=null){ var ws=String(m.week); if(weeks.indexOf(ws)<0) weeks.push(ws); }
+  });
+  weeks.sort(function(a,b){return parseInt(a,10)-parseInt(b,10);});
+  mqBuildRuleMs(rule.id,'year','Years',years,rule.years);
+  mqBuildRuleMs(rule.id,'quarter','Quarters',quarters,rule.quarters,function(v){return 'Q'+v;});
+  mqBuildRuleMs(rule.id,'month','Months',months,rule.months,function(v){return MONTH_NAMES[+v]||v;});
+  mqBuildRuleMs(rule.id,'week','Weeks',weeks,rule.weeks,function(v){return 'W'+v;});
+}
+function mqReadDateRuleFromDom(ruleId){
+  var p=mqRulePrefix(ruleId);
+  return {
+    id:ruleId,
+    dateField:glkGetSelectVal(p+'Field')||'expectedActivation',
+    dateMode:glkGetSelectVal(p+'Mode')||'any',
+    from:glkGetSelectVal(p+'From'),to:glkGetSelectVal(p+'To'),specific:glkGetSelectVal(p+'Specific'),
+    ytdYear:glkGetSelectVal(p+'YtdYear'),
+    years:mqGetRuleChecked(ruleId,'year'),quarters:mqGetRuleChecked(ruleId,'quarter'),
+    months:mqGetRuleChecked(ruleId,'month'),weeks:mqGetRuleChecked(ruleId,'week'),
+  };
+}
+function mqReadAllDateRules(){ return mqDateRules.map(function(r){return mqReadDateRuleFromDom(r.id);}); }
+function mqSyncRuleModeUI(ruleId){
+  var p=mqRulePrefix(ruleId), mode=glkGetSelectVal(p+'Mode')||'any';
+  ['Range','Single','Period','Ytd'].forEach(function(suffix){
+    var g=el(p+suffix+'Group'); if(g) g.style.display=(mode===suffix.toLowerCase()?'grid':'none');
+  });
+  var hint=el(p+'Hint'); if(hint) hint.textContent=glkDateModeHint(mode);
+}
+function mqRenderDateRuleCard(rule,index){
+  var p=mqRulePrefix(rule.id), mode=rule.dateMode||'any';
+  var fieldOpts=GLK_DATE_FIELD_OPTS.map(function(o){return '<option value="'+o.key+'"'+(rule.dateField===o.key?' selected':'')+'>'+o.label+'</option>';}).join('');
+  var modeOpts=[
+    {v:'any',l:'Any date'},{v:'ytd',l:'Year to date'},{v:'range',l:'Date range'},
+    {v:'single',l:'Specific day'},{v:'period',l:'Year / quarter / month'},
+  ].map(function(o){return '<option value="'+o.v+'"'+(mode===o.v?' selected':'')+'>'+o.l+'</option>';}).join('');
+  var years=[...new Set(ALL_BIDS.map(function(b){var m=glkDateMeta(glkBidDateValue(b,rule.dateField));return m?String(m.year):null;}).filter(Boolean))].sort(function(a,b){return parseInt(b,10)-parseInt(a,10);});
+  var ytdOpts=years.map(function(y){return '<option value="'+y+'"'+(String(rule.ytdYear||new Date().getFullYear())===y?' selected':'')+'>'+y+'</option>';}).join('');
+  var ms=function(part,label){
+    return '<div class="filter-group"><div class="filter-label">'+label+'</div><div class="ms-wrap"><div class="ms-trigger" id="'+p+'_'+part+'Trig" onclick="event.stopPropagation();mqToggleRuleMs(\''+rule.id+'\',\''+part+'\')"><span id="'+p+'_'+part+'Text">All '+label+'</span><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div><div class="ms-dropdown" id="'+p+'_'+part+'"></div></div></div>';
+  };
+  return '<div class="glk-date-rule" id="'+p+'Card">'+
+    '<div class="glk-rule-header"><span class="glk-rule-title">Date criterion '+(index+1)+'</span>'+
+      (mqDateRules.length>1?'<button type="button" class="glk-rule-remove" onclick="mqRemoveDateRule(\''+rule.id+'\')">Remove</button>':'')+
+    '</div>'+
+    '<div class="filter-bar-grid">'+
+      '<div class="fb-group"><div class="fb-group-label">Date field</div><select class="fb-select" id="'+p+'Field" onchange="mqOnDateFilterChange()">'+fieldOpts+'</select></div>'+
+      '<div class="fb-group"><div class="fb-group-label">Filter by</div><select class="fb-select" id="'+p+'Mode" onchange="mqSyncRuleModeUI(\''+rule.id+'\');mqOnDateFilterChange()">'+modeOpts+'</select></div>'+
+    '</div>'+
+    '<div class="glk-date-hint" id="'+p+'Hint">'+glkDateModeHint(mode)+'</div>'+
+    '<div id="'+p+'RangeGroup" class="filter-bar-grid" style="display:'+(mode==='range'?'grid':'none')+';margin-top:.4rem;">'+
+      '<div class="fb-group"><div class="fb-group-label">From</div><input type="date" class="fb-select" id="'+p+'From" value="'+(rule.from||'')+'" onchange="mqOnDateFilterChange()"></div>'+
+      '<div class="fb-group"><div class="fb-group-label">To</div><input type="date" class="fb-select" id="'+p+'To" value="'+(rule.to||'')+'" onchange="mqOnDateFilterChange()"></div></div>'+
+    '<div id="'+p+'SingleGroup" class="filter-bar-grid" style="display:'+(mode==='single'?'grid':'none')+';margin-top:.4rem;">'+
+      '<div class="fb-group"><div class="fb-group-label">Day</div><input type="date" class="fb-select" id="'+p+'Specific" value="'+(rule.specific||'')+'" onchange="mqOnDateFilterChange()"></div></div>'+
+    '<div id="'+p+'YtdGroup" class="filter-bar-grid" style="display:'+(mode==='ytd'?'grid':'none')+';margin-top:.4rem;">'+
+      '<div class="fb-group"><div class="fb-group-label">YTD year</div><select class="fb-select" id="'+p+'YtdYear" onchange="mqOnDateFilterChange()">'+ytdOpts+'</select></div></div>'+
+    '<div id="'+p+'PeriodGroup" class="filter-bar-grid" style="display:'+(mode==='period'?'grid':'none')+';margin-top:.4rem;">'+
+      ms('year','Years')+ms('quarter','Quarters')+ms('month','Months')+ms('week','Weeks')+'</div></div>';
+}
+function mqBuildDateFilters(){
+  if(!mqDateRules.length) mqDateRules=[mqDefaultDateRule('expectedActivation')];
+  var wrap=el('mqDateRulesWrap'); if(!wrap) return;
+  wrap.innerHTML=mqDateRules.map(function(r,i){return mqRenderDateRuleCard(r,i);}).join('');
+  mqDateRules.forEach(function(r){
+    mqSyncRuleModeUI(r.id);
+    mqPopulateRulePeriodDropdowns(mqReadDateRuleFromDom(r.id),ALL_BIDS);
+  });
+}
+window.mqAddDateRule=function(){ mqDateRules.push(mqDefaultDateRule('expectedActivation')); mqBuildDateFilters(); };
+window.mqRemoveDateRule=function(ruleId){
+  mqDateRules=mqDateRules.filter(function(r){return r.id!==ruleId;});
+  if(!mqDateRules.length) mqDateRules=[mqDefaultDateRule('expectedActivation')];
+  mqBuildDateFilters(); mqOnDateFilterChange();
+};
+window.mqOnDateFilterChange=function(){
+  mqDateRules=mqReadAllDateRules();
+  mqDateRules.forEach(function(r){mqPopulateRulePeriodDropdowns(r,ALL_BIDS);});
+  renderMobileQtdBridge();
+};
+function mqGetFilterVals(key){
+  if(key==='closureProb') return PROB_ORDER.slice();
+  if(key==='status') return [...new Set(ALL_BIDS.map(function(b){return b.status;}).filter(Boolean))].sort();
+  var vals=new Set();
+  ALL_BIDS.forEach(function(b){
+    var v=b[key];
+    if(v==null||v===''||v==='—') vals.add('(Blank)');
+    else vals.add(v);
+  });
+  return [...vals].sort();
+}
+function mqBidFieldVal(bid,key){
+  var v=bid[key];
+  if(v==null||v===''||v==='—') return '(Blank)';
+  return v;
+}
+function mqGetChecked(key){
+  var drop=el('mqmsd_'+key); if(!drop) return [];
+  return Array.from(drop.querySelectorAll('input:checked')).map(function(c){return c.value;});
+}
+function mqUpdateMsText(key){
+  var checked=mqGetChecked(key); var e=el('mqmstext_'+key); if(!e) return;
+  if(!checked.length) e.textContent='All';
+  else if(checked.length===1) e.textContent=checked[0];
+  else e.textContent=checked.length+' selected';
+}
+window.mqToggleMs=function(key){
+  var drop=el('mqmsd_'+key),trig=el('mqmst_'+key);
+  if(!drop||!trig) return;
+  var isOpen=drop.classList.contains('open');
+  document.querySelectorAll('#mqFiltersGrid .ms-dropdown.open').forEach(function(d){
+    d.classList.remove('open');
+    var k=d.id.replace('mqmsd_','');
+    var t=el('mqmst_'+k); if(t) t.classList.remove('open');
+  });
+  if(!isOpen){
+    var rect=trig.getBoundingClientRect();
+    drop.style.top=(rect.bottom+4)+'px';
+    drop.style.left=rect.left+'px';
+    drop.style.width=Math.max(rect.width,180)+'px';
+    drop.classList.add('open');
+    trig.classList.add('open');
+  }
+};
+window.mqOnFilterChange=function(key){
+  mqUpdateMsText(key);
+  renderMobileQtdBridge();
+};
+function buildMqFilters(){
+  var grid=el('mqFiltersGrid'); if(!grid) return;
+  grid.innerHTML='';
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var div=document.createElement('div'); div.className='filter-group';
+    div.innerHTML='<div class="filter-label">'+fd.label+'</div>';
+    var wrap=document.createElement('div'); wrap.className='ms-wrap'; wrap.id='mqms_'+fd.key;
+    var trig=document.createElement('div'); trig.className='ms-trigger'; trig.id='mqmst_'+fd.key;
+    trig.innerHTML='<span id="mqmstext_'+fd.key+'">All</span><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
+    trig.onclick=function(e){e.stopPropagation();mqToggleMs(fd.key);};
+    var drop=document.createElement('div'); drop.className='ms-dropdown'; drop.id='mqmsd_'+fd.key;
+    mqGetFilterVals(fd.key).forEach(function(v){
+      if(!v) return;
+      var opt=document.createElement('div'); opt.className='ms-option';
+      var cid='mqcb_'+fd.key+'_'+v.toString().replace(/[^a-zA-Z0-9]/g,'_');
+      opt.innerHTML='<input type="checkbox" id="'+cid+'" value="'+v+'" onchange="mqOnFilterChange(\''+fd.key+'\')"><label for="'+cid+'">'+v+'</label>';
+      drop.appendChild(opt);
+    });
+    wrap.appendChild(trig); wrap.appendChild(drop); div.appendChild(wrap); grid.appendChild(div);
+  });
+}
+window.mqResetAllFilters=function(){
+  var rlDrop=el('mqmsd_reportLevel');
+  if(rlDrop) rlDrop.querySelectorAll('input').forEach(function(c){c.checked=false;});
+  mqUpdateReportLevelText();
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var drop=el('mqmsd_'+fd.key);
+    if(drop) drop.querySelectorAll('input').forEach(function(c){c.checked=false;});
+    mqUpdateMsText(fd.key);
+  });
+  renderMobileQtdBridge();
+};
+function mqApplyFilters(){
+  var bids=ALL_BIDS.slice();
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var vals=mqGetChecked(fd.key);
+    if(!vals.length) return;
+    bids=bids.filter(function(b){return vals.indexOf(mqBidFieldVal(b,fd.key))>=0;});
+  });
+  bids=glkApplyDateRules(bids,mqReadAllDateRules());
+  return bids;
+}
+function glkMobilePipelineBids(){
+  return mqApplyFilters();
+}
+function mqApplyBridgeBaseFilters(){
+  var bids=ALL_BIDS.filter(mqBidMatchesPf);
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var vals=mqGetChecked(fd.key);
+    if(!vals.length) return;
+    bids=bids.filter(function(b){return vals.indexOf(mqBidFieldVal(b,fd.key))>=0;});
+  });
+  return bids;
+}
+function mqNormContractType(v){
+  var s=String(v||'').trim().toLowerCase().replace(/\s+/g,' ');
+  if(!s||s==='—') return '(blank)';
+  if(s==='acquisation') return 'acquisition';
+  return s;
+}
+var MQ_GROSS_CONTRACT_TYPES=['acquisition','cross sell','new','relocation','upgrade','upsell','(blank)'];
+var MQ_CHURN_CONTRACT_TYPES=['churn','downgrade'];
+function mqContractInList(bid,list){
+  return list.indexOf(mqNormContractType(bid.typeOfContract))>=0;
+}
+/** Expected activation in report quarter, from current month through quarter-end (skip past months in quarter). */
+function mqActivationQtdForward(bid,year,quarter){
+  var iso=bid.expectedActivation;
+  if(!iso) return false;
+  var d=new Date(iso); if(isNaN(d)) return false;
+  if(d.getFullYear()!==year) return false;
+  var q=Math.floor(d.getMonth()/3)+1;
+  if(q!==quarter) return false;
+  var now=new Date();
+  var nowQ=Math.floor(now.getMonth()/3)+1;
+  if(year===now.getFullYear()&&quarter===nowQ&&d.getMonth()<now.getMonth()) return false;
+  return true;
+}
+window.mqToggleBridgeInfo=function(){
+  var p=el('mqBridgeInfoPanel'); if(!p) return;
+  p.style.display=p.style.display==='none'?'block':'none';
+  if(p.style.display==='block'&&GLK_MQ_CALC_LAST) mqRenderBridgeInfoPanel(GLK_MQ_CALC_LAST);
+};
+function mqRenderBridgeInfoPanel(calc){
+  var p=el('mqBridgeInfoPanel'); if(!p||!calc) return;
+  p.innerHTML=calc.rulesHtml||'';
+}
+function mqFindReportScope(report,vertName){
+  if(!report) return null;
+  if(!vertName) return report.overall||null;
+  var vn=mqNormVertKey(vertName);
+  var list=report.verticals||[];
+  for(var i=0;i<list.length;i++){
+    if(mqNormVertKey(list[i].name)===vn) return list[i];
+  }
+  for(var j=0;j<list.length;j++){
+    var n=mqNormVertKey(list[j].name);
+    if(!n||!vn||n.length<2||vn.length<2) continue;
+    if(n.indexOf(vn)>=0||vn.indexOf(n)>=0) return list[j];
+  }
+  return null;
+}
+function mqMatchVerticalName(bidVert,selVert){
+  if(!selVert) return true;
+  var bv=mqNormVertKey(bidVert);
+  var vn=mqNormVertKey(selVert);
+  if(!bv||bv==='—') return false;
+  if(bv===vn) return true;
+  if(bv.length>=2&&vn.length>=2&&(bv.indexOf(vn)>=0||vn.indexOf(bv)>=0)) return true;
+  return false;
+}
+function mqGetSelectedFilterLabels(){
+  var out={};
+  var rl=mqGetReportLevelsChecked();
+  out['Report level']=rl.length?rl.join(', '):'GLK Overall';
+  MQ_FILTER_DEFS.forEach(function(fd){
+    var vals=mqGetChecked(fd.key);
+    out[fd.label]=vals.length?vals.join(', '):'All';
+  });
+  return out;
+}
+function mqBuildRulesHtml(calc){
+  var f=mqGetSelectedFilterLabels();
+  var monthNames=MONTH_NAMES.slice(Math.max(0,(calc.quarter-1)*3),(calc.quarter)*3).join(', ');
+  var html='<strong style="color:var(--acc);">Bridge rules (backend)</strong><br><br>';
+  html+='<strong>Report level:</strong> '+calc.vertical+' · Actuals QTD '+fmtLines(calc.actualsQtd)+' · Target '+fmtLines(calc.target);
+  if(calc.reportScopeMissing) html+=' <span style="color:#f59e0b;">(some verticals not found in report)</span>';
+  html+='<br>';
+  html+='<strong>Pipeline scope:</strong> '+(mqProductFamily==='fixed'?'Fixed only (MRC)':'Mobile only (GA Lines)')+'<br>';
+  html+='<strong>Scenario:</strong> '+(calc.isBest?'Best Case (Proposed + Opportunity in-flight)':'Worst Case (Proposed only in-flight)')+'<br>';
+  html+='<strong>Activation window:</strong> Q'+calc.quarter+' '+calc.year+' — current month through quarter-end ('+monthNames+')<br><br>';
+  html+='<strong>Gross Adds (100%):</strong> Closure Prob = 100% · Contracts: Acquisition, Cross Sell, New, Relocation, Upgrade, Upsell, blank<br>';
+  html+='<strong>In-flight Gross:</strong> Same contracts · '+(calc.isBest?'Status Proposed or Opportunity':'Status Proposed only')+'<br>';
+  html+='<strong>Churn:</strong> Contracts Churn, Downgrade · Same status rules as in-flight gross<br><br>';
+  html+='<strong>Your pipeline filters:</strong><br>';
+  Object.keys(f).forEach(function(k){ html+='· '+k+': '+f[k]+'<br>'; });
+  if(calc.actualsByVertical&&calc.actualsByVertical.length){
+    html+='<br><strong>Actuals by vertical (report):</strong><br>';
+    calc.actualsByVertical.forEach(function(v){ html+='· '+v.name+': '+fmtLines(v.actualQtd)+'<br>'; });
+  }
+  return html;
+}
+function mqVerticalBreakdown(bids,getVal){
+  var m={};
+  bids.forEach(function(b){
+    var v=b.vertical&&b.vertical!=='—'?b.vertical:'(Blank)';
+    m[v]=(m[v]||0)+getVal(b);
+  });
+  return Object.keys(m).sort().map(function(k){return {name:k,value:m[k]};});
+}
+function mqBidDetailLines(bids,max){
+  var lines=[];
+  (bids||[]).slice(0,max||12).forEach(function(b,i){
+    lines.push((i+1)+'. '+(b.customerName||'—')+' · '+fmtLines(mqBidMetric(b))+' '+mqMetricShort().toLowerCase());
+    lines.push('   Vertical: '+(b.vertical||'—')+' · AD: '+(b.accountDirector||'—')+' · AM: '+(b.amName||'—'));
+    lines.push('   Status: '+(b.status||'—')+' · Prob: '+(b.closureProb||'—')+' · Contract: '+(b.typeOfContract||'—'));
+  });
+  if((bids||[]).length>(max||12)) lines.push('… +'+(bids.length-(max||12))+' more');
+  return lines;
+}
+function mqGrossAdds100Detail(bids,year,quarter){
+  var matched=bids.filter(function(b){
+    return b.closureProb==='100%'&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&mqActivationQtdForward(b,year,quarter)&&mqBidMetric(b)>0;
+  });
+  return {total:matched.reduce(function(s,b){return s+mqBidMetric(b);},0),bids:matched};
+}
+function mqTopNAndOthers(topPool,othersPool,getVal,topN){
+  var custMap={};
+  topPool.forEach(function(b){
+    var k=b.customerName||'Unknown';
+    if(!custMap[k]) custMap[k]={name:k,value:0,bids:[]};
+    custMap[k].value+=getVal(b);
+    custMap[k].bids.push(b);
+  });
+  var ranked=Object.keys(custMap).map(function(k){return custMap[k];}).filter(function(p){return p.value!==0;})
+    .sort(function(a,b){return Math.abs(b.value)-Math.abs(a.value);}).slice(0,topN);
+  var top=ranked.slice().sort(function(a,b){return a.value-b.value;});
+  var topNames={}; top.forEach(function(p){topNames[p.name]=true;});
+  var othersBids=[];
+  othersPool.forEach(function(b){
+    var k=b.customerName||'Unknown';
+    if(topNames[k]) return;
+    othersBids.push(b);
+  });
+  var othersSum=othersBids.reduce(function(s,b){return s+getVal(b);},0);
+  var topSum=top.reduce(function(s,p){return s+p.value;},0);
+  return {top:top,others:othersSum,othersBids:othersBids,total:topSum+othersSum};
+}
+function mqInflightGrossPools(base,year,quarter,isBest){
+  var common=function(b){
+    return mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&mqActivationQtdForward(b,year,quarter)&&mqBidMetric(b)>0;
+  };
+  var topPool,othersPool;
+  if(isBest){
+    topPool=base.filter(function(b){return common(b)&&(b.status==='Proposed'||b.status==='Opportunity');});
+    othersPool=base.filter(function(b){return common(b)&&STATUS_IP.indexOf(b.status)>=0;});
+    return mqTopNAndOthers(topPool,othersPool,mqBidMetric,5);
+  }
+  topPool=base.filter(function(b){return common(b)&&b.status==='Proposed';});
+  othersPool=topPool.slice();
+  return mqTopNAndOthers(topPool,othersPool,mqBidMetric,5);
+}
+function mqInflightChurnPools(base,year,quarter,isBest){
+  var common=function(b){
+    return mqContractInList(b,MQ_CHURN_CONTRACT_TYPES)&&mqActivationQtdForward(b,year,quarter);
+  };
+  var getVal=function(b){
+    var v=mqBidMetric(b);
+    if(v<0) return v;
+    if(v>0) return -v;
+    return 0;
+  };
+  var hasChurn=function(b){ return getVal(b)!==0; };
+  var topPool,othersPool;
+  if(isBest){
+    topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&(b.status==='Proposed'||b.status==='Opportunity');});
+    othersPool=base.filter(function(b){return common(b)&&hasChurn(b)&&STATUS_IP.indexOf(b.status)>=0;});
+    return mqTopNAndOthers(topPool,othersPool,getVal,5);
+  }
+  topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&b.status==='Proposed';});
+  othersPool=topPool.slice();
+  return mqTopNAndOthers(topPool,othersPool,getVal,5);
+}
+function glkMobileQtdCalc(){
+  var report=mqGetActiveReport();
+  var isBest=mqCase==='best';
+  var year=report?report.year:new Date().getFullYear();
+  var quarter=report?report.quarter:Math.floor(new Date().getMonth()/3)+1;
+  var activeLevels=mqGetActiveReportLevels();
+  var scope=mqResolveReportScope(report,activeLevels);
+  var actualsQtd=scope.actualsQtd;
+  var target=scope.target;
+  var actualsByVertical=null;
+  if(!activeLevels.length&&report&&report.verticals){
+    actualsByVertical=report.verticals.map(function(v){return {name:v.name,actualQtd:num(v.actualQtd),target:num(v.target)};});
+  }
+  var base=mqApplyBridgeBaseFilters();
+  if(activeLevels.length) base=base.filter(function(b){return mqBidMatchesReportLevels(b,activeLevels);});
+  var g100=mqGrossAdds100Detail(base,year,quarter);
+  var grossPool=mqInflightGrossPools(base,year,quarter,isBest);
+  var churnPool=mqInflightChurnPools(base,year,quarter,isBest);
+  var inflightGross=grossPool.total;
+  var inflightChurn=churnPool.total;
+  var hasChurn=churnPool.top.length>0||churnPool.others!==0;
+  var forecast=actualsQtd+g100.total+inflightGross+inflightChurn;
+  var diff=target-forecast;
+  var calc={
+    report:report,year:year,quarter:quarter,isBest:isBest,
+    actualsQtd:actualsQtd,target:target,actualsByVertical:actualsByVertical,
+    gross100:g100.total,gross100Bids:g100.bids,grossPool:grossPool,churnPool:churnPool,
+    inflightGross:inflightGross,inflightChurn:inflightChurn,hasChurn:hasChurn,
+    forecast:forecast,diff:diff,gap:diff>0?diff:0,growth:diff<0?Math.abs(diff):0,
+    vertical:scope.label,
+    activeReportLevels:activeLevels.slice(),
+    reportScopeMissing:scope.missing.length>0
+  };
+  calc.rulesHtml=mqBuildRulesHtml(calc);
+  GLK_MQ_CALC_LAST=calc;
+  return calc;
+}
+function mqShortXLabel(b,idx,bars){
+  return mqAxisLabelLines(b)[0]||'';
+}
+function mqAxisLabelLines(b){
+  if(!b) return [''];
+  if(b.type==='growth') return ['Growth','(+'+fmtLines(Math.abs(b.value))+')'];
+  if(b.type==='gap') return ['Gap','('+fmtLines(Math.abs(b.value))+')'];
+  var name=String(b.axisName||b.custName||b.groupLabel||'').trim();
+  if(!name) return [''];
+  if(name.length<=16) return [name];
+  var words=name.split(/\s+/);
+  if(words.length>=2){
+    var best=1,bestDiff=999;
+    for(var w=1;w<words.length;w++){
+      var a=words.slice(0,w).join(' '), bb=words.slice(w).join(' ');
+      var diff=Math.abs(a.length-bb.length);
+      if(diff<bestDiff){ bestDiff=diff; best=w; }
+    }
+    return [words.slice(0,best).join(' '), words.slice(best).join(' ')];
+  }
+  var mid=Math.ceil(name.length/2);
+  return [name.slice(0,mid), name.slice(mid)];
+}
+function mqSyncChartLabels(chart,bars){
+  if(!chart) return;
+  var meta=chart.getDatasetMeta(0);
+  if(!meta||!meta.data||!meta.data.length) return;
+  var canvas=chart.canvas;
+  var cw=canvas?canvas.clientWidth:0;
+  if(!cw) return;
+  var brow=el('mqBracketRow');
+  if(brow){
+    brow.style.width=cw+'px';
+    brow.style.minWidth=cw+'px';
+    brow.innerHTML='';
+    var groups=[];
+    bars.forEach(function(b,i){
+      if(!b.bracketGroup) return;
+      var g=groups.find(function(x){return x.id===b.bracketGroup;});
+      if(!g) groups.push(g={id:b.bracketGroup,label:b.bracketLabel||'',start:i,end:i});
+      else g.end=i;
+    });
+    groups.forEach(function(g){
+      var b0=meta.data[g.start], b1=meta.data[g.end];
+      if(!b0||!b1) return;
+      var cell=document.createElement('div');
+      cell.className='mq-bracket-abs';
+      var x1=b0.x-(b0.width||14)/2-2;
+      var w=b1.x+(b1.width||14)/2+2-x1;
+      cell.style.left=x1+'px';
+      cell.style.width=Math.max(w,20)+'px';
+      cell.innerHTML='<span class="mq-bracket-line"></span><span class="mq-bracket-label">'+mqEscHtml(g.label)+'</span>';
+      brow.appendChild(cell);
+    });
+  }
+  var strip=el('mqXAxisStrip');
+  if(!strip) return;
+  strip.style.width=cw+'px';
+  strip.style.minWidth=cw+'px';
+  strip.innerHTML='';
+  meta.data.forEach(function(bar,i){
+    var b=bars[i]; if(!b) return;
+    var cell=document.createElement('div');
+    var extra=b.type==='growth'?' growth-lbl':(b.type==='gap'?' gap-lbl':'');
+    cell.className='mq-x-abs'+(GLK_MQ_DETAIL_IDX===i?' sel':'')+extra;
+    cell.style.left=bar.x+'px';
+    cell.style.transform='translateX(-50%)';
+    cell.style.maxWidth=Math.max(72,(bar.width||18)+48)+'px';
+    var lines=mqAxisLabelLines(b);
+    cell.innerHTML=lines.map(function(l){return mqEscHtml(l);}).join('<br>');
+    cell.title=b.custName||lines.join(' ');
+    cell.onclick=function(){mqClickAxisCell(i);};
+    strip.appendChild(cell);
+  });
+}
+function mqEscHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+}
+function mqCalcAxisBottomPad(bars){
+  return 8;
+}
+window.mqClickAxisCell=function(idx){
+  if(!GLK_MQ_LAST_BARS) return;
+  mqToggleBarDetail(idx,GLK_MQ_LAST_BARS,GLK_MQ_LAST_BAR_META||[]);
+};
+function mqRenderBridgeLegend(){
+  var leg=el('mqBridgeLegend'); if(!leg) return;
+  var chips=[
+    {c:'#1d4ed8',l:'Actuals QTD'},
+    {c:'#2563eb',l:'Gross Adds (100%)'},
+    {c:'#60a5fa',l:'In-flight Gross'},
+    {c:'#ea580c',l:'Churn / Downgrade'},
+    {c:MQ_CLR_NET,l:'Net Forecast'},
+    {c:MQ_CLR_TARGET,l:'Target'},
+    {c:MQ_CLR_GROWTH,l:'Growth vs Target'},
+    {c:MQ_CLR_GAP,l:'Gap to Target'}
+  ];
+  leg.innerHTML=chips.map(function(x){
+    return '<span class="mq-leg-chip"><span class="mq-leg-dot" style="background:'+x.c+';"></span>'+x.l+'</span>';
+  }).join('');
+}
+function glkMobileQtdSectionPlugin(bars){
+  var fills={actuals:'rgba(29,78,216,.05)',gross:'rgba(59,130,246,.045)',churn:'rgba(234,88,12,.045)',outcome:'rgba(99,102,241,.04)',empty:'rgba(148,163,184,.04)'};
+  return {id:'mqSections',beforeDatasetsDraw:function(chart){
+    var meta=chart.getDatasetMeta(0), ctx=chart.ctx, area=chart.chartArea;
+    if(!meta||!meta.data||!meta.data.length) return;
+    var spans=[], cur=null;
+    bars.forEach(function(b,i){
+      var sec=b.section||'gross';
+      if(!cur||cur.key!==sec){ if(cur) spans.push(cur); cur={key:sec,start:i,end:i}; }
+      else cur.end=i;
+    });
+    if(cur) spans.push(cur);
+    ctx.save();
+    spans.forEach(function(sp){
+      var b0=meta.data[sp.start], b1=meta.data[sp.end];
+      if(!b0||!b1) return;
+      var x1=b0.x-(b0.width||14)/2-6, x2=b1.x+(b1.width||14)/2+6;
+      ctx.fillStyle=fills[sp.key]||fills.gross;
+      ctx.fillRect(x1,area.top,x2-x1,area.bottom-area.top);
+      var titles={actuals:'Actuals & 100%',gross:'In-flight Gross',churn:'Churn / Downgrade',outcome:'Outcome',empty:'No Churn'};
+      if(titles[sp.key]){
+        ctx.fillStyle='rgba(100,116,139,.65)';
+        ctx.font='700 8px Inter';
+        ctx.textAlign='left';
+        ctx.textBaseline='top';
+        ctx.fillText(titles[sp.key],x1+5,area.top+6);
+      }
+    });
+    ctx.restore();
+  }};
+}
+function glkMobileQtdFlowPlugin(bars){
+  return {id:'mqFlow',beforeDatasetsDraw:function(chart){
+    var meta=chart.getDatasetMeta(0), ctx=chart.ctx, area=chart.chartArea;
+    if(!meta||!meta.data) return;
+    ctx.save();
+    ctx.strokeStyle='rgba(100,116,139,.35)';
+    ctx.lineWidth=1;
+    ctx.setLineDash([3,4]);
+    for(var i=0;i<bars.length-1;i++){
+      var b=bars[i], n=bars[i+1];
+      if(b.type==='total'||b.type==='target'||b.type==='gap'||b.type==='growth') continue;
+      if(n.type==='total') continue;
+      var bar=meta.data[i], y=Math.min(bar.y,bar.base);
+      var barN=meta.data[i+1];
+      if(!barN) continue;
+      var yN=Math.max(barN.y,barN.base);
+      if(Math.abs(y-yN)<2) continue;
+      ctx.beginPath();
+      ctx.moveTo(bar.x+((bar.width||14)/2)+2,y);
+      ctx.lineTo(barN.x-((barN.width||14)/2)-2,y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }};
+}
+function glkMobileQtdAxisPlugin(bars,bottomPad){
+  return {id:'mqAxis',afterDraw:function(chart){
+    var meta=chart.getDatasetMeta(0), ctx=chart.ctx, area=chart.chartArea;
+    if(!meta||!meta.data) return;
+    ctx.save();
+    ctx.fillStyle=chart.options.scales.x.ticks.color||'#64748b';
+    ctx.font='600 9px Inter';
+    ctx.textAlign='center';
+    ctx.textBaseline='top';
+    meta.data.forEach(function(bar,i){
+      var b=bars[i]; if(!b) return;
+      var lines=mqAxisLabelLines(b);
+      var x=bar.x, y=area.bottom+10+(b.bracketGroup?18:0);
+      var isSel=GLK_MQ_DETAIL_IDX===i;
+      if(isSel){
+        ctx.fillStyle=chart.options.scales.x.ticks.color||'#64748b';
+        ctx.font='700 9px Inter';
+      }
+      lines.forEach(function(line,li){
+        if(!line) return;
+        var txt=line.length>22?line.slice(0,20)+'…':line;
+        ctx.fillText(txt,x,y+li*11);
+      });
+      if(isSel){
+        ctx.strokeStyle='rgba(99,102,241,.85)';
+        ctx.lineWidth=2;
+        var w=(bar.width||14)+8;
+        ctx.strokeRect(bar.x-w/2,area.bottom+6,w,bottomPad-10);
+      }
+      ctx.font='600 9px Inter';
+    });
+    ctx.restore();
+  }};
+}
+function mqBuildBarDetailHtml(b,metaLabel){
+  if(!b) return '';
+  var h='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem;margin-bottom:.45rem;">';
+  h+='<strong style="color:var(--acc);font-size:.78rem;">'+(metaLabel||b.custName||b.groupLabel||'Bar')+'</strong>';
+  h+='<button type="button" onclick="mqCloseBarDetail()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:.85rem;padding:0 .25rem;">✕</button></div>';
+  h+='<div style="margin-bottom:.35rem;">Value: <strong>'+fmtLines(Math.abs(b.value))+'</strong>';
+  if(b.type==='decrease') h+=' <span style="color:#ef4444;">(churn)</span>';
+  h+='</div>';
+  if(b.groupLabel) h+='<div style="margin-bottom:.35rem;color:var(--t3);">Group: '+b.groupLabel+'</div>';
+  if(b.vertBreakdown&&b.vertBreakdown.length){
+    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Vertical split</div><ul style="margin:0 0 .45rem 1rem;padding:0;">';
+    b.vertBreakdown.forEach(function(v){ h+='<li>'+v.name+': '+fmtLines(v.value)+'</li>'; });
+    h+='</ul>';
+  }
+  if(b.bids&&b.bids.length){
+    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Accounts ('+b.bids.length+')</div>';
+    h+='<div style="font-size:.68rem;line-height:1.6;">';
+    b.bids.forEach(function(bd,i){
+      h+='<div style="padding:.35rem 0;border-top:1px solid var(--border);">';
+      h+='<strong>'+(i+1)+'. '+(bd.customerName||'—')+'</strong> · '+fmtLines(mqBidMetric(bd))+' '+mqMetricShort().toLowerCase()+'<br>';
+      h+='Vertical: '+(bd.vertical||'—')+' · AD: '+(bd.accountDirector||'—')+' · AM: '+(bd.amName||'—')+'<br>';
+      h+='Status: '+(bd.status||'—')+' · Prob: '+(bd.closureProb||'—')+' · Contract: '+(bd.typeOfContract||'—');
+      h+='</div>';
+    });
+    h+='</div>';
+  }else if(!b.vertBreakdown||!b.vertBreakdown.length){
+    h+='<div style="color:var(--t3);font-style:italic;">No account-level detail for this bar.</div>';
+  }
+  return h;
+}
+window.mqCloseBarDetail=function(){
+  GLK_MQ_DETAIL_IDX=-1;
+  var p=el('mqBarDetailPanel'); if(p) p.style.display='none';
+  if(GLK_MQ_LAST_BARS) mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS);
+  if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
+};
+function mqToggleBarDetail(idx,bars,barMeta){
+  var p=el('mqBarDetailPanel'); if(!p) return;
+  if(GLK_MQ_DETAIL_IDX===idx){ mqCloseBarDetail(); return; }
+  GLK_MQ_DETAIL_IDX=idx;
+  var b=bars[idx], m=barMeta[idx];
+  p.style.display='block';
+  p.innerHTML=mqBuildBarDetailHtml(b,m?m.label:'');
+  mqSyncChartLabels(CHARTS.mobileQtd,bars);
+  if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
+  p.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function glkMobileQtdFloatBar(b){ return [b.displayStart,b.displayEnd]; }
+function mqBarTooltipLines(b){
+  var lines=['Value: '+fmtLines(Math.abs(b.value))+(b.type==='decrease'?' (churn)':'')];
+  if(b.bids&&b.bids.length) lines.push(b.bids.length+' account(s) · click bar for details');
+  else if(b.vertBreakdown&&b.vertBreakdown.length) lines.push('Click bar for vertical split');
+  return lines;
+}
+function glkMobileQtdBracketPlugin(bars){
+  return {id:'mqBrackets',afterDatasetsDraw:function(chart){
+    var meta=chart.getDatasetMeta(0), ctx=chart.ctx, area=chart.chartArea;
+    if(!meta||!meta.data) return;
+    var groups=[];
+    bars.forEach(function(b,i){
+      if(!b.bracketGroup) return;
+      var g=groups.find(function(x){return x.id===b.bracketGroup;});
+      if(!g) groups.push(g={id:b.bracketGroup,label:b.bracketLabel||b.bracketGroup,start:i,end:i});
+      else g.end=i;
+    });
+    groups.forEach(function(g){
+      var b0=meta.data[g.start], b1=meta.data[g.end];
+      if(!b0||!b1) return;
+      var x1=b0.x-(b0.width||16)/2-4, x2=b1.x+(b1.width||16)/2+4;
+      var y=area.bottom+2;
+      ctx.save(); ctx.strokeStyle='rgba(100,116,139,.6)'; ctx.lineWidth=1.2; ctx.fillStyle='#64748b';
+      ctx.font='700 8px Inter'; ctx.textAlign='center';
+      ctx.beginPath(); ctx.moveTo(x1,y); ctx.lineTo(x1,y+5); ctx.lineTo(x2,y+5); ctx.lineTo(x2,y); ctx.stroke();
+      ctx.fillText(g.label,(x1+x2)/2,y+14);
+      ctx.restore();
+    });
+  }};
+}
+function glkMobileQtdLabelPlugin(bars){
+  return {id:'mqLabels',afterDatasetsDraw:function(chart){
+    var ctx=chart.ctx,meta=chart.getDatasetMeta(0);
+    if(!meta||!meta.data) return;
+    meta.data.forEach(function(bar,i){
+      var b=bars[i]; if(!b) return;
+      var val=b.value, top=Math.min(bar.y,bar.base), bot=Math.max(bar.y,bar.base), h=bot-top;
+      var midY=top+h/2;
+      ctx.save();
+      var lbl=fmtLines(Math.abs(val));
+      if(b.type==='decrease') lbl='-'+lbl;
+      else if(b.type==='increase'||b.type==='base') lbl='+'+lbl.replace(/^\+/,'');
+      else if(b.type==='total'||b.type==='target'||b.type==='gap'||b.type==='growth') lbl=fmtLines(val);
+      var onBar=h>=16&&(b.type!=='empty');
+      if(onBar){
+        ctx.fillStyle=(b.type==='decrease'||b.type==='total'||b.type==='target')?'#fff':'#fff';
+        ctx.font='bold 10px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(lbl,bar.x,midY);
+      }else{
+        ctx.fillStyle=b.color||'#2563eb';
+        ctx.font='bold 9px Inter'; ctx.textAlign='center';
+        ctx.textBaseline=b.type==='decrease'?'top':'bottom';
+        ctx.fillText(lbl,bar.x,b.type==='decrease'?bot+4:top-4);
+      }
+      if(GLK_MQ_DETAIL_IDX===i){
+        ctx.strokeStyle='rgba(99,102,241,.9)'; ctx.lineWidth=2.5;
+        ctx.strokeRect(bar.x-(bar.width||14)/2-3,top-3,(bar.width||14)+6,h+6);
+      }
+      ctx.restore();
+    });
+  }};
+}
+function glkMobileQtdSepPlugin(churnSepIdx,c){
+  return {id:'mqSep',afterDraw:function(chart){
+    if(churnSepIdx<0) return;
+    var meta=chart.getDatasetMeta(0);
+    if(!meta||!meta.data[churnSepIdx]) return;
+    var bar=meta.data[churnSepIdx], ctx=chart.ctx, area=chart.chartArea;
+    var x=bar.x-(bar.width||20)*0.55;
+    ctx.save(); ctx.strokeStyle='rgba(100,116,139,.55)'; ctx.lineWidth=1.5; ctx.setLineDash([5,5]);
+    ctx.beginPath(); ctx.moveTo(x,area.top); ctx.lineTo(x,area.bottom+8); ctx.stroke();
+    ctx.restore();
+  }};
+}
+function renderMobileQtdBridge(){
+  destroyChart('mobileQtd');
+  mqCloseBarDetail();
+  var c=getChartColors();
+  var calc=glkMobileQtdCalc();
+  var badge=el('mqTargetBadge');
+  if(badge){
+    var scope=calc.vertical==='GLK Overall'?'GLK Overall':'Vertical: '+calc.vertical;
+    badge.textContent=scope+' · Actuals '+fmtLines(calc.actualsQtd)+' · Target '+fmtLines(calc.target);
+  }
+  var sub=el('mqBridgeSubtitle');
+  if(sub) sub.textContent=(calc.isBest?'Best Case · Proposed + Opportunity':'Worst Case · Proposed only')+' · Q'+calc.quarter+' '+calc.year+' · '+mqMetricUnit()+' · Act: current month → quarter-end';
+  if(!mqGetActiveReport()){
+    var wrap=el('mobileQtdSummaryWrap');
+    if(wrap) wrap.innerHTML='<span style="color:#f59e0b;">Upload the daily GLK report — no '+(mqProductFamily==='fixed'?'Fixed Net MRC':'Mobile Net Adds')+' section found for this product family.</span>';
+    return;
+  }
+  var bars=[],barMeta=[],churnSepIdx=-1;
+  var top5GrossStart=-1,top5GrossEnd=-1,top5ChurnStart=-1,top5ChurnEnd=-1;
+  var trueCum=0,dispTop=0;
+  var scaleMax=Math.max(calc.target,calc.actualsQtd,calc.forecast,1);
+  function dispH(v,isPlaceholder){
+    var a=Math.abs(num(v));
+    if(isPlaceholder) return Math.max(scaleMax*0.012,24);
+    return a;
+  }
+  function pushBar(b,meta){
+    var idx=bars.length; bars.push(b); barMeta.push({label:meta||'',bar:b}); return idx;
+  }
+  var actualsVert=(!calc.activeReportLevels.length&&calc.actualsByVertical)?calc.actualsByVertical.map(function(v){return {name:v.name,value:v.actualQtd};}):null;
+  trueCum=calc.actualsQtd; dispTop=calc.actualsQtd;
+  pushBar({
+    value:calc.actualsQtd,trueCum:trueCum,displayStart:0,displayEnd:dispH(calc.actualsQtd,calc.actualsQtd===0),
+    color:'#1d4ed8',type:'base',custName:'Actuals QTD',section:'actuals',bids:[],
+    vertBreakdown:actualsVert
+  },'Actuals QTD · '+fmtLines(calc.actualsQtd)+(calc.reportScopeMissing?' (vertical not in report!)':''));
+  dispTop=dispH(calc.actualsQtd,calc.actualsQtd===0);
+  if(calc.gross100!==0){
+    trueCum+=calc.gross100;
+    var g0s=dispTop,g0e=dispTop+dispH(calc.gross100); dispTop=g0e;
+    pushBar({
+      value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:'#2563eb',type:'increase',
+      custName:'Gross Adds (100%)',section:'actuals',bids:calc.gross100Bids||[],
+      vertBreakdown:(calc.activeReportLevels&&calc.activeReportLevels.length)?null:mqVerticalBreakdown(calc.gross100Bids||[],mqBidMetric)
+    },'Gross Adds 100% · '+fmtLines(calc.gross100));
+  }
+  calc.grossPool.top.forEach(function(p,i){
+    if(!p.value) return;
+    if(top5GrossStart<0) top5GrossStart=bars.length;
+    top5GrossEnd=bars.length;
+    trueCum+=p.value;
+    var ds=dispTop,de=dispTop+dispH(p.value); dispTop=de;
+    pushBar({
+      value:p.value,trueCum:trueCum,displayStart:ds,displayEnd:de,
+      color:['#3b82f6','#60a5fa','#6366f1','#818cf8','#a5b4fc'][i%5],type:'increase',
+      custName:p.name,section:'gross',bids:p.bids||[],bracketGroup:'top5gross',bracketLabel:'Top 5 Gross Adds',groupLabel:'Top 5 Gross Adds'
+    },'Top Gross · '+p.name+' · '+fmtLines(p.value));
+  });
+  if(calc.grossPool.others!==0){
+    trueCum+=calc.grossPool.others;
+    var gs=dispTop,ge=dispTop+dispH(calc.grossPool.others); dispTop=ge;
+    pushBar({
+      value:calc.grossPool.others,trueCum:trueCum,displayStart:gs,displayEnd:ge,color:'#93c5fd',type:'increase',
+      custName:'Others Gross Adds',section:'gross',bids:calc.grossPool.othersBids||[],groupLabel:'Others Gross Adds'
+    },'Others Gross · '+fmtLines(calc.grossPool.others));
+  }
+  churnSepIdx=bars.length;
+  if(!calc.hasChurn){
+    pushBar({
+      value:0,trueCum:trueCum,displayStart:dispTop,displayEnd:dispTop+dispH(0,true),
+      color:'#cbd5e1',type:'empty',
+      custName:'No Churn',section:'empty',bids:[],groupLabel:'Churn'
+    },'No Churn in pipeline for selected filters');
+  }else{
+    calc.churnPool.top.forEach(function(p,i){
+      if(!p.value) return;
+      if(top5ChurnStart<0) top5ChurnStart=bars.length;
+      top5ChurnEnd=bars.length;
+      trueCum+=p.value;
+      var cs=dispTop,ce=dispTop-dispH(Math.abs(p.value)); dispTop=ce;
+      pushBar({
+        value:p.value,trueCum:trueCum,displayStart:cs,displayEnd:ce,color:'#ea580c',type:'decrease',
+        custName:p.name,section:'churn',bids:p.bids||[],bracketGroup:'top5churn',bracketLabel:'Top 5 Churn',groupLabel:'Top 5 Churn'
+      },'Top Churn · '+p.name+' · '+fmtLines(p.value));
+    });
+    if(calc.churnPool.others!==0){
+      trueCum+=calc.churnPool.others;
+      var os=dispTop,oe=dispTop-dispH(Math.abs(calc.churnPool.others)); dispTop=oe;
+      pushBar({
+        value:calc.churnPool.others,trueCum:trueCum,displayStart:os,displayEnd:oe,color:'#f97316',type:'decrease',
+        custName:'Others Churn',section:'churn',bids:calc.churnPool.othersBids||[],groupLabel:'Others Churn'
+      },'Others Churn · '+fmtLines(calc.churnPool.others));
+    }
+  }
+  var fc=calc.forecast;
+  var fcDisp=fc;
+  pushBar({value:fc,trueCum:fc,displayStart:0,displayEnd:fcDisp,color:MQ_CLR_NET,type:'total',custName:'Net Forecast',section:'outcome'},'Net Forecast · '+fmtLines(fc));
+  var tgtDisp=calc.target;
+  pushBar({value:calc.target,trueCum:calc.target,displayStart:0,displayEnd:tgtDisp,color:MQ_CLR_TARGET,type:'target',custName:'Target',section:'outcome'},'Target · '+fmtLines(calc.target));
+  if(calc.target>0){
+    if(calc.gap>0){
+      var gs2=Math.min(fcDisp,tgtDisp),ge2=Math.max(fcDisp,tgtDisp);
+      if(ge2===gs2) ge2=gs2+dispH(calc.gap);
+      pushBar({value:calc.gap,trueCum:calc.target,displayStart:gs2,displayEnd:ge2,color:MQ_CLR_GAP,type:'gap',custName:'Gap to Target',section:'outcome'},'Gap · '+fmtLines(calc.gap));
+    }else if(calc.growth>0){
+      var gs3=tgtDisp,ge3=tgtDisp+dispH(calc.growth);
+      pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:MQ_CLR_GROWTH,type:'growth',custName:'Growth vs Target',section:'outcome'},'Growth · +'+fmtLines(calc.growth));
+    }
+  }
+  var yMax=Math.max(calc.forecast,calc.target,calc.actualsQtd,1);
+  bars.forEach(function(b){
+    yMax=Math.max(yMax,b.displayStart,b.displayEnd,Math.abs(b.trueCum||0),Math.abs(b.value));
+  });
+  yMax*=1.08;
+  var maxNameLen=0;
+  bars.forEach(function(b){ maxNameLen=Math.max(maxNameLen,String(b.custName||'').length); });
+  var scrollWrap=el('mqBridgeScroll');
+  var parentW=scrollWrap?scrollWrap.clientWidth:900;
+  var barSlot=Math.max(76,Math.min(104,Math.floor(parentW/Math.max(bars.length,1))));
+  if(maxNameLen>14) barSlot=Math.max(barSlot,Math.min(112,maxNameLen*5.5));
+  if(bars.length>14) barSlot=Math.max(barSlot,84);
+  var minChartW=Math.max(parentW,bars.length*barSlot+48);
+  var axisPad=8;
+  var chartOuter=el('mqChartOuter');
+  var chartWrap=el('mqChartWrap');
+  if(chartOuter) chartOuter.style.minWidth=minChartW+'px';
+  GLK_MQ_LAST_BAR_SLOT=barSlot;
+  GLK_MQ_LAST_CHART_W=minChartW;
+  var canvas=el('chartMobileQtd');
+  if(!canvas) return;
+  canvas.style.cursor='pointer';
+  var plugins=[
+    glkMobileQtdSectionPlugin(bars),
+    glkMobileQtdFlowPlugin(bars),
+    glkMobileQtdLabelPlugin(bars),
+    glkMobileQtdSepPlugin(churnSepIdx,c)
+  ];
+  try{
+    CHARTS.mobileQtd=new Chart(canvas,{
+      type:'bar', plugins:plugins,
+      data:{labels:bars.map(function(b){return b.custName||'';}),datasets:[{
+        data:bars.map(glkMobileQtdFloatBar),
+        backgroundColor:bars.map(function(b){return b.color;}),
+        borderColor:bars.map(function(b){
+          if(b.type==='total') return '#4338ca';
+          if(b.type==='target') return '#155e75';
+          if(b.type==='growth') return '#15803d';
+          if(b.type==='gap') return '#b91c1c';
+          return 'transparent';
+        }),
+        borderWidth:bars.map(function(b){return (b.type==='total'||b.type==='target'||b.type==='growth'||b.type==='gap')?2:0;}),
+        borderRadius:6,borderSkipped:false,
+        barPercentage:.82,categoryPercentage:.88,minBarLength:0,maxBarThickness:56
+      }]},
+      options:{responsive:true,maintainAspectRatio:false,
+        layout:{padding:{bottom:axisPad,top:16,left:4,right:8}},
+        animation:{onComplete:function(){ mqSyncChartLabels(CHARTS.mobileQtd,bars); }},
+        onClick:function(evt,elements){
+          if(!elements.length){ mqCloseBarDetail(); return; }
+          mqToggleBarDetail(elements[0].index,bars,barMeta);
+        },
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{display:false},tooltip:{
+          backgroundColor:'rgba(15,10,30,.92)',padding:12,cornerRadius:10,titleFont:{size:12,weight:'700'},bodyFont:{size:11},
+          callbacks:{
+            title:function(items){var m=barMeta[items[0].dataIndex]; return m?m.label:'';},
+            label:function(ctx){return null;},
+            afterBody:function(items){
+              var b=bars[items[0].dataIndex];
+              return b?mqBarTooltipLines(b):[];
+            }
+          }}},
+        scales:{
+          x:{ticks:{display:false,color:c.text,font:{size:9,weight:'600'}},grid:{display:false},
+            border:{display:true,color:c.grid}},
+          y:{min:0,max:yMax,ticks:{color:c.text,font:{size:10},callback:function(v){return fmtLines(v);}},grid:{color:c.grid},
+            title:{display:true,text:mqMetricUnit()+' · '+(calc.isBest?'Best Case':'Worst Case'),color:c.text,font:{size:9,weight:'600'}}}
+        }
+      }
+    });
+  }catch(err){ console.error('[GLK] Mobile QTD chart error:',err); }
+  GLK_MQ_LAST_BARS=bars;
+  GLK_MQ_LAST_BAR_META=barMeta;
+  mqSyncChartLabels(CHARTS.mobileQtd,bars);
+  mqRenderBridgeLegend();
+  mqRenderBridgeInfoPanel(calc);
+  var sum=el('mobileQtdSummaryWrap');
+  if(sum){
+    var gapTxt=calc.gap>0
+      ?'<span style="color:'+MQ_CLR_GAP+';">'+fmtLines(calc.gap)+' short of target</span>'
+      :'<span style="color:'+MQ_CLR_GROWTH+';">+'+fmtLines(calc.growth)+' ahead of target</span>';
+    sum.innerHTML='<strong>'+(calc.isBest?'Best':'Worst')+' Case</strong> · Actuals QTD '+fmtLines(calc.actualsQtd)+
+      ' · Gross 100% '+fmtLines(calc.gross100)+
+      ' · In-flight Gross '+fmtLines(calc.inflightGross)+
+      ' · Churn '+fmtLines(calc.inflightChurn)+
+      ' · Net Forecast '+fmtLines(calc.forecast)+
+      ' · Target '+fmtLines(calc.target)+' · '+gapTxt;
+  }
+}
+function glkMobileQtdInit(){
+  buildMqFilters();
+  mqUpdateProductFamilyUi();
+  glkSpLoadMobileReport(function(err){
+    if(err&&!mqGetActiveReport()){
+      console.log('[GLK] No QTD report yet:',err.message);
+      GLK_MOBILE_REPORT_META=null;
+    }
+    glkMobileQtdRefreshUI();
+  });
+}
+function mqStripHtml(s){
+  var d=document.createElement('div');
+  d.innerHTML=s||'';
+  return (d.textContent||d.innerText||'').trim();
+}
+function mqCaptureBridgeForExport(cb){
+  var scroll=el('mqBridgeScroll');
+  var outer=el('mqChartOuter');
+  var chart=CHARTS.mobileQtd;
+  if(!scroll||!outer||!chart){
+    return cb(new Error('Chart not ready. Open Mobile QTD Bridge after the report loads.'));
+  }
+  if(typeof html2canvas==='undefined'){
+    try{ return cb(null,chart.toBase64Image('image/png',2)); }
+    catch(e){ return cb(new Error('Capture libraries not loaded')); }
+  }
+  var prevOverflow=scroll.style.overflow;
+  var prevScroll=scroll.scrollLeft;
+  var prevOuterMin=outer.style.minWidth;
+  var prevOuterW=outer.style.width;
+  scroll.style.overflow='visible';
+  scroll.scrollLeft=0;
+  var fullW=Math.max(outer.scrollWidth,outer.offsetWidth,scroll.scrollWidth);
+  outer.style.minWidth=fullW+'px';
+  outer.style.width=fullW+'px';
+  if(CHARTS.mobileQtd) CHARTS.mobileQtd.resize();
+  mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS||[]);
+  setTimeout(function(){
+    html2canvas(scroll,{
+      scale:2,
+      backgroundColor:'#ffffff',
+      useCORS:true,
+      logging:false,
+      scrollX:0,
+      scrollY:-window.scrollY,
+      width:fullW,
+      windowWidth:fullW+80
+    }).then(function(canvas){
+      scroll.style.overflow=prevOverflow;
+      scroll.scrollLeft=prevScroll;
+      outer.style.minWidth=prevOuterMin;
+      outer.style.width=prevOuterW;
+      if(CHARTS.mobileQtd) CHARTS.mobileQtd.resize();
+      mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS||[]);
+      cb(null,canvas.toDataURL('image/png'));
+    }).catch(function(err){
+      scroll.style.overflow=prevOverflow;
+      scroll.scrollLeft=prevScroll;
+      outer.style.minWidth=prevOuterMin;
+      outer.style.width=prevOuterW;
+      if(CHARTS.mobileQtd) CHARTS.mobileQtd.resize();
+      try{ cb(null,chart.toBase64Image('image/png',2)); }
+      catch(e2){ cb(err||e2); }
+    });
+  },120);
+}
+window.mqExportBridgePpt=function(){
+  if(typeof PptxGenJS==='undefined'){
+    alert('PowerPoint library still loading. Wait a few seconds and try again.');
+    return;
+  }
+  if(!CHARTS.mobileQtd||!mqGetActiveReport()){
+    alert('Upload the GLK report and wait for the bridge chart to render before exporting.');
+    return;
+  }
+  glkShowLoader('Building PowerPoint…');
+  mqCaptureBridgeForExport(function(err,imgData){
+    if(err||!imgData){
+      glkHideLoader();
+      alert('Could not capture chart: '+(err?err.message:'unknown error'));
+      return;
+    }
+    try{
+      var calc=GLK_MQ_CALC_LAST||{};
+      var isFixed=mqProductFamily==='fixed';
+      var bridgeTitle=isFixed?'Fixed Net MRC — QTD Bridge':'Mobile Net Adds — QTD Bridge';
+      var pptx=new PptxGenJS();
+      pptx.layout='LAYOUT_WIDE';
+      pptx.author='GLK Pipeline Dashboard';
+      pptx.title=(isFixed?'Fixed Net MRC':'Mobile Net Adds')+' QTD Bridge';
+      pptx.subject='QTD Bridge Export';
+      var slide=pptx.addSlide();
+      slide.background={color:'FFFFFF'};
+      slide.addText(bridgeTitle,{
+        x:0.35,y:0.12,w:12.5,h:0.42,fontSize:22,bold:true,color:'1e1133',fontFace:'Arial'
+      });
+      var caseLbl=(calc.isBest?'Best Case':'Worst Case');
+      var qLbl=calc.quarter&&calc.year?('Q'+calc.quarter+' '+calc.year):'';
+      var scopeLbl=calc.vertical||'GLK Overall';
+      slide.addText(caseLbl+(qLbl?(' · '+qLbl):'')+' · '+scopeLbl,{
+        x:0.35,y:0.52,w:12.5,h:0.28,fontSize:11,color:'64748b',fontFace:'Arial'
+      });
+      var badge=el('mqTargetBadge');
+      if(badge&&badge.textContent){
+        slide.addText(badge.textContent,{x:0.35,y:0.78,w:12.5,h:0.22,fontSize:10,bold:true,color:'0891b2',fontFace:'Arial'});
+      }
+      var sumEl=el('mobileQtdSummaryWrap');
+      var sumTxt=sumEl?mqStripHtml(sumEl.innerHTML):'';
+      if(sumTxt){
+        slide.addText(sumTxt,{x:0.35,y:0.98,w:12.5,h:0.22,fontSize:9,color:'475569',fontFace:'Arial'});
+      }
+      slide.addImage({data:imgData,x:0.2,y:1.22,w:12.9,h:5.75});
+      var legEl=el('mqBridgeLegend');
+      if(legEl&&legEl.textContent){
+        slide.addText(legEl.textContent,{x:0.35,y:7.05,w:12.5,h:0.28,fontSize:8,color:'64748b',fontFace:'Arial'});
+      }
+      var dt=new Date().toISOString().slice(0,10);
+      var fnScope=String(scopeLbl).replace(/[^\w\s-]+/g,'').trim().replace(/\s+/g,'_')||'GLK';
+      pptx.writeFile({fileName:'GLK_Mobile_QTD_Bridge_'+fnScope+'_'+dt+'.pptx'});
+      glkHideLoader();
+    }catch(e){
+      glkHideLoader();
+      console.error('[GLK] PPT export error:',e);
+      alert('PowerPoint export failed: '+e.message);
+    }
+  });
+};
 
 // ══════════════════════════════════════════════════════════════════
 //  INIT
