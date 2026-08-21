@@ -3,171 +3,971 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Topics Analysis Form</title>
+<title>QIA — Quality Improvement & Assurance</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/32.0.2/ag-grid-community.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-theme-alpine.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
-:root{--bg:#050817;--line:rgba(255,255,255,.12);--green:#29f39a;--red:#ff4b6e}
-*{box-sizing:border-box;margin:0;padding:0;font-family:Segoe UI,Arial,sans-serif}
-body{background:radial-gradient(circle at top,#111b55 0%,#050817 42%,#02040d 100%);color:#fff}
-.qm-app{display:grid;grid-template-columns:255px 1fr;gap:18px;min-height:100vh;padding:14px}
-.qm-side{background:linear-gradient(180deg,#091533,#050b21);border:1px solid var(--line);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:18px}
-.qm-brand{display:flex;gap:14px;align-items:center;margin-bottom:12px}
-.qm-logo{width:54px;height:54px;border-radius:13px;background:linear-gradient(135deg,#00d4ff,#8d2cff);display:grid;place-items:center;font-weight:900;font-size:20px;box-shadow:0 0 25px rgba(123,44,255,.55)}
-.qm-brand h2{font-size:17px;line-height:1.3}
-.qm-title{color:#7f8bb0;font-size:12px;margin:14px 0 8px;text-transform:uppercase;letter-spacing:.08em}
-.qm-nav a{display:flex;align-items:center;gap:12px;color:#dfe7ff;text-decoration:none;padding:13px 14px;border-radius:10px;margin-bottom:6px;font-size:15px}
-.qm-nav a.active,.qm-nav a:hover{background:linear-gradient(90deg,#732cff,#137cff);box-shadow:0 0 18px rgba(19,124,255,.35)}
-.qm-profile{margin-top:auto;background:#0a1636;border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center}
-.qm-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#276bff,#7b2cff);display:grid;place-items:center;font-weight:900}
-.qm-main{display:flex;flex-direction:column;gap:14px}
-.qm-top{background:linear-gradient(145deg,#070d2c,#090d31);border:1px solid var(--line);border-radius:18px;padding:22px 28px;display:flex;justify-content:space-between;align-items:center}
-.qm-top h1{font-size:28px;margin-bottom:6px}.qm-top p{color:#c4cbe4}
-.qm-date{border:1px solid var(--line);padding:13px 18px;border-radius:12px;background:#071331}
-.qm-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.qm-kpi{background:linear-gradient(145deg,#0c1439,#09122f);border:1px solid var(--line);border-radius:18px;padding:24px;min-height:145px}
-.qm-kpi:nth-child(1){background:linear-gradient(145deg,#23105f,#10143a)}
-.qm-kpi:nth-child(2){background:linear-gradient(145deg,#06295f,#081537)}
-.qm-kpi:nth-child(3){background:linear-gradient(145deg,#053d3d,#081537)}
-.qm-kpi:nth-child(4){background:linear-gradient(145deg,#4b0738,#10143a)}
-.qm-kpi h4{color:#d8ddff;font-size:13px;letter-spacing:.04em;margin-bottom:8px}
-.qm-num{font-size:34px;font-weight:900;margin-bottom:8px}.good{color:var(--green);font-size:13px}
-.qm-panel{background:linear-gradient(145deg,#08112d,#071029);border:1px solid var(--line);border-radius:18px;overflow:hidden}
-.qm-panel-head{padding:20px 26px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
-.qm-panel-head h2{font-size:26px}.qm-actions{display:flex;gap:10px}
-.qm-btn{border:none;border-radius:10px;padding:13px 18px;color:white;background:#101c43;border:1px solid var(--line);cursor:pointer;font-weight:700}
-.qm-btn.primary{background:linear-gradient(90deg,#842cff,#00c8ff);box-shadow:0 0 22px rgba(0,200,255,.28)}
-.qm-btn.danger{background:linear-gradient(90deg,#ff375f,#ff8b3d)}
-.qm-btn.small{padding:8px 12px;font-size:12px}
-.qm-tabs{display:flex;gap:10px;padding:18px 26px;background:#07102a;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.qm-tab{padding:12px 16px;border-radius:10px;background:#091636;border:1px solid var(--line);color:#dfe7ff;font-weight:700}
-.qm-tab.active{background:linear-gradient(90deg,#732cff,#137cff)}
-.qm-form{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:24px}
-.qm-field label{display:block;color:#c2c9e4;font-size:13px;margin-bottom:8px}
-.qm-field input,.qm-field select,.qm-field textarea{width:100%;border:1px solid var(--line);background:#091636;color:#fff;border-radius:10px;padding:13px;outline:none}
-.qm-full{grid-column:1/-1} textarea{min-height:95px;resize:vertical}
-.qm-section-title{grid-column:1/-1;margin-top:8px;padding:13px 16px;border-radius:12px;background:linear-gradient(90deg,rgba(123,44,255,.28),rgba(0,212,255,.14));border:1px solid var(--line);font-size:17px;font-weight:900}
-.qm-savebar{padding:18px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:12px;background:#06102a}
-.qm-table-wrap{overflow:auto}.qm-table{width:100%;border-collapse:collapse;min-width:1600px}
-.qm-table th{background:linear-gradient(90deg,#6f20e9,#028be6,#00c9e8);padding:15px;text-align:left;font-size:13px}
-.qm-table td{padding:14px;border-bottom:1px solid rgba(255,255,255,.07);border-right:1px solid rgba(255,255,255,.05);font-size:14px}
-.qm-empty td{text-align:center;color:#aeb8d8;padding:42px;font-size:16px}
-.qm-badge{display:inline-block;padding:7px 12px;border-radius:8px;font-size:12px;border:1px solid}
-.Critical{color:#ff4b87;border-color:#ff4b87;background:rgba(255,75,135,.1)}
-.High{color:#ff6b6b;border-color:#ff6b6b;background:rgba(255,107,107,.1)}
-.Medium{color:#ffc857;border-color:#ffc857;background:rgba(255,200,87,.1)}
-.Low{color:#35f59b;border-color:#35f59b;background:rgba(53,245,155,.1)}
-@media(max-width:1100px){.qm-app{grid-template-columns:1fr}.qm-side{display:none}.qm-kpis,.qm-form{grid-template-columns:1fr}}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+/* QIA TEAL LIGHT */
+:root{
+  --bg-body:linear-gradient(145deg,#f0fdf9,#ecfdf5,#f0fdfa);
+  --bg-card:#fff;--bg-header:rgba(255,255,255,.97);--bg-sidebar:linear-gradient(180deg,#f0fdf9,#ecfdf5);
+  --bg-content:#f0fdfa;--bg-input:rgba(13,148,136,.06);--bg-secondary:rgba(13,148,136,.05);--bg-hover:rgba(13,148,136,.08);
+  --border:rgba(13,148,136,.2);--border-s:rgba(13,148,136,.45);
+  --t1:#0f2f2a;--t2:#2d6b60;--t3:#5f9e92;--acc:#0d9488;--acc2:#14b8a6;
+  --glow:rgba(13,148,136,.28);--grad:linear-gradient(135deg,#0d9488,#14b8a6);
+  --nab:rgba(13,148,136,.1);--nab2:rgba(13,148,136,.35);--sc:#0d9488;
+  --cs:0 1px 8px rgba(13,148,136,.12);--ch:0 6px 20px rgba(13,148,136,.2);--chip:rgba(13,148,136,.08);
+}
+body[data-theme="dark"]{
+  --bg-body:linear-gradient(145deg,#041512,#062420,#041916);
+  --bg-card:#0a2420;--bg-header:rgba(4,21,18,.98);--bg-sidebar:linear-gradient(180deg,#0a2824,#062018);
+  --bg-content:#041916;--bg-input:rgba(20,184,166,.12);--bg-secondary:rgba(20,184,166,.08);--bg-hover:rgba(20,184,166,.12);
+  --border:rgba(20,184,166,.2);--border-s:rgba(20,184,166,.5);
+  --t1:#ecfdf5;--t2:#99f6e4;--t3:#5eead4;--acc:#2dd4bf;--acc2:#5eead4;
+  --glow:rgba(45,212,191,.35);--grad:linear-gradient(135deg,#0d9488,#2dd4bf);
+  --nab:rgba(20,184,166,.16);--nab2:rgba(20,184,166,.45);--sc:#2dd4bf;
+  --cs:0 2px 16px rgba(0,0,0,.5);--ch:0 6px 24px rgba(20,184,166,.25);--chip:rgba(20,184,166,.15);
+}
+body[data-theme="duralux"]{
+  --bg-body:linear-gradient(145deg,#f0f4ff,#e8edff,#f4f6ff);--bg-card:#fff;--bg-header:rgba(255,255,255,.97);
+  --bg-sidebar:linear-gradient(180deg,#f0f4ff,#e8edff);--bg-content:#f0f4ff;
+  --bg-input:rgba(76,111,255,.06);--bg-secondary:rgba(76,111,255,.05);--bg-hover:rgba(76,111,255,.07);
+  --border:rgba(76,111,255,.2);--border-s:rgba(76,111,255,.45);
+  --t1:#0f1a3e;--t2:#3d4f8a;--t3:#7a8fc4;--acc:#4c6fff;--acc2:#818cf8;
+  --glow:rgba(76,111,255,.28);--grad:linear-gradient(135deg,#4c6fff,#818cf8);
+  --nab:rgba(76,111,255,.1);--nab2:rgba(76,111,255,.35);--sc:#4c6fff;
+  --cs:0 1px 8px rgba(76,111,255,.1);--ch:0 6px 20px rgba(76,111,255,.18);--chip:rgba(76,111,255,.08);
+}
+body[data-theme="duralux-dark"]{
+  --bg-body:linear-gradient(145deg,#060c1f,#0c1535,#080e25);--bg-card:#0e1630;--bg-header:rgba(6,12,31,.98);
+  --bg-sidebar:linear-gradient(180deg,#101a38,#0c1430);--bg-content:#090f28;
+  --bg-input:rgba(76,111,255,.12);--bg-secondary:rgba(76,111,255,.08);--bg-hover:rgba(76,111,255,.12);
+  --border:rgba(76,111,255,.2);--border-s:rgba(76,111,255,.5);
+  --t1:#e2e8f0;--t2:#a5b4c8;--t3:#637899;--acc:#818cf8;--acc2:#a5b4fc;
+  --glow:rgba(129,140,248,.35);--grad:linear-gradient(135deg,#4c6fff,#818cf8);
+  --nab:rgba(76,111,255,.14);--nab2:rgba(76,111,255,.45);--sc:#818cf8;
+  --cs:0 2px 16px rgba(0,0,0,.55);--ch:0 6px 24px rgba(76,111,255,.2);--chip:rgba(76,111,255,.15);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg-body);color:var(--t1);min-height:100vh;line-height:1.5;transition:background .3s,color .3s}
+select,input,textarea,button{font-family:inherit}
+.portal-shell{max-width:1800px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+.header{background:var(--bg-header);border-bottom:1px solid var(--border);padding:0 1.25rem;height:56px;display:flex;align-items:center;justify-content:space-between;gap:1rem;position:sticky;top:0;z-index:200}
+.logo-section{display:flex;align-items:center;gap:.65rem}
+.logo{width:36px;height:36px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px var(--glow)}
+.header-title{font-size:1.05rem;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header-actions{display:flex;align-items:center;gap:.5rem}
+.live-badge-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.22rem .65rem;border-radius:20px;background:rgba(13,148,136,.12);border:1px solid rgba(13,148,136,.28);font-size:.73rem;font-weight:700;color:#0d9488}
+body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-badge-pill{color:#2dd4bf}
+.status-dot{width:6px;height:6px;border-radius:50%;background:#0d9488;animation:pulseDot 2s infinite}
+@keyframes pulseDot{0%,100%{box-shadow:0 0 0 0 rgba(13,148,136,.4)}50%{box-shadow:0 0 0 5px rgba(13,148,136,0)}}
+.color-scheme-selector,.filter-select,.search-box{padding:.45rem .75rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);font-size:.82rem}
+.theme-toggle{width:34px;height:34px;border-radius:50%;background:var(--bg-input);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t1)}
+.main-container{display:flex;flex:1;min-height:0;position:relative}
+.sidebar{width:210px;min-width:210px;background:var(--bg-sidebar);border-right:1px solid var(--border);padding:1rem 0;flex-shrink:0;transition:width .26s}
+.sidebar.collapsed{width:52px;min-width:52px;overflow:hidden}
+.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-section-label{display:none}
+.sidebar-toggle-btn{position:absolute;right:-14px;top:20px;z-index:300;width:28px;height:28px;border-radius:50%;background:var(--bg-card);border:1px solid var(--border);box-shadow:var(--cs);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t1)}
+.nav-items{display:flex;flex-direction:column;gap:2px;padding:0 .65rem}
+.nav-section-label{font-size:.67rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);padding:.75rem .6rem .3rem}
+.nav-item{display:flex;align-items:center;gap:.65rem;padding:.55rem .7rem;border-radius:9px;cursor:pointer;color:var(--t2);border:1px solid transparent;font-size:.84rem;font-weight:500;user-select:none}
+.nav-item:hover{background:var(--bg-hover);color:var(--t1)}
+.nav-item.active{background:var(--nab);border-color:var(--nab2);color:var(--t1);font-weight:600}
+.content{flex:1;overflow-y:auto;min-width:0;background:var(--bg-content);padding:1.1rem 1.25rem}
+.module-section{display:none;animation:fadeSection .25s ease}
+.module-section.active{display:block}
+@keyframes fadeSection{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.hero-banner{background:var(--grad);border-radius:16px;padding:1.75rem 2rem;margin-bottom:1.75rem;color:#fff;display:flex;align-items:center;gap:1.25rem}
+.hero-banner h2{font-size:1.25rem;font-weight:800;margin-bottom:.2rem}
+.hero-banner p{font-size:.82rem;opacity:.85}
+.top-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.85rem;margin-bottom:1rem}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;box-shadow:var(--cs);position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad)}
+.stat-label{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-weight:700;margin-bottom:.35rem}
+.stat-value{font-size:1.9rem;font-weight:900;line-height:1;color:var(--sc)}
+.filters-section{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:.9rem 1rem;margin-bottom:1rem;box-shadow:var(--cs)}
+.filters-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.65rem}
+.filter-group{display:flex;flex-direction:column;gap:.25rem}
+.filter-label{font-size:.68rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em}
+.export-btn{padding:.5rem 1rem;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.35rem;border:none;background:var(--grad);color:#fff;box-shadow:0 2px 10px var(--glow)}
+.reset-btn{padding:.5rem 1rem;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;background:var(--bg-input);color:var(--t1);border:1px solid var(--border)}
+.table-section{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--cs)}
+.table-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.65rem;margin-bottom:.85rem}
+.table-title{font-size:.9rem;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:.35rem}
+.chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;box-shadow:var(--cs);margin-bottom:1rem}
+.chart-title{font-size:.8rem;font-weight:700;color:var(--t2);margin-bottom:.65rem}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.tab-bar{display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap}
+.tab-btn{padding:10px 24px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);display:inline-flex;align-items:center;gap:6px}
+.tab-btn.active{background:var(--grad);color:#fff;border-color:transparent}
+.form-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--cs)}
+.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+.form-field{display:flex;flex-direction:column;gap:.35rem}
+.form-field.full{grid-column:1/-1}
+.form-field label{font-size:.72rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em}
+.form-field input,.form-field select,.form-field textarea{padding:.55rem .75rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);font-size:.84rem}
+.form-field textarea{min-height:90px;resize:vertical}
+.section-divider{grid-column:1/-1;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);padding:8px 12px;background:var(--bg-secondary);border-radius:7px;margin-top:4px}
+.status-badge{display:inline-block;padding:.18rem .55rem;border-radius:20px;font-size:.68rem;font-weight:700}
+.risk-Critical,.risk-Critical{background:rgba(239,68,68,.12);color:#ef4444}
+.risk-High{background:rgba(249,115,22,.12);color:#f97316}
+.risk-Medium{background:rgba(245,158,11,.12);color:#f59e0b}
+.risk-Low{background:rgba(16,185,129,.12);color:#10b981}
+.lm-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;padding:.9rem 1rem;cursor:pointer;box-shadow:var(--cs);position:relative;overflow:hidden}
+.lm-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad)}
+.lm-tile.selected{border-color:var(--nab2);background:var(--nab)}
+.lm-tile h3{font-size:.88rem;font-weight:700;margin-bottom:.35rem}
+.lm-stat-value{font-size:1.2rem;font-weight:900;color:var(--sc)}
+.qa-atab-btn{padding:8px 18px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg-input);color:var(--t1)}
+.qa-atab-btn.active{background:var(--grad);color:#fff;border-color:transparent}
+.qa-criterion-row{display:flex;align-items:center;padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);min-height:44px;gap:6px;margin-bottom:6px}
+.qa-crit-label{flex:1;font-size:.84rem;font-weight:600}
+.qa-score-select{padding:6px 4px;border-radius:7px;border:2px solid var(--border);background:var(--bg-input);color:var(--t1);font-size:.9rem;font-weight:800;width:70px;text-align:center}
+.qa-error-banner{display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);color:#dc2626;padding:12px 16px;border-radius:10px;margin-bottom:1rem;font-size:.84rem;font-weight:600}
+.loading-wrap{text-align:center;padding:60px 20px}
+.loading-wrap .spinner{width:48px;height:48px;border-radius:50%;border:4px solid var(--border);border-top-color:var(--acc);animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1100px){.form-grid,.charts-grid{grid-template-columns:1fr 1fr}.sidebar{display:none}}
+.qia-ag-set-filter{padding:.5rem;min-width:200px;max-width:260px}
+.qia-ag-set-search{width:100%;box-sizing:border-box;margin-bottom:.45rem;padding:.35rem .5rem;border:1px solid var(--border);border-radius:8px;font-size:.75rem;background:var(--bg-card);color:var(--t1)}
+.qia-ag-set-list{max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:.2rem}
+.qia-ag-set-option{display:flex;align-items:center;gap:.35rem;font-size:.75rem;cursor:pointer;padding:.15rem 0;color:var(--t1)}
+.qia-ag-set-actions{display:flex;gap:.35rem;margin-top:.45rem}
+.qia-ag-set-actions button{flex:1;padding:.25rem .4rem;font-size:.68rem;font-weight:700;border:1px solid var(--border);border-radius:6px;background:var(--nab);color:var(--acc);cursor:pointer}
 </style>
 </head>
 <body>
-</aside>
-<main class="qm-main">
-<div class="qm-top">
-<div><h1>Topics Analysis</h1><p>Voice Of customer</p></div>
-</div>
-<section class="qm-kpis">
-<div class="qm-kpi"><h4>TOTAL ANALYSIS</h4><div class="qm-num" id="kTotal">0</div><div class="good">Ready for input</div></div>
-<div class="qm-kpi"><h4>REPEATED CALLS</h4><div class="qm-num" id="kRepeat">0</div><div class="good">Auto calculated</div></div>
-<div class="qm-kpi"><h4>REOPENED TTs</h4><div class="qm-num" id="kReopen">0</div><div class="good">Auto calculated</div></div>
-<div class="qm-kpi"><h4>SAVING POTENTIAL</h4><div class="qm-num" id="kSaving">AED 0</div><div class="good">Auto calculated</div></div>
-</section>
-<section class="qm-panel">
-<div class="qm-panel-head">
-<h2>Topics Analysis Form</h2>
-<div class="qm-actions">
-<button class="qm-btn" onclick="exportCSV()">⇩ Export Submitted Topics</button>
-<button class="qm-btn danger" onclick="clearForm()">Clear Form</button>
-<button class="qm-btn primary" onclick="saveAnalysis()">＋ Save Analysis</button>
-</div>
-</div>
-<div class="qm-tabs"><div class="qm-tab active">1. Customer Details</div><div class="qm-tab">2. Driver & Root Cause</div><div class="qm-tab">3. FCR / TT Impact</div><div class="qm-tab">4. Action Plan</div></div>
-<form id="analysisForm" class="qm-form">
-<div class="qm-section-title">Customer & Interaction Details</div>
-<div class="qm-field"><label>Date & Time</label><input type="datetime-local" id="dateTime"></div>
-<div class="qm-field"><label>INUM</label><input id="inum"></div>
-<div class="qm-field"><label>Calling Number</label><input id="callingNumber"></div>
-<div class="qm-field"><label>Status of Number</label><select id="numberStatus"><option>Active</option><option>Suspended</option><option>Deactivated</option><option>Pending Activation</option></select></div>
-<div class="qm-field"><label>Impacted Number</label><input id="impactedNumber"></div>
-<div class="qm-field"><label>Account Number</label><input id="accountNumber"></div>
-<div class="qm-field"><label>Segment</label><select id="segment"><option>Consumer</option><option>Enterprise</option></select></div>
-<div class="qm-field"><label>LOB</label><select id="lob"><option>Front Office</option><option>Retention</option><option>Back Office</option><option>Billing</option><option>Enterprise</option></select></div>
-<div class="qm-field"><label>Product</label><select id="product"><option>Postpaid</option><option>Prepaid</option><option>Home Wireless</option><option>Fiber</option><option>Roaming</option><option>Billing</option></select></div>
-<div class="qm-field"><label>Site</label><input id="site"></div>
-<div class="qm-field"><label>Agent Name / ID</label><input id="agent"></div>
-<div class="qm-field"><label>Call ID</label><input id="callId"></div>
-<div class="qm-field qm-full"><label>Customer Claim</label><textarea id="customerClaim" placeholder="Write customer claim exactly from VOC / call / complaint..."></textarea></div>
-<div class="qm-field qm-full"><label>Agent Resolution</label><textarea id="agentResolution" placeholder="What did the agent do? Was it correct? Was ownership clear?"></textarea></div>
-<div class="qm-section-title">Driver, Root Cause & Gap Identification</div>
-<div class="qm-field"><label>Driver</label><select id="driver"><option>Billing</option><option>Network</option><option>Cancellation</option><option>Refund</option><option>SIM / PUK</option><option>Roaming</option><option>Activation</option><option>Technical Support</option></select></div>
-<div class="qm-field"><label>Primary Driver</label><input id="primaryDriver"></div>
-<div class="qm-field"><label>Secondary Driver</label><input id="secondaryDriver"></div>
-<div class="qm-field"><label>Sub Driver</label><input id="subDriver"></div>
-<div class="qm-field"><label>Root Cause</label><select id="rootCause"><option>Process Gap</option><option>Agent Knowledge Gap</option><option>System Gap</option><option>Policy Gap</option><option>Communication Gap</option><option>Customer Education Gap</option></select></div>
-<div class="qm-field"><label>Identified Gap “Process”</label><select id="processGap"><option>No</option><option>Yes</option></select></div>
-<div class="qm-field"><label>Identified Gap “Agent”</label><select id="agentGap"><option>No</option><option>Yes</option></select></div>
-<div class="qm-field"><label>Risk Level</label><select id="risk"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>
-<div class="qm-field qm-full"><label>Deep Root Cause Details</label><textarea id="rootCauseDetails"></textarea></div>
-<div class="qm-section-title">Repeat, TT, FCR & Validation</div>
-<div class="qm-field"><label>Repeated Call?</label><select id="repeated"><option>No</option><option>Yes</option></select></div>
-<div class="qm-field"><label>Repeated Calls Count</label><input type="number" id="repeatedCount" placeholder="0"></div>
-<div class="qm-field"><label>Repeated TTs Count</label><input type="number" id="repeatedTt" placeholder="0"></div>
-<div class="qm-field"><label>Reopened TTs Count</label><input type="number" id="reopenedTt" placeholder="0"></div>
-<div class="qm-field"><label>FCR Impact %</label><input type="number" id="fcrImpact" placeholder="0"></div>
-<div class="qm-field"><label>Event Triplet Valid?</label><select id="eventTriplet"><option>Yes</option><option>No</option><option>N/A</option></select></div>
-<div class="qm-field"><label>Ticket Triplet Valid?</label><select id="ticketTriplet"><option>Yes</option><option>No</option><option>N/A</option></select></div>
-<div class="qm-field"><label>FO Resolution Valid?</label><select id="foResolution"><option>Yes</option><option>No</option><option>N/A</option></select></div>
-<div class="qm-field"><label>Validation Process Followed?</label><select id="validationProcess"><option>Yes</option><option>No</option><option>Partially</option></select></div>
-<div class="qm-field"><label>Leakage Cost AED</label><input type="number" id="leakageCost" placeholder="0"></div>
-<div class="qm-field"><label>Saving Potential AED</label><input type="number" id="savingPotential" placeholder="0"></div>
-<div class="qm-field"><label>Status</label><select id="status"><option>Open</option><option>In Progress</option><option>Pending</option><option>Closed</option></select></div>
-<div class="qm-section-title">Action Plan & Outcome</div>
-<div class="qm-field"><label>Owner</label><input id="owner"></div>
-<div class="qm-field"><label>Target Date</label><input type="date" id="targetDate"></div>
-<div class="qm-field"><label>Expected Outcome</label><select id="outcome"><option>Reduce Repeat Calls</option><option>Improve FCR</option><option>Reduce Reopened TTs</option><option>Improve Customer Experience</option><option>Reduce Cost Leakage</option></select></div>
-<div class="qm-field"><label>Priority</label><select id="priority"><option>Low</option><option>Medium</option><option>High</option><option>Urgent</option></select></div>
-<div class="qm-field qm-full"><label>Action Plan</label><textarea id="actionPlan"></textarea></div>
-<div class="qm-field qm-full"><label>Manager / QA Comments</label><textarea id="comments"></textarea></div>
-</form>
-<div class="qm-savebar"><button class="qm-btn danger" onclick="clearForm()">Clear Form</button><button class="qm-btn primary" onclick="saveAnalysis()">Save Analysis</button></div>
-</section>
-<section class="qm-panel">
-<div class="qm-panel-head"><h2>Submitted Topics Analysis</h2><div class="qm-actions"><button class="qm-btn" onclick="exportCSV()">⇩ Export Submitted Topics</button><button class="qm-btn danger" onclick="clearAll()">Clear All Records</button></div></div>
-<div class="qm-table-wrap"><table class="qm-table"><thead><tr>
-<th>Delete</th><th>Date</th><th>Topic / Claim</th><th>LOB</th><th>Product</th><th>Segment</th><th>Driver</th><th>Root Cause</th><th>Repeated Calls</th><th>Repeated TTs</th><th>Reopened TTs</th><th>FCR Impact</th><th>Risk</th><th>Status</th><th>Owner</th><th>Saving Potential</th>
-</tr></thead><tbody id="analysisRows"></tbody></table></div>
-</section>
-</main>
+<div class="portal-shell">
+  <header class="header">
+    <div class="logo-section">
+      <div class="logo"><i data-lucide="sparkles" style="width:20px;height:20px;color:#fff;stroke:#fff;"></i></div>
+      <span class="header-title">QIA Portal</span>
+    </div>
+    <div class="header-actions">
+      <span class="live-badge-pill" id="modeBadge"><span class="status-dot"></span> Demo Mode</span>
+      <select class="color-scheme-selector" id="themeScheme" onchange="qiaSetScheme(this.value)">
+        <option value="default">QIA Teal</option>
+        <option value="duralux">Duralux</option>
+      </select>
+      <button class="theme-toggle" type="button" onclick="qiaToggleDark()" title="Toggle dark mode"><i data-lucide="moon" id="themeIcon" style="width:16px;height:16px;"></i></button>
+    </div>
+  </header>
+  <div class="main-container">
+    <aside class="sidebar" id="sidebar">
+      <button class="sidebar-toggle-btn" type="button" onclick="qiaToggleSidebar()"><i data-lucide="chevron-left" style="width:14px;height:14px;"></i></button>
+      <nav class="nav-items">
+        <div class="nav-section-label">Modules</div>
+        <div class="nav-item active" data-module="topics" onclick="qiaShowModule('topics')"><i data-lucide="message-square-text" style="width:17px;height:17px;"></i><span class="nav-label">Topic Analysis</span></div>
+        <div class="nav-item" data-module="qa" onclick="qiaShowModule('qa')"><i data-lucide="shield-check" style="width:17px;height:17px;"></i><span class="nav-label">Quality Assurance</span></div>
+      </nav>
+    </aside>
+    <main class="content">
+      <section id="mod-topics" class="module-section active">
+        <div id="taLoading" class="loading-wrap"><div class="spinner"></div><div>Loading Topic Analysis...</div></div>
+        <div id="taContent" style="display:none;"></div>
+      </section>
+      <section id="mod-qa" class="module-section">
+        <div id="qaLoading" class="loading-wrap"><div class="spinner"></div><div>Loading Quality Assurance...</div></div>
+        <div id="qaContent" style="display:none;"></div>
+      </section>
+    </main>
+  </div>
 </div>
 <script>
-var records = JSON.parse(localStorage.getItem("qmTopicsAnalysisRecords") || "[]");
-function get(id){return document.getElementById(id).value;}
-function money(n){return "AED " + Number(n||0).toLocaleString();}
-function safe(v){return String(v||"").replace(/[&<>"']/g,function(m){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]);});}
-function saveAnalysis(){
-var r={dateTime:get("dateTime"),inum:get("inum"),callingNumber:get("callingNumber"),numberStatus:get("numberStatus"),impactedNumber:get("impactedNumber"),accountNumber:get("accountNumber"),segment:get("segment"),lob:get("lob"),product:get("product"),site:get("site"),agent:get("agent"),callId:get("callId"),customerClaim:get("customerClaim"),agentResolution:get("agentResolution"),driver:get("driver"),primaryDriver:get("primaryDriver"),secondaryDriver:get("secondaryDriver"),subDriver:get("subDriver"),rootCause:get("rootCause"),processGap:get("processGap"),agentGap:get("agentGap"),risk:get("risk"),rootCauseDetails:get("rootCauseDetails"),repeated:get("repeated"),repeatedCount:Number(get("repeatedCount")||0),repeatedTt:Number(get("repeatedTt")||0),reopenedTt:Number(get("reopenedTt")||0),fcrImpact:Number(get("fcrImpact")||0),eventTriplet:get("eventTriplet"),ticketTriplet:get("ticketTriplet"),foResolution:get("foResolution"),validationProcess:get("validationProcess"),leakageCost:Number(get("leakageCost")||0),savingPotential:Number(get("savingPotential")||0),status:get("status"),owner:get("owner"),targetDate:get("targetDate"),outcome:get("outcome"),priority:get("priority"),actionPlan:get("actionPlan"),comments:get("comments")};
-if(!r.dateTime || !r.customerClaim){alert("Please fill Date & Time and Customer Claim");return;}
-records.unshift(r);localStorage.setItem("qmTopicsAnalysisRecords",JSON.stringify(records));render();clearForm();
+// CONFIG
+var QIA_DUMMY_MODE = true;
+var SP_URL = 'http://sharedspaces:8116/sites/QIA';
+var LIST_TOPIC = 'Topic Analysis';
+var LIST_QA = 'QIA_QA_Audit';
+var qiaTeams = [], qiaTopics = [], qiaQaAudits = [];
+var taGridApi = null, qaGridApi = null;
+var taChartsVisible = false, qaChartsVisible = false;
+var taCurrentTab = 'analytics', qaCurrentTab = 'analytics', qaAnalyticsTab = 'Call', qaChartPeriod = 'M';
+window.USER_CONTEXT = { userName: 'Demo User', role: 'Admin' };
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  qiaInit();
+});
+
+async function qiaInit() {
+  document.getElementById('modeBadge').innerHTML = QIA_DUMMY_MODE
+    ? '<span class="status-dot"></span> Demo Mode' : '<span class="status-dot"></span> Live';
+  await Promise.all([qiaFetchTopics(), qiaFetchQaAudits()]);
+  await qiaLoadTeamChoices();
+  document.getElementById('taLoading').style.display = 'none';
+  document.getElementById('taContent').style.display = 'block';
+  document.getElementById('qaLoading').style.display = 'none';
+  document.getElementById('qaContent').style.display = 'block';
+  taRenderShell(); qaRenderShell();
 }
-function clearForm(){document.getElementById("analysisForm").reset();}
-function deleteRecord(index){if(confirm("Delete this wrong submission?")){records.splice(index,1);localStorage.setItem("qmTopicsAnalysisRecords",JSON.stringify(records));render();}}
-function clearAll(){if(confirm("Clear all submitted records?")){records=[];localStorage.removeItem("qmTopicsAnalysisRecords");render();}}
-function render(){
-var body=document.getElementById("analysisRows");body.innerHTML="";
-if(records.length===0){body.innerHTML='<tr class="qm-empty"><td colspan="16">No topics analysis submitted yet. Fill the form above and click Save Analysis.</td></tr>';}
-else{records.forEach(function(r,index){body.innerHTML+='<tr><td><button class="qm-btn danger small" onclick="deleteRecord('+index+')">Delete</button></td><td>'+safe((r.dateTime||"").replace("T"," "))+'</td><td>'+safe(r.customerClaim)+'</td><td>'+safe(r.lob)+'</td><td>'+safe(r.product)+'</td><td>'+safe(r.segment)+'</td><td>'+safe(r.driver)+'</td><td>'+safe(r.rootCause)+'</td><td>'+safe(r.repeatedCount)+'</td><td>'+safe(r.repeatedTt)+'</td><td>'+safe(r.reopenedTt)+'</td><td style="color:#ff4b6e">'+safe(r.fcrImpact)+'%</td><td><span class="qm-badge '+safe(r.risk)+'">'+safe(r.risk)+'</span></td><td>'+safe(r.status)+'</td><td>'+safe(r.owner)+'</td><td>'+money(r.savingPotential)+'</td></tr>';});}
-document.getElementById("kTotal").textContent=records.length.toLocaleString();
-document.getElementById("kRepeat").textContent=records.reduce(function(s,r){return s+Number(r.repeatedCount||0)},0).toLocaleString();
-document.getElementById("kReopen").textContent=records.reduce(function(s,r){return s+Number(r.reopenedTt||0)},0).toLocaleString();
-var saving=records.reduce(function(s,r){return s+Number(r.savingPotential||0)},0);document.getElementById("kSaving").textContent=saving?money(saving):"AED 0";
+
+async function qiaLoadTeamChoices() {
+  if (QIA_DUMMY_MODE) { qiaTeams = ['A','B','C']; return; }
+  qiaTeams = [];
+  try {
+    var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_QA + "')/fields/getbyinternalnameortitle('Team')";
+    var res = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+    if (res.ok) {
+      var data = await res.json();
+      var choices = data.d && data.d.Choices && data.d.Choices.results;
+      if (choices && choices.length) qiaTeams = choices.slice();
+    }
+  } catch(e) { console.warn('[QIA] Team choices fetch failed', e); }
+  qiaQaAudits.forEach(function(a) {
+    if (a.Team && qiaTeams.indexOf(a.Team) < 0) qiaTeams.push(a.Team);
+  });
+  qiaTeams.sort();
 }
-function exportCSV(){
-if(records.length===0){alert("No submitted topics to export.");return;}
-var headers=["Date Time","INUM","Calling Number","Status of Number","Impacted Number","Account Number","Segment","LOB","Product","Site","Agent","Call ID","Customer Claim","Agent Resolution","Driver","Primary Driver","Secondary Driver","Sub Driver","Root Cause","Process Gap","Agent Gap","Risk","Root Cause Details","Repeated","Repeated Calls Count","Repeated TTs","Reopened TTs","FCR Impact","Event Triplet","Ticket Triplet","FO Resolution","Validation Process","Leakage Cost","Saving Potential","Status","Owner","Target Date","Expected Outcome","Priority","Action Plan","Comments"];
-var keys=["dateTime","inum","callingNumber","numberStatus","impactedNumber","accountNumber","segment","lob","product","site","agent","callId","customerClaim","agentResolution","driver","primaryDriver","secondaryDriver","subDriver","rootCause","processGap","agentGap","risk","rootCauseDetails","repeated","repeatedCount","repeatedTt","reopenedTt","fcrImpact","eventTriplet","ticketTriplet","foResolution","validationProcess","leakageCost","savingPotential","status","owner","targetDate","outcome","priority","actionPlan","comments"];
-var rows=records.map(function(r){return keys.map(function(k){return r[k];});});
-var csv=[headers].concat(rows).map(function(row){return row.map(function(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"';}).join(",");}).join("\\n");
-var blob=new Blob([csv],{type:"text/csv"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="topics_analysis_records.csv";a.click();
+
+async function qiaFetchTopics() {
+  if (QIA_DUMMY_MODE) { qiaTopics = taGenDummyTopics(); return; }
+  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_TOPIC + "')/items?$select=ID,Title," + TA_SELECT + "&$top=2000&$orderby=Created desc";
+  var res = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+  if (!res.ok) throw new Error('Topic Analysis fetch failed');
+  qiaTopics = (await res.json()).d.results.map(taNormalizeRow);
 }
-render();
+
+function taSp(k){ return TA_SP[k]; }
+function taNormalizeRow(r){
+  var row={ ID:r.ID, Title:r.Title };
+  Object.keys(TA_SP).forEach(function(k){
+    var f=TA_SP[k], v=r[f];
+    if(['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'].indexOf(k)>=0)
+      row[f]=Number(v||0);
+    else row[f]=v==null?'':v;
+  });
+  return row;
+}
+
+function taGenDummyTopics() {
+  var drivers=['Billing','Network','Cancellation','Refund','Roaming'];
+  var risks=['Low','Medium','High','Critical'];
+  var statuses=['Open','In Progress','Pending','Closed'];
+  var rows=[];
+  for(var i=0;i<45;i++){
+    var d=new Date(); d.setDate(d.getDate()-Math.floor(Math.random()*120));
+    var row={ ID:i+1, Title:'Topic '+i };
+    row[taSp('Date_Time')]=d.toISOString();
+    row[taSp('INUM')]='IN'+String(1000+i);
+    row[taSp('Calling_Number')]='9715'+String(Math.floor(Math.random()*1e7));
+    row[taSp('Status_of_Number')]='Active';
+    row[taSp('Impacted_Number')]='9715'+String(Math.floor(Math.random()*1e7));
+    row[taSp('Account_Number')]='ACC'+i;
+    row[taSp('Segment')]=i%2?'Consumer':'Enterprise';
+    row[taSp('LOB')]=['Front Office','Retention','Billing'][i%3];
+    row[taSp('Product')]=['Postpaid','Prepaid','Fiber'][i%3];
+    row[taSp('Site')]='Site '+(i%5+1);
+    row[taSp('Agent_Name_ID')]='Agent '+(100+i);
+    row[taSp('Call_ID')]='CALL'+String(90000+i);
+    row[taSp('Customer_Claim')]='Customer reported issue regarding '+drivers[i%5];
+    row[taSp('Agent_Resolution')]='Agent explained and attempted resolution';
+    row[taSp('Driver')]=drivers[i%5];
+    row[taSp('Primary_Driver')]=drivers[i%5];
+    row[taSp('Root_Cause')]=['Process Gap','Agent Knowledge Gap','System Gap'][i%3];
+    row[taSp('Identified_Gap_Process')]=i%2?'Yes':'No';
+    row[taSp('Identified_Gap_Agent')]=i%3?'Yes':'No';
+    row[taSp('Risk_Level')]=risks[i%4];
+    row[taSp('Repeated_Calls_Count')]=i%4?Math.floor(Math.random()*5):0;
+    row[taSp('Reopened_TTs_Count')]=Math.floor(Math.random()*2);
+    row[taSp('FCR_Impact_pct')]=Math.floor(Math.random()*40);
+    row[taSp('Saving_Potential_AED')]=Math.floor(Math.random()*8000);
+    row[taSp('Status')]=statuses[i%4];
+    row[taSp('Owner')]='Owner '+(i%4+1);
+    rows.push(row);
+  }
+  return rows;
+}
+
+async function qiaFetchQaAudits() {
+  if (QIA_DUMMY_MODE) { qiaQaAudits = qaGenDummyAudits(); return; }
+  var cols = QA_CALL_CRITERIA.map(function(c){return c.id;}).concat(QA_EMAIL_CRITERIA.map(function(c){return c.id;})).join(',');
+  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_QA + "')/items?$select=ID,Title,Reference_ID,Audit_Type,Team,Agent_Name,Evaluator/Title,Date_of_Eval,Date_of_Call,Call_Duration,Call_Duration_Type,MSISDN,Call_Reason,Date_of_Email,Email_Reason,Email_Subject,Avg_Score,Outcome,Comments,NA_Fields," + cols + "&$expand=Evaluator&$orderby=Created desc&$top=1000";
+  var res = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+  if (!res.ok) throw new Error('QA fetch failed');
+  qiaQaAudits = (await res.json()).d.results.map(function(a){ a.Evaluator = a.Evaluator ? a.Evaluator.Title : ''; return a; });
+}
+
+function qiaShowModule(mod) {
+  document.querySelectorAll('.module-section').forEach(function(s){ s.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('active'); });
+  document.getElementById('mod-' + mod).classList.add('active');
+  document.querySelector('.nav-item[data-module="' + mod + '"]').classList.add('active');
+}
+function qiaToggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+function qiaToggleDark(){
+  var b=document.body, scheme=document.getElementById('themeScheme').value;
+  var dark=scheme==='duralux'?'duralux-dark':'dark', light=scheme==='duralux'?'duralux':'';
+  b.setAttribute('data-theme', b.getAttribute('data-theme')===dark?light:dark);
+  var icon=document.getElementById('themeIcon');
+  if(icon) icon.setAttribute('data-lucide', b.getAttribute('data-theme').indexOf('dark')>=0?'sun':'moon');
+  if(typeof lucide!=='undefined') lucide.createIcons();
+}
+function qiaSetScheme(v){ document.body.setAttribute('data-theme', v==='duralux'?'duralux':''); qiaToggleDark(); qiaToggleDark(); }
+function qiaTeamOptions(){ return qiaTeams.map(function(t){ return '<option value="'+t+'">'+t+'</option>'; }).join(''); }
+function qiaEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function qiaFmtDate(v){ if(!v)return'—'; try{return new Date(v).toLocaleDateString('en-GB');}catch(e){return v;} }
+function qiaMoney(n){ return 'AED '+Number(n||0).toLocaleString(); }
+
+// AG Grid multi-select set filter (same pattern as SM)
+function QiaSetColumnFilter(){}
+QiaSetColumnFilter.prototype.init=function(params){
+  this.params=params; this.selected=new Set(); this.fixedValues=params.colDef.filterParams&&params.colDef.filterParams.values;
+  this.gui=document.createElement('div'); this.gui.className='qia-ag-set-filter'; this._buildGui();
+};
+QiaSetColumnFilter.prototype._cellValue=function(data){
+  var field=this.params.colDef.field, v=data[field];
+  if(this.params.colDef.valueGetter) v=this.params.colDef.valueGetter({data:data});
+  if(v===null||v===undefined||v==='') return '—';
+  if(this.params.colDef.valueFormatter){ var f=this.params.colDef.valueFormatter({value:v,data:data}); return String(f==null?'—':f); }
+  return String(v);
+};
+QiaSetColumnFilter.prototype._allValues=function(){
+  if(this.fixedValues) return this.fixedValues.slice();
+  var values=new Set(), self=this;
+  this.params.api.forEachNode(function(node){ if(node.data) values.add(self._cellValue(node.data)); });
+  return Array.from(values).sort(function(a,b){ return a.localeCompare(b); });
+};
+QiaSetColumnFilter.prototype._buildGui=function(){
+  var self=this, all=this._allValues(); this.gui.innerHTML='';
+  var search=document.createElement('input'); search.type='text'; search.placeholder='Search...'; search.className='qia-ag-set-search'; this.gui.appendChild(search);
+  var list=document.createElement('div'); list.className='qia-ag-set-list'; this.gui.appendChild(list);
+  var render=function(term){
+    list.innerHTML='';
+    all.filter(function(v){ return !term||v.toLowerCase().indexOf(term.toLowerCase())>=0; }).forEach(function(v){
+      var row=document.createElement('label'); row.className='qia-ag-set-option';
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=self.selected.has(v);
+      cb.onchange=function(){ if(cb.checked) self.selected.add(v); else self.selected.delete(v); self.params.filterChangedCallback(); };
+      row.appendChild(cb); row.appendChild(document.createTextNode(' '+v)); list.appendChild(row);
+    });
+  };
+  render(''); search.oninput=function(){ render(search.value); };
+  var actions=document.createElement('div'); actions.className='qia-ag-set-actions';
+  var btnAll=document.createElement('button'); btnAll.type='button'; btnAll.textContent='Select all';
+  btnAll.onclick=function(){ all.forEach(function(v){ self.selected.add(v); }); render(search.value); self.params.filterChangedCallback(); };
+  var btnClear=document.createElement('button'); btnClear.type='button'; btnClear.textContent='Clear';
+  btnClear.onclick=function(){ self.selected.clear(); render(search.value); self.params.filterChangedCallback(); };
+  actions.appendChild(btnAll); actions.appendChild(btnClear); this.gui.appendChild(actions);
+};
+QiaSetColumnFilter.prototype.getGui=function(){ return this.gui; };
+QiaSetColumnFilter.prototype.isFilterActive=function(){ return this.selected.size>0; };
+QiaSetColumnFilter.prototype.doesFilterPass=function(params){
+  if(!this.selected.size) return true;
+  return this.selected.has(this._cellValue(params.data));
+};
+QiaSetColumnFilter.prototype.getModel=function(){ return this.selected.size?{values:Array.from(this.selected)}:null; };
+QiaSetColumnFilter.prototype.setModel=function(model){ this.selected=new Set(model&&model.values?model.values:[]); this._buildGui(); };
+QiaSetColumnFilter.prototype.destroy=function(){};
+
+function qiaSetFilterCol(col, fixedValues){
+  col.filter=QiaSetColumnFilter;
+  if(fixedValues) col.filterParams={values:fixedValues};
+  return col;
+}
+function qiaGridDefaults(){ return {sortable:true,resizable:true,filter:QiaSetColumnFilter}; }
+
+// Topic Analysis — existing SP list internal names (DO NOT recreate this list)
+var TA_SP = {
+  Date_Time:'Date_x0020__x0026__x0020_Time', INUM:'INUM', Calling_Number:'Calling_x0020_Number',
+  Status_of_Number:'Status_x0020_of_x0020_Number', Impacted_Number:'Impacted_x0020_Number',
+  Account_Number:'Account_x0020_Number', Segment:'Segment', LOB:'LOB', Product:'Product', Site:'Site',
+  Agent_Name_ID:'Agent_x0020_Name_x0020__x002f__x', Call_ID:'Call_x0020_ID',
+  Customer_Claim:'Customer_x0020_Claim', Agent_Resolution:'Agent_x0020_Resolution',
+  Driver:'Driver', Primary_Driver:'Primary_x0020_Driver', Secondary_Driver:'Secondary_x0020_Driver',
+  Sub_Driver:'Sub_x0020_Driver', Root_Cause:'Root_x0020_Cause',
+  Identified_Gap_Process:'Identified_x0020_Gap_x0020_Proce', Identified_Gap_Agent:'Identified_x0020_Gap_x0020_Agent',
+  Risk_Level:'Risk_x0020_Level', Deep_Root_Cause_Details:'Deep_x0020_Root_x0020_Cause_x002',
+  Repeated_Call:'Repeated_x0020_Call', Repeated_Calls_Count:'Repeated_x0020_Calls_x0020_Count',
+  Repeated_TTs_Count:'Repeated_x0020_TTs_x0020_Count', Reopened_TTs_Count:'Reopened_x0020_TTs_x0020_Count',
+  FCR_Impact_pct:'FCR_x0020_Impact_x0020__x0025_',
+  Event_Triplet_Valid:'Event_x0020_Triplet_x0020_Valid', Ticket_Triplet_Valid:'Ticket_x0020_Triplet_x0020_Valid',
+  FO_Resolution_Valid:'FO_x0020_Resolution_x0020_Valid', Validation_Process_Followed:'Validation_x0020_Process_x0020_F',
+  Leakage_Cost_AED:'Leakage_x0020_Cost_x0020_AED', Saving_Potential_AED:'Saving_x0020_Potential_x0020_AED',
+  Status:'Status', Owner:'Owner', Target_Date:'Target_x0020_Date', Expected_Outcome:'Expected_x0020_Outcome',
+  Priority:'Priority', Action_Plan:'Action_x0020_Plan', Manager_QA_Comments:'Manager_x0020__x002f__x0020_QA_x'
+};
+var TA_SELECT = Object.keys(TA_SP).map(function(k){ return TA_SP[k]; }).join(',');
+
+function taFieldId(k){ return 'ta_'+TA_SP[k].replace(/[^a-zA-Z0-9_]/g,'_'); }
+
+function taRenderShell() {
+  var c=document.getElementById('taContent');
+  c.innerHTML='<div class="hero-banner"><div style="width:52px;height:52px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;"><i data-lucide="message-square-text" style="width:26px;height:26px;color:#fff;"></i></div><div><h2>Topic Analysis</h2><p>Voice of Customer — drivers, root cause & action plans</p></div></div>'+
+    '<div class="tab-bar"><button type="button" class="tab-btn active" id="taTabAnalytics" onclick="taSetTab(\'analytics\')"><i data-lucide="bar-chart-3" style="width:14px;height:14px;"></i>Analytics</button>'+
+    '<button type="button" class="tab-btn" id="taTabSubmit" onclick="taSetTab(\'submit\')"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i>Submit Analysis</button></div>'+
+    '<div id="taTabAnalyticsSection"></div><div id="taTabSubmitSection" style="display:none;"></div>';
+  taSetTab(taCurrentTab);
+  if(typeof lucide!=='undefined') lucide.createIcons();
+}
+
+window.taSetTab=function(tab){
+  taCurrentTab=tab;
+  document.getElementById('taTabAnalytics').classList.toggle('active', tab==='analytics');
+  document.getElementById('taTabSubmit').classList.toggle('active', tab==='submit');
+  document.getElementById('taTabAnalyticsSection').style.display=tab==='analytics'?'block':'none';
+  document.getElementById('taTabSubmitSection').style.display=tab==='submit'?'block':'none';
+  if(tab==='analytics') taRenderAnalyticsSection();
+  else taRenderSubmitSection();
+};
+
+function taRenderAnalyticsSection(){
+  var el=document.getElementById('taTabAnalyticsSection');
+  el.innerHTML='<div class="filters-section"><div class="filters-grid">'+
+    '<div class="filter-group"><label class="filter-label">LOB</label><select class="filter-select" id="taFilterLOB" onchange="taRenderAnalytics()"><option value="">All</option><option>Front Office</option><option>Retention</option><option>Billing</option></select></div>'+
+    '<div class="filter-group"><label class="filter-label">Product</label><select class="filter-select" id="taFilterProduct" onchange="taRenderAnalytics()"><option value="">All</option><option>Postpaid</option><option>Prepaid</option><option>Fiber</option></select></div>'+
+    '<div class="filter-group"><label class="filter-label">Driver</label><select class="filter-select" id="taFilterDriver" onchange="taRenderAnalytics()"><option value="">All</option><option>Billing</option><option>Network</option><option>Cancellation</option><option>Refund</option><option>Roaming</option></select></div>'+
+    '<div class="filter-group"><label class="filter-label">Risk</label><select class="filter-select" id="taFilterRisk" onchange="taRenderAnalytics()"><option value="">All</option><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>'+
+    '<div class="filter-group"><label class="filter-label">Status</label><select class="filter-select" id="taFilterStatus" onchange="taRenderAnalytics()"><option value="">All</option><option>Open</option><option>In Progress</option><option>Pending</option><option>Closed</option></select></div>'+
+    '<div class="filter-group"><label class="filter-label">From</label><input type="date" class="filter-select" id="taFilterFrom" onchange="taRenderAnalytics()"></div>'+
+    '<div class="filter-group"><label class="filter-label">To</label><input type="date" class="filter-select" id="taFilterTo" onchange="taRenderAnalytics()"></div>'+
+    '</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="reset-btn" type="button" onclick="taResetFilters()">Reset</button></div></div>'+
+    '<div id="taKPITiles"></div><div id="taSelectionTiles" style="margin-bottom:1rem;"></div>'+
+    '<div style="text-align:center;margin-bottom:1rem;"><button class="export-btn" type="button" onclick="taToggleCharts()"><span id="taChartsBtnText">Show Charts</span></button></div>'+
+    '<div id="taChartsSection" style="display:none;"></div><div id="taGridWrap"></div>';
+  taRenderAnalytics();
+}
+
+window.taGetFiltered=function(){
+  var lob=(document.getElementById('taFilterLOB')||{}).value||'';
+  var product=(document.getElementById('taFilterProduct')||{}).value||'';
+  var driver=(document.getElementById('taFilterDriver')||{}).value||'';
+  var risk=(document.getElementById('taFilterRisk')||{}).value||'';
+  var status=(document.getElementById('taFilterStatus')||{}).value||'';
+  var from=(document.getElementById('taFilterFrom')||{}).value||'';
+  var to=(document.getElementById('taFilterTo')||{}).value||'';
+  return qiaTopics.filter(function(r){
+    if(lob&&r[taSp('LOB')]!==lob) return false;
+    if(product&&r[taSp('Product')]!==product) return false;
+    if(driver&&r[taSp('Driver')]!==driver) return false;
+    if(risk&&r[taSp('Risk_Level')]!==risk) return false;
+    if(status&&r[taSp('Status')]!==status) return false;
+    if(from&&r[taSp('Date_Time')]&&new Date(r[taSp('Date_Time')])<new Date(from)) return false;
+    if(to&&r[taSp('Date_Time')]&&new Date(r[taSp('Date_Time')])>new Date(to+'T23:59:59')) return false;
+    return true;
+  });
+};
+
+window.taResetFilters=function(){
+  ['taFilterLOB','taFilterProduct','taFilterDriver','taFilterRisk','taFilterStatus'].forEach(function(id){ var el=document.getElementById(id); if(el) el.selectedIndex=0; });
+  ['taFilterFrom','taFilterTo'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  taRenderAnalytics();
+};
+
+window.taRenderAnalytics=function(){
+  var data=taGetFiltered();
+  var kpis=[
+    {label:'Total Analysis',val:data.length,color:'#0d9488'},
+    {label:'Repeated Calls',val:data.reduce(function(s,r){return s+Number(r[taSp('Repeated_Calls_Count')]||0);},0),color:'#f59e0b'},
+    {label:'Reopened TTs',val:data.reduce(function(s,r){return s+Number(r[taSp('Reopened_TTs_Count')]||0);},0),color:'#ef4444'},
+    {label:'Saving Potential',val:qiaMoney(data.reduce(function(s,r){return s+Number(r[taSp('Saving_Potential_AED')]||0);},0)),color:'#10b981'},
+    {label:'High/Critical Risk',val:data.filter(function(r){var v=r[taSp('Risk_Level')];return v==='High'||v==='Critical';}).length,color:'#ef4444'},
+    {label:'Open Items',val:data.filter(function(r){var v=r[taSp('Status')];return v==='Open'||v==='In Progress';}).length,color:'#8b5cf6'}
+  ];
+  document.getElementById('taKPITiles').innerHTML='<div class="top-stats">'+kpis.map(function(k){
+    return '<div class="stat-card"><div class="stat-label">'+k.label+'</div><div class="stat-value" style="color:'+k.color+'">'+k.val+'</div></div>';
+  }).join('')+'</div>';
+  taRenderDriverTiles(data);
+  taRenderGrid(data);
+  if(taChartsVisible) taRenderCharts(data);
+  if(typeof lucide!=='undefined') lucide.createIcons();
+};
+
+function taRenderDriverTiles(data){
+  var drivers=[...new Set(data.map(function(r){return r[taSp('Driver')];}))].filter(Boolean).sort();
+  var el=document.getElementById('taSelectionTiles');
+  if(!drivers.length){ el.innerHTML=''; return; }
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem;">'+drivers.map(function(d){
+    var cnt=data.filter(function(r){return r[taSp('Driver')]===d;}).length;
+    var saving=data.filter(function(r){return r[taSp('Driver')]===d;}).reduce(function(s,r){return s+Number(r[taSp('Saving_Potential_AED')]||0);},0);
+    return '<div class="lm-tile" onclick="document.getElementById(\'taFilterDriver\').value=\''+d.replace(/'/g,"\\'")+'\';taRenderAnalytics();"><h3>'+qiaEsc(d)+'</h3><div class="lm-stat-value">'+cnt+'</div><div style="font-size:.72rem;color:var(--t3);margin-top:4px;">'+qiaMoney(saving)+' potential</div></div>';
+  }).join('')+'</div>';
+}
+
+function taRenderGrid(data){
+  var wrap=document.getElementById('taGridWrap');
+  if(taGridApi){ try{taGridApi.destroy();}catch(e){} taGridApi=null; }
+  wrap.innerHTML='<div class="table-section"><div class="table-header"><div class="table-title">Submitted Topics</div><div><button class="export-btn" type="button" onclick="taExportCSV()">Export</button></div></div><div id="taGridDiv" class="ag-theme-alpine" style="height:480px;width:100%;"></div></div>';
+  var F=taSp;
+  var cols=[
+    {field:F('Date_Time'),headerName:'Date',width:110,filter:QiaSetColumnFilter,valueFormatter:function(p){return qiaFmtDate(p.value);}},
+    {field:F('Customer_Claim'),headerName:'Customer Claim',flex:1,minWidth:200,filter:QiaSetColumnFilter},
+    qiaSetFilterCol({field:F('Segment'),headerName:'Segment',width:110},['Consumer','Enterprise']),
+    qiaSetFilterCol({field:F('LOB'),headerName:'LOB',width:110},['Front Office','Retention','Back Office','Billing','Enterprise']),
+    qiaSetFilterCol({field:F('Product'),headerName:'Product',width:100},['Postpaid','Prepaid','Home Wireless','Fiber','Roaming','Billing']),
+    qiaSetFilterCol({field:F('Driver'),headerName:'Driver',width:110},['Billing','Network','Cancellation','Refund','SIM / PUK','Roaming','Activation','Technical Support']),
+    qiaSetFilterCol({field:F('Root_Cause'),headerName:'Root Cause',width:140},['Process Gap','Agent Knowledge Gap','System Gap','Policy Gap','Communication Gap','Customer Education Gap']),
+    {field:F('Repeated_Calls_Count'),headerName:'Repeat Calls',width:110,filter:QiaSetColumnFilter},
+    {field:F('Reopened_TTs_Count'),headerName:'Reopened TTs',width:110,filter:QiaSetColumnFilter},
+    {field:F('FCR_Impact_pct'),headerName:'FCR %',width:90,filter:QiaSetColumnFilter,valueFormatter:function(p){return (p.value||0)+'%';}},
+    qiaSetFilterCol({field:F('Risk_Level'),headerName:'Risk',width:100,cellRenderer:function(p){return '<span class="status-badge risk-'+p.value+'">'+qiaEsc(p.value)+'</span>';}},['Low','Medium','High','Critical']),
+    qiaSetFilterCol({field:F('Status'),headerName:'Status',width:110},['Open','In Progress','Pending','Closed']),
+    {field:F('Owner'),headerName:'Owner',width:120,filter:QiaSetColumnFilter},
+    {field:F('Saving_Potential_AED'),headerName:'Saving AED',width:120,filter:QiaSetColumnFilter,valueFormatter:function(p){return qiaMoney(p.value);}}
+  ];
+  agGrid.createGrid(document.getElementById('taGridDiv'),{columnDefs:cols,rowData:data,defaultColDef:qiaGridDefaults(),pagination:true,paginationPageSize:20,onGridReady:function(p){taGridApi=p.api;}});
+}
+
+window.taExportCSV=function(){ if(taGridApi) taGridApi.exportDataAsCsv({fileName:'Topic_Analysis_'+new Date().toISOString().split('T')[0]+'.csv'}); };
+
+window.taToggleCharts=function(){
+  taChartsVisible=!taChartsVisible;
+  var sec=document.getElementById('taChartsSection');
+  sec.style.display=taChartsVisible?'block':'none';
+  document.getElementById('taChartsBtnText').textContent=taChartsVisible?'Hide Charts':'Show Charts';
+  if(taChartsVisible){ sec.innerHTML='<div class="charts-grid"><div class="chart-card"><div class="chart-title">Risk Distribution</div><canvas id="taRiskChart" height="220"></canvas></div><div class="chart-card"><div class="chart-title">Driver Breakdown</div><canvas id="taDriverChart" height="220"></canvas></div></div><div class="charts-grid"><div class="chart-card"><div class="chart-title">Status Overview</div><canvas id="taStatusChart" height="220"></canvas></div><div class="chart-card"><div class="chart-title">Monthly Submissions</div><canvas id="taTrendChart" height="220"></canvas></div></div>'; taRenderCharts(taGetFiltered()); }
+};
+
+function taDestroyChart(id){ var c=document.getElementById(id); if(c&&c._chart){c._chart.destroy();c._chart=null;} }
+
+function taRenderCharts(data){
+  taDestroyChart('taRiskChart'); taDestroyChart('taDriverChart'); taDestroyChart('taStatusChart'); taDestroyChart('taTrendChart');
+  var risks=['Low','Medium','High','Critical'];
+  var rc=document.getElementById('taRiskChart');
+  if(rc) rc._chart=new Chart(rc,{type:'doughnut',data:{labels:risks,datasets:[{data:risks.map(function(r){return data.filter(function(d){return d[taSp('Risk_Level')]===r;}).length;}),backgroundColor:['#10b981','#f59e0b','#f97316','#ef4444']}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
+  var drivers=[...new Set(data.map(function(r){return r[taSp('Driver')];}))].filter(Boolean);
+  var dc=document.getElementById('taDriverChart');
+  if(dc) dc._chart=new Chart(dc,{type:'bar',data:{labels:drivers,datasets:[{label:'Count',data:drivers.map(function(d){return data.filter(function(r){return r[taSp('Driver')]===d;}).length;}),backgroundColor:'#0d9488',borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  var statuses=['Open','In Progress','Pending','Closed'];
+  var sc=document.getElementById('taStatusChart');
+  if(sc) sc._chart=new Chart(sc,{type:'pie',data:{labels:statuses,datasets:[{data:statuses.map(function(s){return data.filter(function(d){return d[taSp('Status')]===s;}).length;}),backgroundColor:['#4c6fff','#f59e0b','#8b5cf6','#10b981']}]},options:{plugins:{legend:{position:'bottom'}}}});
+  var months={};
+  data.forEach(function(r){ if(!r[taSp('Date_Time')])return; var k=new Date(r[taSp('Date_Time')]).toISOString().slice(0,7); months[k]=(months[k]||0)+1; });
+  var mk=Object.keys(months).sort();
+  var tc=document.getElementById('taTrendChart');
+  if(tc) tc._chart=new Chart(tc,{type:'line',data:{labels:mk,datasets:[{label:'Submissions',data:mk.map(function(k){return months[k];}),borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,.15)',fill:true,tension:.35}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+}
+
+function taRenderSubmitSection(){
+  document.getElementById('taTabSubmitSection').innerHTML='<div class="form-card"><div class="table-title" style="margin-bottom:1rem;">New Topic Analysis</div><form id="taForm" class="form-grid" onsubmit="return taSubmit(event)">'+
+    '<div class="section-divider">Customer & Interaction</div>'+
+    '<div class="form-field"><label>Date_Time *</label><input type="datetime-local" id="taDate_Time" required></div>'+
+    '<div class="form-field"><label>INUM</label><input id="taINUM"></div>'+
+    '<div class="form-field"><label>Calling_Number</label><input id="taCalling_Number"></div>'+
+    '<div class="form-field"><label>Status_of_Number</label><select id="taStatus_of_Number"><option>Active</option><option>Suspended</option><option>Deactivated</option></select></div>'+
+    '<div class="form-field"><label>Impacted_Number</label><input id="taImpacted_Number"></div>'+
+    '<div class="form-field"><label>Account_Number</label><input id="taAccount_Number"></div>'+
+    '<div class="form-field"><label>Segment</label><select id="taSegment"><option>Consumer</option><option>Enterprise</option></select></div>'+
+    '<div class="form-field"><label>LOB</label><select id="taLOB"><option>Front Office</option><option>Retention</option><option>Back Office</option><option>Billing</option></select></div>'+
+    '<div class="form-field"><label>Product</label><select id="taProduct"><option>Postpaid</option><option>Prepaid</option><option>Home Wireless</option><option>Fiber</option></select></div>'+
+    '<div class="form-field"><label>Site</label><input id="taSite"></div>'+
+    '<div class="form-field"><label>Agent_Name_ID</label><input id="taAgent_Name_ID"></div>'+
+    '<div class="form-field"><label>Call_ID</label><input id="taCall_ID"></div>'+
+    '<div class="form-field full"><label>Customer_Claim *</label><textarea id="taCustomer_Claim" required></textarea></div>'+
+    '<div class="form-field full"><label>Agent_Resolution</label><textarea id="taAgent_Resolution"></textarea></div>'+
+    '<div class="section-divider">Driver & Root Cause</div>'+
+    '<div class="form-field"><label>Driver</label><select id="taDriver"><option>Billing</option><option>Network</option><option>Cancellation</option><option>Refund</option><option>Roaming</option></select></div>'+
+    '<div class="form-field"><label>Primary_Driver</label><input id="taPrimary_Driver"></div>'+
+    '<div class="form-field"><label>Secondary_Driver</label><input id="taSecondary_Driver"></div>'+
+    '<div class="form-field"><label>Sub_Driver</label><input id="taSub_Driver"></div>'+
+    '<div class="form-field"><label>Root_Cause</label><select id="taRoot_Cause"><option>Process Gap</option><option>Agent Knowledge Gap</option><option>System Gap</option><option>Policy Gap</option></select></div>'+
+    '<div class="form-field"><label>Identified_Gap_Process</label><select id="taIdentified_Gap_Process"><option>No</option><option>Yes</option></select></div>'+
+    '<div class="form-field"><label>Identified_Gap_Agent</label><select id="taIdentified_Gap_Agent"><option>No</option><option>Yes</option></select></div>'+
+    '<div class="form-field"><label>Risk_Level</label><select id="taRisk_Level"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>'+
+    '<div class="form-field full"><label>Deep_Root_Cause_Details</label><textarea id="taDeep_Root_Cause_Details"></textarea></div>'+
+    '<div class="section-divider">FCR / TT Impact</div>'+
+    '<div class="form-field"><label>Repeated_Call</label><select id="taRepeated_Call"><option>No</option><option>Yes</option></select></div>'+
+    '<div class="form-field"><label>Repeated_Calls_Count</label><input type="number" id="taRepeated_Calls_Count" value="0"></div>'+
+    '<div class="form-field"><label>Repeated_TTs_Count</label><input type="number" id="taRepeated_TTs_Count" value="0"></div>'+
+    '<div class="form-field"><label>Reopened_TTs_Count</label><input type="number" id="taReopened_TTs_Count" value="0"></div>'+
+    '<div class="form-field"><label>FCR_Impact_pct</label><input type="number" id="taFCR_Impact_pct" value="0"></div>'+
+    '<div class="form-field"><label>Event_Triplet_Valid</label><select id="taEvent_Triplet_Valid"><option>Yes</option><option>No</option><option>N/A</option></select></div>'+
+    '<div class="form-field"><label>Ticket_Triplet_Valid</label><select id="taTicket_Triplet_Valid"><option>Yes</option><option>No</option><option>N/A</option></select></div>'+
+    '<div class="form-field"><label>FO_Resolution_Valid</label><select id="taFO_Resolution_Valid"><option>Yes</option><option>No</option><option>N/A</option></select></div>'+
+    '<div class="form-field"><label>Validation_Process_Followed</label><select id="taValidation_Process_Followed"><option>Yes</option><option>No</option><option>Partially</option></select></div>'+
+    '<div class="form-field"><label>Leakage_Cost_AED</label><input type="number" id="taLeakage_Cost_AED" value="0"></div>'+
+    '<div class="form-field"><label>Saving_Potential_AED</label><input type="number" id="taSaving_Potential_AED" value="0"></div>'+
+    '<div class="form-field"><label>Status</label><select id="taStatus"><option>Open</option><option>In Progress</option><option>Pending</option><option>Closed</option></select></div>'+
+    '<div class="section-divider">Action Plan</div>'+
+    '<div class="form-field"><label>Owner</label><input id="taOwner"></div>'+
+    '<div class="form-field"><label>Target_Date</label><input type="date" id="taTarget_Date"></div>'+
+    '<div class="form-field"><label>Expected_Outcome</label><select id="taExpected_Outcome"><option>Reduce Repeat Calls</option><option>Improve FCR</option><option>Reduce Cost Leakage</option></select></div>'+
+    '<div class="form-field"><label>Priority</label><select id="taPriority"><option>Low</option><option>Medium</option><option>High</option><option>Urgent</option></select></div>'+
+    '<div class="form-field full"><label>Action_Plan</label><textarea id="taAction_Plan"></textarea></div>'+
+    '<div class="form-field full"><label>Manager_QA_Comments</label><textarea id="taManager_QA_Comments"></textarea></div>'+
+    '<div class="form-field full" style="display:flex;gap:8px;justify-content:flex-end;"><button type="button" class="reset-btn" onclick="document.getElementById(\'taForm\').reset()">Clear</button><button type="submit" class="export-btn">Save Analysis</button></div>'+
+    '</form><div id="taSubmitMsg" style="margin-top:8px;font-size:.84rem;"></div></div>';
+}
+
+window.taSubmit=function(e){
+  e.preventDefault();
+  var body={};
+  var numKeys=['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'];
+  Object.keys(TA_SP).forEach(function(k){
+    var el=document.getElementById(taFieldId(k))||document.getElementById('ta'+k); if(!el) return;
+    body[TA_SP[k]]=numKeys.indexOf(k)>=0?Number(el.value||0):el.value;
+  });
+  body.Title=(body[TA_SP.Customer_Claim]||'Topic').substring(0,255);
+  if(!body[TA_SP.Date_Time]||!body[TA_SP.Customer_Claim]){ alert('Date & Time and Customer Claim are required'); return false; }
+  if(QIA_DUMMY_MODE){ var row=Object.assign({ID:qiaTopics.length+1},body); qiaTopics.unshift(row); document.getElementById('taSubmitMsg').innerHTML='<span style="color:#10b981;">Saved locally (demo mode)</span>'; taSetTab('analytics'); return false; }
+  taSubmitToSp(body);
+  return false;
+};
+
+async function taSubmitToSp(body){
+  try{
+    var digestRes=await fetch(SP_URL+'/_api/contextinfo',{method:'POST',headers:{'Accept':'application/json;odata=verbose'},credentials:'include'});
+    var digest=(await digestRes.json()).d.GetContextWebInformation.FormDigestValue;
+    var res=await fetch(SP_URL+"/_api/web/lists/getbytitle('"+LIST_TOPIC+"')/items",{method:'POST',headers:{'Accept':'application/json;odata=verbose','Content-Type':'application/json;odata=verbose','X-RequestDigest':digest},credentials:'include',body:JSON.stringify(body)});
+    if(!res.ok) throw new Error(await res.text());
+    await qiaFetchTopics(); taSetTab('analytics');
+    document.getElementById('taSubmitMsg').innerHTML='<span style="color:#10b981;">Saved to SharePoint</span>';
+  }catch(err){ document.getElementById('taSubmitMsg').innerHTML='<span style="color:#ef4444;">'+err.message+'</span>'; }
+}
+
+// QUALITY ASSURANCE (QIA — Call & Email only)
+var QA_MAX_PER_CRITERION = 2;
+var QA_CALL_CRITERIA = [
+  {id:'C01_Welcoming',label:'Welcoming & Farewell'},
+  {id:'C03_FormOfAppeal',label:'Form of Appeal'},
+  {id:'C04_OfficialSpeech',label:'Professional Language'},
+  {id:'C06_HoldTechniques',label:'Hold Techniques'},
+  {id:'C07_ActiveListening',label:'Active Listening'},
+  {id:'C10_HandlingTime',label:'Handling Time'},
+  {id:'C12_CustomerID',label:'Customer Identification'},
+  {id:'C14_Transaction',label:'Transaction Registration'},
+  {id:'C16_CorrectInfo',label:'Correct Information'},
+  {id:'C20_ClarifyingQuestions',label:'Clarifying Questions'}
+];
+var QA_EMAIL_CRITERIA = [
+  {id:'E01_FormOfAppeal',label:'Form of Appeal'},
+  {id:'E02_OfficialText',label:'Official Text & Grammar'},
+  {id:'E03_ReadingAttentively',label:'Reading Attentively'},
+  {id:'E05_HandlingTime',label:'Handling Time'},
+  {id:'E07_CustomerID',label:'Customer Identification'},
+  {id:'E09_Transaction',label:'Transaction Fulfillment'},
+  {id:'E11_CorrectInfo',label:'Correct Information'},
+  {id:'E13_ClarifyingQuestions',label:'Clarifying Questions'}
+];
+
+function qaGetCriteria(type){ return type==='Email'?QA_EMAIL_CRITERIA:QA_CALL_CRITERIA; }
+function qaCalcScore(scores,type){
+  var criteria=qaGetCriteria(type), sum=0, count=0;
+  criteria.forEach(function(c){ var v=scores[c.id]; if(v===null||v===undefined||v==='')return; var n=parseFloat(v); if(isNaN(n))return; sum+=Math.min(QA_MAX_PER_CRITERION,Math.max(0,n)); count++; });
+  return count?Math.round((sum/(count*QA_MAX_PER_CRITERION))*100):0;
+}
+function qaOutcomeFromScore(s){ return s>=70?'Pass':s>=50?'Needs Improvement':'Fail'; }
+
+function qaGenDummyAudits(){
+  var agents=['Sara Ali','Khalid Hassan','Fatima Noor','Omar Farid','Layla Ahmed'];
+  var evaluators=['QA Lead 1','QA Lead 2'];
+  var types=['Call','Call','Email','Email'];
+  var rows=[];
+  for(var i=0;i<60;i++){
+    var type=types[i%4], team=qiaTeams[i%qiaTeams.length], agent=agents[i%agents.length];
+    var d=new Date(); d.setDate(d.getDate()-Math.floor(Math.random()*90));
+    var fmt=function(dt){return dt.toISOString().split('T')[0];};
+    var row={ID:i+1,Title:'QIA-QA-'+(1000+i),Reference_ID:'REF-'+(1000+i),Audit_Type:type,Team:team,Agent_Name:agent,Evaluator:evaluators[i%2],Date_of_Eval:fmt(new Date()),Comments:''};
+    if(type==='Call'){ row.Date_of_Call=fmt(d); row.Call_Duration=Math.floor(Math.random()*400+30); row.Call_Duration_Type='Standard'; row.MSISDN='9715'+String(Math.floor(Math.random()*1e7)); row.Call_Reason='Billing Query'; }
+    else { row.Date_of_Email=fmt(d); row.Email_Reason='Complaint'; row.Email_Subject='RE: Account issue'; }
+    qaGetCriteria(type).forEach(function(c){ row[c.id]=Math.floor(Math.random()*3); });
+    row.Avg_Score=qaCalcScore(row,type); row.Outcome=qaOutcomeFromScore(row.Avg_Score);
+    rows.push(row);
+  }
+  return rows.sort(function(a,b){ return new Date(b.Date_of_Eval)-new Date(a.Date_of_Eval); });
+}
+
+function qaRenderShell(){
+  var c=document.getElementById('qaContent');
+  c.innerHTML='<div class="hero-banner"><div style="width:52px;height:52px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;"><i data-lucide="shield-check" style="width:26px;height:26px;color:#fff;"></i></div><div><h2>Quality Assurance</h2><p>Call & Email audits — independent from Service Management</p></div></div>'+
+    '<div class="tab-bar"><button type="button" class="tab-btn" id="qaTabSubmit" onclick="qaSetTab(\'submit\')"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i>Submit Audit</button>'+
+    '<button type="button" class="tab-btn active" id="qaTabAnalytics" onclick="qaSetTab(\'analytics\')"><i data-lucide="bar-chart-3" style="width:14px;height:14px;"></i>Analytics</button></div>'+
+    '<div id="qaTabSubmitSection" style="display:none;"></div><div id="qaTabAnalyticsSection"></div>';
+  qaSetTab(qaCurrentTab);
+  if(typeof lucide!=='undefined') lucide.createIcons();
+}
+
+window.qaSetTab=function(tab){
+  qaCurrentTab=tab;
+  document.getElementById('qaTabSubmit').classList.toggle('active', tab==='submit');
+  document.getElementById('qaTabAnalytics').classList.toggle('active', tab==='analytics');
+  document.getElementById('qaTabSubmitSection').style.display=tab==='submit'?'block':'none';
+  document.getElementById('qaTabAnalyticsSection').style.display=tab==='analytics'?'block':'none';
+  if(tab==='submit') qaRenderSubmitForm();
+  else qaRenderAnalyticsSection();
+};
+
+function qaRenderSubmitForm(){
+  document.getElementById('qaTabSubmitSection').innerHTML='<div id="qaErrorBanner" class="qa-error-banner"></div><div class="form-card"><div class="table-title" style="margin-bottom:1rem;">Submit QA Audit</div>'+
+    '<div class="form-grid">'+
+    '<div class="form-field"><label>Audit_Type *</label><select id="qaAuditType" onchange="qaHandleTypeChange()"><option value="">Select...</option><option>Call</option><option>Email</option></select></div>'+
+    '<div class="form-field"><label>Team *</label><select id="qaTeam"><option value="">Select team...</option>'+qiaTeamOptions()+'</select></div>'+
+    '<div class="form-field"><label>Agent_Name *</label><input id="qaAgentName" placeholder="Free text agent name"></div>'+
+    '<div class="form-field"><label>Reference_ID</label><input id="qaReferenceID"></div>'+
+    '<div class="form-field"><label>Date_of_Eval</label><input type="date" id="qaDateOfEval"></div>'+
+    '<div id="qaTypeFields" class="form-field full"></div>'+
+    '<div class="section-divider full">Scoring Criteria (0 / 1 / 2)</div>'+
+    '<div id="qaCriteriaList" class="form-field full"></div>'+
+    '<div class="form-field"><label>Total Score</label><div id="qaTotalScore" style="font-size:1.5rem;font-weight:900;color:var(--sc);">— / 100</div></div>'+
+    '<div class="form-field"><label>Outcome</label><div id="qaOutcomeDisplay" style="font-weight:700;">—</div></div>'+
+    '<div class="form-field full"><label>Comments</label><textarea id="qaComments"></textarea></div>'+
+    '<div class="form-field full" style="display:flex;gap:8px;justify-content:flex-end;"><button type="button" class="reset-btn" onclick="qaClearForm()">Clear</button><button type="button" class="export-btn" onclick="qaSubmitAudit()">Submit Audit</button></div>'+
+    '</div><div id="qaSubmitMsg" style="margin-top:8px;font-size:.84rem;"></div></div>';
+  document.getElementById('qaDateOfEval').value=new Date().toISOString().split('T')[0];
+  qaHandleTypeChange();
+}
+
+window.qaHandleTypeChange=function(){
+  var type=(document.getElementById('qaAuditType')||{}).value||'';
+  var tf=document.getElementById('qaTypeFields');
+  var cl=document.getElementById('qaCriteriaList');
+  if(!type){ tf.innerHTML=''; cl.innerHTML='<div style="color:var(--t3);">Select audit type first</div>'; return; }
+  if(type==='Call'){
+    tf.innerHTML='<div class="form-grid" style="grid-column:1/-1;">'+
+      '<div class="form-field"><label>Date_of_Call</label><input type="date" id="qaDateField"></div>'+
+      '<div class="form-field"><label>MSISDN</label><input id="qaMSISDN"></div>'+
+      '<div class="form-field"><label>Call_Reason</label><input id="qaCallReason"></div>'+
+      '<div class="form-field"><label>Call_Duration (sec)</label><input type="number" id="qaCallDuration" value="0"></div></div>';
+  } else {
+    tf.innerHTML='<div class="form-grid" style="grid-column:1/-1;">'+
+      '<div class="form-field"><label>Date_of_Email</label><input type="date" id="qaDateField"></div>'+
+      '<div class="form-field"><label>Email_Reason</label><input id="qaEmailReason"></div>'+
+      '<div class="form-field"><label>Email_Subject</label><input id="qaEmailSubject"></div></div>';
+  }
+  cl.innerHTML=qaGetCriteria(type).map(function(c){
+    return '<div class="qa-criterion-row"><div class="qa-crit-label">'+c.label+'</div><select class="qa-score-select" id="qa_'+c.id+'" onchange="qaUpdateScore()"><option value="">—</option><option>0</option><option>1</option><option>2</option></select></div>';
+  }).join('');
+  qaUpdateScore();
+};
+
+window.qaUpdateScore=function(){
+  var type=(document.getElementById('qaAuditType')||{}).value||'Call';
+  var scores={};
+  qaGetCriteria(type).forEach(function(c){ scores[c.id]=(document.getElementById('qa_'+c.id)||{}).value; });
+  var score=qaCalcScore(scores,type), outcome=qaOutcomeFromScore(score);
+  document.getElementById('qaTotalScore').textContent=score+' / 100';
+  document.getElementById('qaOutcomeDisplay').textContent=outcome;
+  document.getElementById('qaOutcomeDisplay').style.color=outcome==='Pass'?'#10b981':outcome==='Fail'?'#ef4444':'#f59e0b';
+};
+
+window.qaClearForm=function(){
+  document.getElementById('qaAuditType').selectedIndex=0;
+  ['qaTeam','qaAgentName','qaReferenceID','qaComments'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  qaHandleTypeChange();
+  document.getElementById('qaSubmitMsg').innerHTML='';
+};
+
+window.qaSubmitAudit=function(){
+  var type=(document.getElementById('qaAuditType')||{}).value;
+  var team=(document.getElementById('qaTeam')||{}).value;
+  var agent=(document.getElementById('qaAgentName')||{}).value.trim();
+  if(!type||!team||!agent){ alert('Audit Type, Team and Agent Name are required'); return; }
+  var row={ID:qiaQaAudits.length+1,Title:'QIA-QA-'+Date.now(),Reference_ID:(document.getElementById('qaReferenceID')||{}).value||'',Audit_Type:type,Team:team,Agent_Name:agent,Evaluator:window.USER_CONTEXT.userName,Date_of_Eval:(document.getElementById('qaDateOfEval')||{}).value,Comments:(document.getElementById('qaComments')||{}).value||''};
+  var dateField=(document.getElementById('qaDateField')||{}).value;
+  if(type==='Call'){ row.Date_of_Call=dateField; row.MSISDN=(document.getElementById('qaMSISDN')||{}).value||''; row.Call_Reason=(document.getElementById('qaCallReason')||{}).value||''; row.Call_Duration=Number((document.getElementById('qaCallDuration')||{}).value||0); }
+  else { row.Date_of_Email=dateField; row.Email_Reason=(document.getElementById('qaEmailReason')||{}).value||''; row.Email_Subject=(document.getElementById('qaEmailSubject')||{}).value||''; }
+  qaGetCriteria(type).forEach(function(c){ var v=(document.getElementById('qa_'+c.id)||{}).value; if(v!=='') row[c.id]=Number(v); });
+  row.Avg_Score=qaCalcScore(row,type); row.Outcome=qaOutcomeFromScore(row.Avg_Score);
+  if(QIA_DUMMY_MODE){ qiaQaAudits.unshift(row); document.getElementById('qaSubmitMsg').innerHTML='<span style="color:#10b981;">Audit saved (demo mode)</span>'; qaClearForm(); return; }
+  qaSubmitToSp(row);
+};
+
+async function qaSubmitToSp(row){
+  try{
+    var digestRes=await fetch(SP_URL+'/_api/contextinfo',{method:'POST',headers:{'Accept':'application/json;odata=verbose'},credentials:'include'});
+    var digest=(await digestRes.json()).d.GetContextWebInformation.FormDigestValue;
+    row.Title=row.Reference_ID||row.Title;
+    var res=await fetch(SP_URL+"/_api/web/lists/getbytitle('"+LIST_QA+"')/items",{method:'POST',headers:{'Accept':'application/json;odata=verbose','Content-Type':'application/json;odata=verbose','X-RequestDigest':digest},credentials:'include',body:JSON.stringify(row)});
+    if(!res.ok) throw new Error(await res.text());
+    await qiaFetchQaAudits(); document.getElementById('qaSubmitMsg').innerHTML='<span style="color:#10b981;">Submitted to SharePoint</span>'; qaClearForm();
+  }catch(e){ document.getElementById('qaSubmitMsg').innerHTML='<span style="color:#ef4444;">'+e.message+'</span>'; }
+}
+
+function qaRenderAnalyticsSection(){
+  document.getElementById('qaTabAnalyticsSection').innerHTML=
+    '<div class="filters-section"><div class="filters-grid">'+
+    '<div class="filter-group"><label class="filter-label">Team</label><select class="filter-select" id="qaFilterTeam" onchange="qaRenderAnalytics()"><option value="">All</option>'+qiaTeamOptions()+'</select></div>'+
+    '<div class="filter-group"><label class="filter-label">Agent</label><select class="filter-select" id="qaFilterAgent" onchange="qaRenderAnalytics()"><option value="">All</option></select></div>'+
+    '<div class="filter-group"><label class="filter-label">Evaluator</label><select class="filter-select" id="qaFilterEvaluator" onchange="qaRenderAnalytics()"><option value="">All</option></select></div>'+
+    '<div class="filter-group"><label class="filter-label">From</label><input type="date" class="filter-select" id="qaFilterFrom" onchange="qaRenderAnalytics()"></div>'+
+    '<div class="filter-group"><label class="filter-label">To</label><input type="date" class="filter-select" id="qaFilterTo" onchange="qaRenderAnalytics()"></div>'+
+    '<div class="filter-group"><label class="filter-label">Search</label><input class="filter-select" id="qaAnalyticsSearch" placeholder="Agent or evaluator..." oninput="qaRenderAnalytics()"></div>'+
+    '</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="reset-btn" type="button" onclick="qaResetFilters()">Reset</button></div></div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:1rem;"><button type="button" class="qa-atab-btn active" onclick="qaSetAnalyticsTab(\'Call\')">Call</button><button type="button" class="qa-atab-btn" onclick="qaSetAnalyticsTab(\'Email\')">Email</button></div>'+
+    '<div id="qaKPITiles"></div><div id="qaSelectionTiles" style="margin-bottom:1rem;"></div>'+
+    '<div style="text-align:center;margin-bottom:1rem;"><button class="export-btn" type="button" onclick="qaToggleCharts()"><span id="qaChartsBtnText">Show Analytics Charts</span></button></div>'+
+    '<div id="qaChartsSection" style="display:none;"></div><div id="qaGridWrap"></div>';
+  qaRenderAnalytics();
+}
+
+window.qaSetAnalyticsTab=function(tab){
+  qaAnalyticsTab=tab;
+  document.querySelectorAll('.qa-atab-btn').forEach(function(b){ b.classList.toggle('active', b.textContent.trim()===tab); });
+  if(qaChartsVisible){ document.getElementById('qaChartsSection').innerHTML=qaChartsHTML(); qaRenderCharts(qaGetFiltered()); }
+  qaRenderAnalytics();
+};
+
+window.qaGetFiltered=function(){
+  var data=qiaQaAudits.filter(function(a){ return a.Audit_Type===qaAnalyticsTab; });
+  var team=(document.getElementById('qaFilterTeam')||{}).value||'';
+  var agent=(document.getElementById('qaFilterAgent')||{}).value||'';
+  var evaluator=(document.getElementById('qaFilterEvaluator')||{}).value||'';
+  var from=(document.getElementById('qaFilterFrom')||{}).value||'';
+  var to=(document.getElementById('qaFilterTo')||{}).value||'';
+  var search=((document.getElementById('qaAnalyticsSearch')||{}).value||'').toLowerCase().trim();
+  return data.filter(function(a){
+    if(team&&a.Team!==team) return false;
+    if(agent&&a.Agent_Name!==agent) return false;
+    if(evaluator&&a.Evaluator!==evaluator) return false;
+    if(search&&!(a.Agent_Name||'').toLowerCase().includes(search)&&!(a.Evaluator||'').toLowerCase().includes(search)) return false;
+    var d=a.Date_of_Call||a.Date_of_Email||a.Date_of_Eval;
+    if(from&&d&&new Date(d)<new Date(from)) return false;
+    if(to&&d&&new Date(d)>new Date(to+'T23:59:59')) return false;
+    return true;
+  });
+};
+
+window.qaResetFilters=function(){
+  ['qaFilterTeam','qaFilterAgent','qaFilterEvaluator'].forEach(function(id){ var el=document.getElementById(id); if(el) el.selectedIndex=0; });
+  ['qaFilterFrom','qaFilterTo','qaAnalyticsSearch'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  qaRenderAnalytics();
+};
+
+window.qaRenderAnalytics=function(){
+  var data=qaGetFiltered();
+  qaPopulateFilterDropdowns(data);
+  var total=data.length, avg=total?(data.reduce(function(s,a){return s+(a.Avg_Score||0);},0)/total).toFixed(1):0;
+  var passed=data.filter(function(a){return a.Outcome==='Pass';}).length;
+  var failed=data.filter(function(a){return a.Outcome==='Fail';}).length;
+  var passRate=total?Math.round((passed/total)*100):0;
+  var kpis=[
+    {label:'Total Audits',val:total,color:'#0d9488'},{label:'Avg Score',val:avg+'%',color:'#f59e0b'},
+    {label:'Pass Rate',val:passRate+'%',color:'#10b981'},{label:'Fails',val:failed,color:'#ef4444'},
+    {label:'Passed',val:passed,color:'#10b981'},{label:qaAnalyticsTab+' Audits',val:total,color:'#8b5cf6'}
+  ];
+  document.getElementById('qaKPITiles').innerHTML='<div class="top-stats">'+kpis.map(function(k){
+    return '<div class="stat-card"><div class="stat-label">'+k.label+'</div><div class="stat-value" style="color:'+k.color+'">'+k.val+'</div></div>';
+  }).join('')+'</div>';
+  qaRenderAgentTiles(data);
+  qaRenderQaGrid(data);
+  if(qaChartsVisible) qaRenderCharts(data);
+};
+
+function qaPopulateFilterDropdowns(data){
+  function fill(id, vals, label){
+    var sel=document.getElementById(id); if(!sel||sel.options.length>1) return;
+    [...new Set(vals)].filter(Boolean).sort().forEach(function(v){ var o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+  }
+  fill('qaFilterAgent', qiaQaAudits.filter(function(a){return a.Audit_Type===qaAnalyticsTab;}).map(function(a){return a.Agent_Name;}));
+  fill('qaFilterEvaluator', qiaQaAudits.map(function(a){return a.Evaluator;}));
+}
+
+function qaRenderAgentTiles(data){
+  var agents=[...new Set(data.map(function(a){return a.Agent_Name;}))].filter(Boolean).sort();
+  var el=document.getElementById('qaSelectionTiles');
+  if(!agents.length){ el.innerHTML=''; return; }
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem;">'+agents.slice(0,8).map(function(ag){
+    var agData=data.filter(function(a){return a.Agent_Name===ag;});
+    var avg=agData.length?(agData.reduce(function(s,a){return s+(a.Avg_Score||0);},0)/agData.length).toFixed(0):0;
+    var color=avg>=70?'#10b981':avg>=50?'#f59e0b':'#ef4444';
+    return '<div class="lm-tile" onclick="document.getElementById(\'qaFilterAgent\').value=\''+ag.replace(/'/g,"\\'")+'\';qaRenderAnalytics();"><h3>'+qiaEsc(ag)+'</h3><div class="lm-stat-value" style="color:'+color+'">'+avg+'%</div><div style="font-size:.72rem;color:var(--t3);">'+agData.length+' audits</div></div>';
+  }).join('')+'</div>';
+}
+
+function qaRenderQaGrid(data){
+  var wrap=document.getElementById('qaGridWrap');
+  if(qaGridApi){ try{qaGridApi.destroy();}catch(e){} qaGridApi=null; }
+  wrap.innerHTML='<div class="table-section"><div class="table-header"><div class="table-title">'+qaAnalyticsTab+' Audits</div><div><button class="export-btn" type="button" onclick="qaExportCSV()">Export</button></div></div><div id="qaGridDiv" class="ag-theme-alpine" style="height:480px;width:100%;"></div></div>';
+  var cols=[
+    qiaSetFilterCol({field:'Team',headerName:'Team',width:90}, qiaTeams.slice()),
+    {field:'Agent_Name',headerName:'Agent',width:150,filter:QiaSetColumnFilter},
+    {field:'Evaluator',headerName:'Evaluator',width:130,filter:QiaSetColumnFilter},
+    {field:'Reference_ID',headerName:'Ref ID',width:120,filter:QiaSetColumnFilter},
+    {field:'Date_of_Eval',headerName:'Eval Date',width:110,filter:QiaSetColumnFilter,valueFormatter:function(p){return qiaFmtDate(p.value);}},
+    {field:'Date_of_Call',headerName:'Audit Date',width:110,filter:QiaSetColumnFilter,valueFormatter:function(p){var v=p.data.Date_of_Call||p.data.Date_of_Email||'';return qiaFmtDate(v);}},
+    {field:'Avg_Score',headerName:'Score',width:90,filter:QiaSetColumnFilter,cellRenderer:function(p){var s=p.value||0,color=s>=70?'#10b981':s>=50?'#f59e0b':'#ef4444';return '<span style="font-weight:800;color:'+color+'">'+s+'%</span>';}},
+    qiaSetFilterCol({field:'Outcome',headerName:'Outcome',width:140,cellRenderer:function(p){var c=p.value==='Pass'?'#10b981':p.value==='Fail'?'#ef4444':'#f59e0b';return '<span class="status-badge" style="background:'+c+'22;color:'+c+'">'+qiaEsc(p.value)+'</span>';}},['Pass','Needs Improvement','Fail'])
+  ];
+  agGrid.createGrid(document.getElementById('qaGridDiv'),{columnDefs:cols,rowData:data,defaultColDef:qiaGridDefaults(),pagination:true,paginationPageSize:20,onGridReady:function(p){qaGridApi=p.api;}});
+}
+
+window.qaExportCSV=function(){ if(qaGridApi) qaGridApi.exportDataAsCsv({fileName:'QIA_QA_'+qaAnalyticsTab+'_'+new Date().toISOString().split('T')[0]+'.csv'}); };
+
+window.qaToggleCharts=function(){
+  qaChartsVisible=!qaChartsVisible;
+  var sec=document.getElementById('qaChartsSection');
+  sec.style.display=qaChartsVisible?'block':'none';
+  document.getElementById('qaChartsBtnText').textContent=qaChartsVisible?'Hide Analytics Charts':'Show Analytics Charts';
+  if(qaChartsVisible){ sec.innerHTML=qaChartsHTML(); qaRenderCharts(qaGetFiltered()); }
+};
+
+function qaChartsHTML(){
+  return '<div class="chart-card"><div class="chart-title">Score Trend</div><canvas id="qaScoreTrendChart" height="220"></canvas></div>'+
+    '<div class="charts-grid"><div class="chart-card"><div class="chart-title">Agent Performance</div><canvas id="qaAgentScoreChart" height="240"></canvas></div>'+
+    '<div class="chart-card"><div class="chart-title">Outcome Distribution</div><canvas id="qaOutcomeChart" height="240"></canvas></div></div>'+
+    '<div class="charts-grid"><div class="chart-card"><div class="chart-title">Pass / Fail Trend</div><canvas id="qaMonthlyTrendChart" height="220"></canvas></div>'+
+    '<div class="chart-card"><div class="chart-title">Evaluator Productivity</div><canvas id="qaEvaluatorChart" height="220"></canvas></div></div>'+
+    '<div class="chart-card"><div class="chart-title">Criteria Heatmap</div><div id="qaHeatmap"></div></div>'+
+    '<div class="chart-card"><div class="chart-title">Bottom 5 Agents</div><div id="qaBottom5"></div></div>';
+}
+
+function qaDestroyChart(id){ var c=document.getElementById(id); if(c&&c._chart){c._chart.destroy();c._chart=null;} }
+
+function qaRenderCharts(data){
+  qaDestroyChart('qaScoreTrendChart'); qaDestroyChart('qaAgentScoreChart'); qaDestroyChart('qaOutcomeChart');
+  qaDestroyChart('qaMonthlyTrendChart'); qaDestroyChart('qaEvaluatorChart');
+  function getDate(a){ return a.Date_of_Call||a.Date_of_Email||a.Date_of_Eval||''; }
+  var monthMap={};
+  data.forEach(function(a){ var d=getDate(a); if(!d)return; var k=new Date(d).toISOString().slice(0,7); if(!monthMap[k]) monthMap[k]={pass:0,needs:0,fail:0}; if(a.Outcome==='Pass')monthMap[k].pass++; else if(a.Outcome==='Needs Improvement')monthMap[k].needs++; else monthMap[k].fail++; });
+  var mk=Object.keys(monthMap).sort();
+  var st=document.getElementById('qaScoreTrendChart');
+  if(st) st._chart=new Chart(st,{type:'line',data:{labels:mk,datasets:[
+    {label:'Pass',data:mk.map(function(k){return monthMap[k].pass;}),borderColor:'#10b981',tension:.35},
+    {label:'Needs',data:mk.map(function(k){return monthMap[k].needs;}),borderColor:'#f59e0b',tension:.35},
+    {label:'Fail',data:mk.map(function(k){return monthMap[k].fail;}),borderColor:'#ef4444',tension:.35}
+  ]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true}}}});
+  var agents=[...new Set(data.map(function(a){return a.Agent_Name;}))].filter(Boolean).sort();
+  var agentAvgs=agents.map(function(ag){ var d=data.filter(function(a){return a.Agent_Name===ag;}); return d.length?+(d.reduce(function(s,a){return s+(a.Avg_Score||0);},0)/d.length).toFixed(1):0; });
+  var a1=document.getElementById('qaAgentScoreChart');
+  if(a1) a1._chart=new Chart(a1,{type:'bar',data:{labels:agents,datasets:[{label:'Avg %',data:agentAvgs,backgroundColor:'#0d9488',borderRadius:6}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{max:100,beginAtZero:true}}}});
+  var passC=data.filter(function(a){return a.Outcome==='Pass';}).length, needsC=data.filter(function(a){return a.Outcome==='Needs Improvement';}).length, failC=data.filter(function(a){return a.Outcome==='Fail';}).length;
+  var o1=document.getElementById('qaOutcomeChart');
+  if(o1) o1._chart=new Chart(o1,{type:'doughnut',data:{labels:['Pass','Needs Improvement','Fail'],datasets:[{data:[passC,needsC,failC],backgroundColor:['#10b981','#f59e0b','#ef4444']}]},options:{plugins:{legend:{position:'bottom'}}}});
+  var m1=document.getElementById('qaMonthlyTrendChart');
+  if(m1) m1._chart=new Chart(m1,{type:'bar',data:{labels:mk,datasets:[
+    {label:'Pass',data:mk.map(function(k){return monthMap[k].pass;}),backgroundColor:'#10b981'},
+    {label:'Needs',data:mk.map(function(k){return monthMap[k].needs;}),backgroundColor:'#f59e0b'},
+    {label:'Fail',data:mk.map(function(k){return monthMap[k].fail;}),backgroundColor:'#ef4444'}
+  ]},options:{scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}}});
+  var evaluators=[...new Set(data.map(function(a){return a.Evaluator;}))].filter(Boolean).sort();
+  var e1=document.getElementById('qaEvaluatorChart');
+  if(e1) e1._chart=new Chart(e1,{type:'bar',data:{labels:evaluators,datasets:[{label:'Audits',data:evaluators.map(function(ev){return data.filter(function(a){return a.Evaluator===ev;}).length;}),backgroundColor:'#14b8a6',borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  qaRenderHeatmap(data);
+  qaRenderBottom5(data);
+}
+
+function qaRenderHeatmap(data){
+  var el=document.getElementById('qaHeatmap'); if(!el) return;
+  var criteria=qaGetCriteria(qaAnalyticsTab);
+  var rows=criteria.map(function(cat){
+    var rel=data.filter(function(a){return a[cat.id]!==null&&a[cat.id]!==undefined&&a[cat.id]!=='';});
+    if(!rel.length) return null;
+    var avg=rel.reduce(function(s,a){return s+(a[cat.id]||0);},0)/rel.length;
+    return {cat:cat,avg:avg,count:rel.length};
+  }).filter(Boolean).sort(function(a,b){return a.avg-b.avg;});
+  el.innerHTML=rows.map(function(r){
+    var pct=(r.avg/QA_MAX_PER_CRITERION*100).toFixed(0), color=r.avg>=1.4?'#10b981':r.avg>=0.8?'#f59e0b':'#ef4444';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;"><div style="width:200px;font-size:.82rem;font-weight:600;">'+r.cat.label+'</div><div style="flex:1;background:var(--bg-secondary);border-radius:20px;height:8px;"><div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:20px;"></div></div><div style="width:60px;text-align:right;font-weight:700;color:'+color+'">'+r.avg.toFixed(2)+'/2</div></div>';
+  }).join('')||'<div style="color:var(--t3);padding:20px;text-align:center;">No data</div>';
+}
+
+function qaRenderBottom5(data){
+  var el=document.getElementById('qaBottom5'); if(!el) return;
+  var agents=[...new Set(data.map(function(a){return a.Agent_Name;}))].filter(Boolean);
+  var stats=agents.map(function(ag){
+    var d=data.filter(function(a){return a.Agent_Name===ag;});
+    return {name:ag,avg:d.length?d.reduce(function(s,a){return s+(a.Avg_Score||0);},0)/d.length:0,count:d.length};
+  }).sort(function(a,b){return a.avg-b.avg;}).slice(0,5);
+  el.innerHTML=stats.map(function(s,i){
+    var color=s.avg>=70?'#10b981':s.avg>=50?'#f59e0b':'#ef4444';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid var(--border);"><div style="font-weight:900;color:#ef4444;">#'+(i+1)+'</div><div style="flex:1;font-weight:700;">'+qiaEsc(s.name)+'</div><div style="font-size:.78rem;color:var(--t3);">'+s.count+' audits</div><div style="font-weight:900;color:'+color+'">'+s.avg.toFixed(1)+'%</div></div>';
+  }).join('')||'<div style="color:var(--t3);padding:20px;text-align:center;">No data</div>';
+}
+
 </script>
 </body>
 </html>
