@@ -400,8 +400,8 @@ body[data-theme="dark"] .status-dot,body[data-theme="duralux-dark"] .status-dot{
 .mq-x-abs{position:absolute;top:0;text-align:center;font-size:9px;font-weight:600;color:var(--t3);line-height:1.3;padding:0 2px;word-break:break-word;hyphens:auto;cursor:pointer;transition:color .15s,background .15s}
 .mq-x-abs:hover{color:var(--acc);background:var(--nab)}
 .mq-x-abs.sel{color:var(--acc);font-weight:800;background:var(--nab);border:1px solid var(--nab2);border-radius:4px}
-.mq-x-abs.growth-lbl{color:#16a34a;font-weight:700}
-.mq-x-abs.gap-lbl{color:#dc2626;font-weight:700}
+.mq-x-abs.growth-lbl{color:#22c55e;font-weight:700}
+.mq-x-abs.gap-lbl{color:#ef4444;font-weight:700}
 #mqBridgeLegend{display:flex;flex-wrap:wrap;gap:.35rem .65rem;margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border)}
 .mq-leg-chip{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;font-weight:600;color:var(--t3)}
 .mq-leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
@@ -1143,6 +1143,12 @@ const SP_MOBILE_REPORT_PATH=SP_MOBILE_REPORT_FOLDER+'/'+SP_MOBILE_REPORT_FILE;
 const MQ_IDB_NAME='GLKMobileQtdCache';
 const MQ_IDB_STORE='report';
 const MQ_LS_META_KEY='glk_mobile_qtd_meta';
+const MQ_LS_DATA_KEY='glk_mobile_qtd_b64';
+const MQ_LS_MAX_B64=1800000;
+const MQ_CLR_NET='#6366f1';
+const MQ_CLR_TARGET='#0891b2';
+const MQ_CLR_GROWTH='#22c55e';
+const MQ_CLR_GAP='#ef4444';
 const STATUS_WON  = ['Won','Billed'];
 const STATUS_IP   = ['Lead','Opportunity','On Hold','Proposed'];
 const STATUS_LOST = ['Lost','Cancelled','No Bid'];
@@ -1891,14 +1897,40 @@ function mqIdbOpen(cb){
   };
   req.onsuccess=function(){ cb(null,req.result); };
 }
+function mqArrayBufferCopy(buf){
+  if(!buf) return null;
+  try{ return buf.slice(0); }catch(e){
+    var u=new Uint8Array(buf);
+    return u.buffer.slice(u.byteOffset,u.byteOffset+u.byteLength);
+  }
+}
+function mqBufToB64(buf){
+  var bytes=new Uint8Array(buf);
+  var CHUNK=0x8000,parts=[];
+  for(var i=0;i<bytes.length;i+=CHUNK) parts.push(String.fromCharCode.apply(null,bytes.subarray(i,i+CHUNK)));
+  return btoa(parts.join(''));
+}
+function mqB64ToBuf(b64){
+  var bin=atob(b64),len=bin.length,buf=new ArrayBuffer(len),u=new Uint8Array(buf);
+  for(var i=0;i<len;i++) u[i]=bin.charCodeAt(i);
+  return buf;
+}
 function mqCacheSaveReport(arrayBuffer,meta,cb){
   cb=cb||function(){};
   var metaOut=Object.assign({},meta||{},{storage:meta&&meta.storage?meta.storage:'local',cachedAt:new Date().toISOString()});
+  var bufCopy=mqArrayBufferCopy(arrayBuffer);
   try{ localStorage.setItem(MQ_LS_META_KEY,JSON.stringify(metaOut)); }catch(e){}
+  try{
+    if(bufCopy&&bufCopy.byteLength<=MQ_LS_MAX_B64) localStorage.setItem(MQ_LS_DATA_KEY,mqBufToB64(bufCopy));
+    else localStorage.removeItem(MQ_LS_DATA_KEY);
+  }catch(e2){ try{ localStorage.removeItem(MQ_LS_DATA_KEY); }catch(e3){} }
   mqIdbOpen(function(err,db){
-    if(err){ console.warn('[GLK] IDB cache save skipped:',err.message); return cb(null,metaOut); }
+    if(err){
+      console.warn('[GLK] IDB cache save skipped:',err.message);
+      return cb(null,metaOut);
+    }
     var tx=db.transaction(MQ_IDB_STORE,'readwrite');
-    tx.objectStore(MQ_IDB_STORE).put({buffer:arrayBuffer,meta:metaOut},'latest');
+    tx.objectStore(MQ_IDB_STORE).put({buffer:bufCopy,meta:metaOut},'latest');
     tx.oncomplete=function(){ cb(null,metaOut); };
     tx.onerror=function(){ cb(null,metaOut); };
   });
@@ -1906,40 +1938,56 @@ function mqCacheSaveReport(arrayBuffer,meta,cb){
 function mqCacheLoadReport(cb){
   var meta=null;
   try{ meta=JSON.parse(localStorage.getItem(MQ_LS_META_KEY)||'null'); }catch(e){}
+  function tryLsB64(){
+    try{
+      var b64=localStorage.getItem(MQ_LS_DATA_KEY);
+      if(b64&&b64.length>20) return cb(null,mqB64ToBuf(b64),meta);
+    }catch(e){}
+    return cb(new Error('No cached report'),null,null);
+  }
   mqIdbOpen(function(err,db){
-    if(err) return cb(err,null,null);
+    if(err) return tryLsB64();
     var tx=db.transaction(MQ_IDB_STORE,'readonly');
     var req=tx.objectStore(MQ_IDB_STORE).get('latest');
     req.onsuccess=function(){
-      if(!req.result||!req.result.buffer) return cb(new Error('No cached report'),null,null);
-      cb(null,req.result.buffer,req.result.meta||meta);
+      if(!req.result||!req.result.buffer) return tryLsB64();
+      cb(null,mqArrayBufferCopy(req.result.buffer),req.result.meta||meta);
     };
-    req.onerror=function(){ cb(req.error||new Error('Cache read failed'),null,null); };
+    req.onerror=function(){ tryLsB64(); };
   });
 }
 function glkSpLoadMobileReport(cb){
-  spDownloadMobileReport(function(err,buffer){
-    if(!err&&buffer&&buffer.byteLength>0){
-      spGetMobileReportMeta(function(err2,meta){
-        var m=Object.assign({},meta||{},{storage:'sharepoint',originalName:meta&&meta.originalName});
-        mqCacheSaveReport(buffer,m,function(){
-          glkParseAndSetMobileReport(buffer,function(err3,parsed){
-            if(err3) return cb(err3);
-            GLK_MOBILE_REPORT_META=m;
-            cb(null,parsed,m);
+  cb=cb||function(){};
+  var gotReport=false;
+  mqCacheLoadReport(function(errC,bufferC,metaC){
+    if(!errC&&bufferC&&bufferC.byteLength>0){
+      glkParseAndSetMobileReport(bufferC,function(e,parsed){
+        if(!e&&parsed){
+          gotReport=true;
+          GLK_MOBILE_REPORT_META=Object.assign({},metaC||{},{storage:(metaC&&metaC.storage)||'local-cache'});
+          cb(null,parsed,GLK_MOBILE_REPORT_META);
+        }
+      });
+    }
+    spDownloadMobileReport(function(err,buffer){
+      if(!err&&buffer&&buffer.byteLength>0){
+        spGetMobileReportMeta(function(e2,meta){
+          var m=Object.assign({},meta||{},{storage:'sharepoint'});
+          mqCacheSaveReport(buffer,m,function(){
+            glkParseAndSetMobileReport(buffer,function(e3,parsed){
+              if(e3) return;
+              GLK_MOBILE_REPORT_META=m;
+              if(gotReport){
+                glkMobileQtdRefreshUI();
+                var mqView=el('mobile-qtd-view');
+                if(mqView&&mqView.style.display!=='none') renderMobileQtdBridge();
+              }else cb(null,parsed,m);
+            });
           });
         });
-      });
-      return;
-    }
-    console.log('[GLK] SharePoint report load failed, trying local cache:',err&&err.message);
-    mqCacheLoadReport(function(errC,bufferC,metaC){
-      if(errC||!bufferC) return cb(err||errC||new Error('No report in SharePoint or local cache'));
-      glkParseAndSetMobileReport(bufferC,function(err3,parsed){
-        if(err3) return cb(err3);
-        GLK_MOBILE_REPORT_META=Object.assign({},metaC||{},{storage:'local-cache'});
-        cb(null,parsed,GLK_MOBILE_REPORT_META);
-      });
+        return;
+      }
+      if(!gotReport) cb(err||errC||new Error('No mobile report found. Upload the daily GLK Excel once — it will be saved on SharePoint and this browser.'),null,null);
     });
   });
 }
@@ -4815,8 +4863,8 @@ function glkMobileQtdRefreshUI(){
       var dt=meta.uploadedAt?new Date(meta.uploadedAt).toLocaleString('en-GB'):'—';
       var src=meta.originalName&&meta.originalName!==meta.filename?' (from '+meta.originalName+')':'';
       var store=meta.storage==='sharepoint'
-        ?'<span style="color:#16a34a;">✓ SharePoint:</span> Shared Documents / GLK Mobile QTD'
-        :'<span style="color:#f59e0b;">✓ Saved on this browser</span>'+(meta.spError?' · SP upload failed':'');
+        ?'<span style="color:#16a34a;">✓ SharePoint</span> + browser backup'
+        :'<span style="color:#16a34a;">✓ Saved on this browser</span> (auto-loads on refresh)'+(meta.spError?' · SP upload failed':'');
       metaEl.innerHTML=store+' · <strong>'+meta.filename+'</strong>'+src+' · '+dt+' · '+GLK_MOBILE_REPORT.quarterLabel;
       if(repBtn) repBtn.style.display='inline-flex';
     }else if(GLK_MOBILE_REPORT){
@@ -5373,17 +5421,17 @@ function mqRenderBridgeLegend(){
     {c:'#2563eb',l:'Gross Adds (100%)'},
     {c:'#60a5fa',l:'In-flight Gross'},
     {c:'#ea580c',l:'Churn / Downgrade'},
-    {c:'#16a34a',l:'Net Forecast'},
-    {c:'#059669',l:'Target'},
-    {c:'#16a34a',l:'Growth vs Target'},
-    {c:'#dc2626',l:'Gap to Target'}
+    {c:MQ_CLR_NET,l:'Net Forecast'},
+    {c:MQ_CLR_TARGET,l:'Target'},
+    {c:MQ_CLR_GROWTH,l:'Growth vs Target'},
+    {c:MQ_CLR_GAP,l:'Gap to Target'}
   ];
   leg.innerHTML=chips.map(function(x){
     return '<span class="mq-leg-chip"><span class="mq-leg-dot" style="background:'+x.c+';"></span>'+x.l+'</span>';
   }).join('');
 }
 function glkMobileQtdSectionPlugin(bars){
-  var fills={actuals:'rgba(29,78,216,.05)',gross:'rgba(59,130,246,.045)',churn:'rgba(234,88,12,.045)',outcome:'rgba(22,163,74,.05)',empty:'rgba(148,163,184,.04)'};
+  var fills={actuals:'rgba(29,78,216,.05)',gross:'rgba(59,130,246,.045)',churn:'rgba(234,88,12,.045)',outcome:'rgba(99,102,241,.04)',empty:'rgba(148,163,184,.04)'};
   return {id:'mqSections',beforeDatasetsDraw:function(chart){
     var meta=chart.getDatasetMeta(0), ctx=chart.ctx, area=chart.chartArea;
     if(!meta||!meta.data||!meta.data.length) return;
@@ -5690,17 +5738,17 @@ function renderMobileQtdBridge(){
   }
   var fc=calc.forecast;
   var fcDisp=fc;
-  pushBar({value:fc,trueCum:fc,displayStart:0,displayEnd:fcDisp,color:'#16a34a',type:'total',custName:'Net Forecast',section:'outcome'},'Net Forecast · '+fmtLines(fc));
+  pushBar({value:fc,trueCum:fc,displayStart:0,displayEnd:fcDisp,color:MQ_CLR_NET,type:'total',custName:'Net Forecast',section:'outcome'},'Net Forecast · '+fmtLines(fc));
   var tgtDisp=calc.target;
-  pushBar({value:calc.target,trueCum:calc.target,displayStart:0,displayEnd:tgtDisp,color:'#059669',type:'target',custName:'Target',section:'outcome'},'Target · '+fmtLines(calc.target));
+  pushBar({value:calc.target,trueCum:calc.target,displayStart:0,displayEnd:tgtDisp,color:MQ_CLR_TARGET,type:'target',custName:'Target',section:'outcome'},'Target · '+fmtLines(calc.target));
   if(calc.target>0){
     if(calc.gap>0){
       var gs2=Math.min(fcDisp,tgtDisp),ge2=Math.max(fcDisp,tgtDisp);
       if(ge2===gs2) ge2=gs2+dispH(calc.gap);
-      pushBar({value:calc.gap,trueCum:calc.target,displayStart:gs2,displayEnd:ge2,color:'#dc2626',type:'gap',custName:'Gap to Target',section:'outcome'},'Gap · '+fmtLines(calc.gap));
+      pushBar({value:calc.gap,trueCum:calc.target,displayStart:gs2,displayEnd:ge2,color:MQ_CLR_GAP,type:'gap',custName:'Gap to Target',section:'outcome'},'Gap · '+fmtLines(calc.gap));
     }else if(calc.growth>0){
       var gs3=tgtDisp,ge3=tgtDisp+dispH(calc.growth);
-      pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:'#16a34a',type:'growth',custName:'Growth vs Target',section:'outcome'},'Growth · +'+fmtLines(calc.growth));
+      pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:MQ_CLR_GROWTH,type:'growth',custName:'Growth vs Target',section:'outcome'},'Growth · +'+fmtLines(calc.growth));
     }
   }
   var yMax=Math.max(calc.forecast,calc.target,calc.actualsQtd,1);
@@ -5737,6 +5785,14 @@ function renderMobileQtdBridge(){
       data:{labels:bars.map(function(b){return b.custName||'';}),datasets:[{
         data:bars.map(glkMobileQtdFloatBar),
         backgroundColor:bars.map(function(b){return b.color;}),
+        borderColor:bars.map(function(b){
+          if(b.type==='total') return '#4338ca';
+          if(b.type==='target') return '#155e75';
+          if(b.type==='growth') return '#15803d';
+          if(b.type==='gap') return '#b91c1c';
+          return 'transparent';
+        }),
+        borderWidth:bars.map(function(b){return (b.type==='total'||b.type==='target'||b.type==='growth'||b.type==='gap')?2:0;}),
         borderRadius:6,borderSkipped:false,
         barPercentage:.82,categoryPercentage:.88,minBarLength:0,maxBarThickness:56
       }]},
@@ -5775,8 +5831,8 @@ function renderMobileQtdBridge(){
   var sum=el('mobileQtdSummaryWrap');
   if(sum){
     var gapTxt=calc.gap>0
-      ?'<span style="color:#dc2626;">'+fmtLines(calc.gap)+' short of target</span>'
-      :'<span style="color:#16a34a;">+'+fmtLines(calc.growth)+' ahead of target</span>';
+      ?'<span style="color:'+MQ_CLR_GAP+';">'+fmtLines(calc.gap)+' short of target</span>'
+      :'<span style="color:'+MQ_CLR_GROWTH+';">+'+fmtLines(calc.growth)+' ahead of target</span>';
     sum.innerHTML='<strong>'+(calc.isBest?'Best':'Worst')+' Case</strong> · Actuals QTD '+fmtLines(calc.actualsQtd)+
       ' · Gross 100% '+fmtLines(calc.gross100)+
       ' · In-flight Gross '+fmtLines(calc.inflightGross)+
@@ -5788,9 +5844,8 @@ function renderMobileQtdBridge(){
 function glkMobileQtdInit(){
   buildMqFilters();
   glkSpLoadMobileReport(function(err){
-    if(err){
-      console.log('[GLK] No mobile report in SharePoint yet (or cannot read):',err.message);
-      GLK_MOBILE_REPORT=null;
+    if(err&&!GLK_MOBILE_REPORT){
+      console.log('[GLK] No mobile report yet:',err.message);
       GLK_MOBILE_REPORT_META=null;
     }
     glkMobileQtdRefreshUI();
