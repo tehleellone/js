@@ -441,18 +441,14 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('click', function(e) {
   var t = e.target;
   if (!t) return;
-  if (t.id === 'taSaveBtn') { e.preventDefault(); taSaveAnalysis(); return; }
-  if (t.id === 'taClearBtn') { e.preventDefault(); var f = document.getElementById('taForm'); if (f) f.reset(); return; }
-  if (t.id === 'qaSubmitBtn') { e.preventDefault(); qaSubmitAudit(); return; }
-  if (t.id === 'qaClearBtn') { e.preventDefault(); qaClearForm(); return; }
+  if (t.closest && t.closest('#taSaveBtn')) { e.preventDefault(); taSaveAnalysis(); return; }
+  if (t.closest && t.closest('#taClearBtn')) { e.preventDefault(); taClearForm(); return; }
+  if (t.closest && t.closest('#qaSubmitBtn')) { e.preventDefault(); qaSubmitAudit(); return; }
+  if (t.closest && t.closest('#qaClearBtn')) { e.preventDefault(); qaClearForm(); return; }
   var taTab = t.closest ? t.closest('[data-ta-tab]') : null;
   if (taTab) { e.preventDefault(); taSetTab(taTab.getAttribute('data-ta-tab')); return; }
   var qaTab = t.closest ? t.closest('[data-qa-tab]') : null;
   if (qaTab) { e.preventDefault(); qaSetTab(qaTab.getAttribute('data-qa-tab')); return; }
-});
-
-document.addEventListener('submit', function(e) {
-  if (e.target && e.target.id === 'taForm') { e.preventDefault(); taSaveAnalysis(); }
 });
 
 setTimeout(function() {
@@ -872,9 +868,20 @@ function taSel(k, label, opts) {
   return '<div class="qia-field"><label>' + label + '</label><select id="' + id + '">' + opts.map(function(o){ return '<option>' + o + '</option>'; }).join('') + '</select></div>';
 }
 
+function taClearForm(){
+  var root=document.getElementById('taFormRoot');
+  if(!root) return;
+  root.querySelectorAll('input,textarea,select').forEach(function(el){
+    if(el.tagName==='SELECT') el.selectedIndex=0;
+    else el.value='';
+  });
+  var msg=document.getElementById('taSubmitMsg');
+  if(msg) msg.innerHTML='';
+}
+
 function taRenderSubmitSection(){
   var h = '<div class="form-card qia-form-page"><div class="qia-form-head"><h3>New Topic Analysis</h3><span style="font-size:.78rem;color:var(--t3);">Fields map to your SharePoint list</span></div>';
-  h += '<form id="taForm" novalidate>';
+  h += '<div id="taFormRoot">';
   h += '<div class="qia-form-section"><div class="qia-form-section-title">Customer & Interaction</div><div class="qia-row-3">';
   h += taF('Date_Time', 'Date & Time', 'datetime-local', true);
   h += taF('INUM', 'INUM'); h += taF('Calling_Number', 'Calling Number');
@@ -920,7 +927,7 @@ function taRenderSubmitSection(){
   h += taF('Manager_QA_Comments', 'Manager / QA Comments', 'textarea');
   h += '</div></div>';
   h += '<div class="qia-form-actions"><button type="button" class="reset-btn" id="taClearBtn">Clear</button><button type="button" class="export-btn" id="taSaveBtn">Save to SharePoint</button></div>';
-  h += '</form><div id="taSubmitMsg" style="margin-top:12px;font-size:.84rem;font-weight:600;"></div></div>';
+  h += '</div><div id="taSubmitMsg" style="margin-top:12px;font-size:.84rem;font-weight:600;"></div></div>';
   document.getElementById('taTabSubmitSection').innerHTML = h;
 }
 
@@ -944,9 +951,12 @@ function taBuildSubmitPayload() {
 }
 
 window.taSaveAnalysis=async function(){
-  var form=document.getElementById('taForm');
+  var root=document.getElementById('taFormRoot');
   var msgEl=document.getElementById('taSubmitMsg');
-  if(!form){ if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">Form not found — open Submit Analysis tab again.</span>'; return; }
+  if(!root){
+    if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">Submit form not loaded — click Submit Analysis tab again.</span>';
+    return;
+  }
   var dt=document.getElementById(taFieldId('Date_Time'));
   var cc=document.getElementById(taFieldId('Customer_Claim'));
   if(!dt||!dt.value){ if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">Date & Time is required.</span>'; if(dt) dt.focus(); return; }
