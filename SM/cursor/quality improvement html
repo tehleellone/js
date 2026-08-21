@@ -438,6 +438,23 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
+document.addEventListener('click', function(e) {
+  var t = e.target;
+  if (!t) return;
+  if (t.id === 'taSaveBtn') { e.preventDefault(); taSaveAnalysis(); return; }
+  if (t.id === 'taClearBtn') { e.preventDefault(); var f = document.getElementById('taForm'); if (f) f.reset(); return; }
+  if (t.id === 'qaSubmitBtn') { e.preventDefault(); qaSubmitAudit(); return; }
+  if (t.id === 'qaClearBtn') { e.preventDefault(); qaClearForm(); return; }
+  var taTab = t.closest ? t.closest('[data-ta-tab]') : null;
+  if (taTab) { e.preventDefault(); taSetTab(taTab.getAttribute('data-ta-tab')); return; }
+  var qaTab = t.closest ? t.closest('[data-qa-tab]') : null;
+  if (qaTab) { e.preventDefault(); qaSetTab(qaTab.getAttribute('data-qa-tab')); return; }
+});
+
+document.addEventListener('submit', function(e) {
+  if (e.target && e.target.id === 'taForm') { e.preventDefault(); taSaveAnalysis(); }
+});
+
 setTimeout(function() {
   if (window.__qiaStarted) return;
   qiaShowFatal('JavaScript did not start. If this file is opened from a SharePoint library, upload it to Site Assets and open it from there, or host it in a Content Editor Web Part on a site page.');
@@ -696,8 +713,8 @@ function qiaGridDefaults(){ return {sortable:true,resizable:true,filter:QiaSetCo
 function taRenderShell() {
   var c=document.getElementById('taContent');
   c.innerHTML='<div class="hero-banner"><div style="width:52px;height:52px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;"><i data-lucide="message-square-text" style="width:26px;height:26px;color:#fff;"></i></div><div><h2>Topic Analysis</h2><p>Voice of Customer — drivers, root cause & action plans</p></div></div>'+
-    '<div class="tab-bar"><button type="button" class="tab-btn active" id="taTabAnalytics" onclick="taSetTab(\'analytics\')"><i data-lucide="bar-chart-3" style="width:14px;height:14px;"></i>Analytics</button>'+
-    '<button type="button" class="tab-btn" id="taTabSubmit" onclick="taSetTab(\'submit\')"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i>Submit Analysis</button></div>'+
+    '<div class="tab-bar"><button type="button" class="tab-btn active" id="taTabAnalytics" data-ta-tab="analytics"><i data-lucide="bar-chart-3" style="width:14px;height:14px;"></i>Analytics</button>'+
+    '<button type="button" class="tab-btn" id="taTabSubmit" data-ta-tab="submit"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i>Submit Analysis</button></div>'+
     '<div id="taTabAnalyticsSection"></div><div id="taTabSubmitSection" style="display:none;"></div>';
   taSetTab(taCurrentTab);
   if(typeof lucide!=='undefined') lucide.createIcons();
@@ -857,7 +874,7 @@ function taSel(k, label, opts) {
 
 function taRenderSubmitSection(){
   var h = '<div class="form-card qia-form-page"><div class="qia-form-head"><h3>New Topic Analysis</h3><span style="font-size:.78rem;color:var(--t3);">Fields map to your SharePoint list</span></div>';
-  h += '<form id="taForm" onsubmit="return taSubmit(event)">';
+  h += '<form id="taForm" novalidate>';
   h += '<div class="qia-form-section"><div class="qia-form-section-title">Customer & Interaction</div><div class="qia-row-3">';
   h += taF('Date_Time', 'Date & Time', 'datetime-local', true);
   h += taF('INUM', 'INUM'); h += taF('Calling_Number', 'Calling Number');
@@ -902,7 +919,7 @@ function taRenderSubmitSection(){
   h += taF('Action_Plan', 'Action Plan', 'textarea');
   h += taF('Manager_QA_Comments', 'Manager / QA Comments', 'textarea');
   h += '</div></div>';
-  h += '<div class="qia-form-actions qia-span-full"><button type="button" class="reset-btn" onclick="document.getElementById(\'taForm\').reset()">Clear</button><button type="submit" class="export-btn">Save to SharePoint</button></div>';
+  h += '<div class="qia-form-actions"><button type="button" class="reset-btn" id="taClearBtn">Clear</button><button type="button" class="export-btn" id="taSaveBtn">Save to SharePoint</button></div>';
   h += '</form><div id="taSubmitMsg" style="margin-top:12px;font-size:.84rem;font-weight:600;"></div></div>';
   document.getElementById('taTabSubmitSection').innerHTML = h;
 }
@@ -926,38 +943,40 @@ function taBuildSubmitPayload() {
   return body;
 }
 
-window.taSubmit=function(e){
-  e.preventDefault();
-  var msgEl = document.getElementById('taSubmitMsg');
-  try {
-    var body = taBuildSubmitPayload();
-    if (QIA_DUMMY_MODE) {
-      var row = Object.assign({ ID: qiaTopics.length + 1 }, body);
-      qiaTopics.unshift(row);
-      if (msgEl) msgEl.innerHTML = '<span style="color:#10b981;">Saved locally (demo mode)</span>';
-      taSetTab('analytics'); taRenderAnalytics();
-      return false;
-    }
-    taSubmitToSp(body);
-  } catch(err) {
-    if (msgEl) msgEl.innerHTML = '<span style="color:#ef4444;">' + qiaEsc(err.message) + '</span>';
-  }
-  return false;
-};
-
-async function taSubmitToSp(body){
+window.taSaveAnalysis=async function(){
+  var form=document.getElementById('taForm');
   var msgEl=document.getElementById('taSubmitMsg');
-  if(msgEl) msgEl.innerHTML='<span style="color:var(--t3);">Saving to SharePoint…</span>';
+  if(!form){ if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">Form not found — open Submit Analysis tab again.</span>'; return; }
+  var dt=document.getElementById(taFieldId('Date_Time'));
+  var cc=document.getElementById(taFieldId('Customer_Claim'));
+  if(!dt||!dt.value){ if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">Date & Time is required.</span>'; if(dt) dt.focus(); return; }
+  if(!cc||!cc.value.trim()){ if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">Customer Claim is required.</span>'; if(cc) cc.focus(); return; }
+  if(msgEl) msgEl.innerHTML='<span style="color:var(--t3);">Preparing save…</span>';
   try{
-    var created = await qiaSpCreateItem(LIST_TOPIC, body);
+    var body=taBuildSubmitPayload();
+    if(QIA_DUMMY_MODE){
+      qiaTopics.unshift(Object.assign({ID:qiaTopics.length+1},body));
+      if(msgEl) msgEl.innerHTML='<span style="color:#10b981;">Saved locally (demo mode)</span>';
+      taSetTab('analytics'); taRenderAnalytics();
+      return;
+    }
+    if(msgEl) msgEl.innerHTML='<span style="color:var(--t3);">Saving to SharePoint…</span>';
+    var created=await qiaSpCreateItem(LIST_TOPIC, body);
     await qiaFetchTopics();
     taSetTab('analytics');
     taRenderAnalytics();
-    if(msgEl) msgEl.innerHTML='<span style="color:#10b981;">Saved — Item #' + (created.Id || created.ID || '') + '</span>';
+    if(msgEl) msgEl.innerHTML='<span style="color:#10b981;">Saved — Item #'+(created.Id||created.ID||'?')+'</span>';
   }catch(err){
-    if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">' + qiaEsc(err.message||String(err)) + '</span>';
+    console.error('[QIA] Topic save failed', err);
+    if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">'+qiaEsc(err.message||String(err))+'</span>';
   }
-}
+};
+
+window.taSubmit=function(e){
+  if(e&&e.preventDefault) e.preventDefault();
+  taSaveAnalysis();
+  return false;
+};
 
 // QUALITY ASSURANCE (QIA — Call & Email only)
 function qaGetCriteria(type){ return type==='Email'?QA_EMAIL_CRITERIA:QA_CALL_CRITERIA; }
@@ -990,8 +1009,8 @@ function qaGenDummyAudits(){
 function qaRenderShell(){
   var c=document.getElementById('qaContent');
   c.innerHTML='<div class="hero-banner"><div style="width:52px;height:52px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;"><i data-lucide="shield-check" style="width:26px;height:26px;color:#fff;"></i></div><div><h2>Quality Assurance</h2><p>Call & Email audits — independent from Service Management</p></div></div>'+
-    '<div class="tab-bar"><button type="button" class="tab-btn" id="qaTabSubmit" onclick="qaSetTab(\'submit\')"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i>Submit Audit</button>'+
-    '<button type="button" class="tab-btn active" id="qaTabAnalytics" onclick="qaSetTab(\'analytics\')"><i data-lucide="bar-chart-3" style="width:14px;height:14px;"></i>Analytics</button></div>'+
+    '<div class="tab-bar"><button type="button" class="tab-btn" id="qaTabSubmit" data-qa-tab="submit"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i>Submit Audit</button>'+
+    '<button type="button" class="tab-btn active" id="qaTabAnalytics" data-qa-tab="analytics"><i data-lucide="bar-chart-3" style="width:14px;height:14px;"></i>Analytics</button></div>'+
     '<div id="qaTabSubmitSection" style="display:none;"></div><div id="qaTabAnalyticsSection"></div>';
   qaSetTab(qaCurrentTab);
   if(typeof lucide!=='undefined') lucide.createIcons();
@@ -1047,7 +1066,7 @@ function qaRenderSubmitForm(){
     '<div id="qaOutcomePill" class="qia-outcome-pill" style="background:var(--chip);color:var(--t3);">—</div></div></div>'+
     '<div id="qaCommentBlock" style="display:none;" class="qia-form-section"><div class="qia-form-section-title">Criterion Comments</div><div id="qaCommentInputs"></div></div>'+
     '<div class="qia-form-section"><div class="qia-form-section-title">General Comments</div><div class="qia-field"><textarea id="qaComments" placeholder="Optional overall comments" rows="3"></textarea></div></div>'+
-    '<div class="qia-form-actions"><button type="button" class="reset-btn" onclick="qaClearForm()">Clear</button><button type="button" class="export-btn" onclick="qaSubmitAudit()">Submit Audit</button></div>'+
+    '<div class="qia-form-actions"><button type="button" class="reset-btn" id="qaClearBtn">Clear</button><button type="button" class="export-btn" id="qaSubmitBtn">Submit Audit</button></div>'+
     '<div id="qaSubmitMsg" style="margin-top:12px;font-size:.84rem;font-weight:600;"></div></div>';
   document.getElementById('qaDateOfEval').value=new Date().toISOString().split('T')[0];
   qaHandleTypeChange();
