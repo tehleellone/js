@@ -7,6 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/32.0.2/ag-grid-community.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-grid.css">
 <link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-theme-alpine.css">
 <style>
@@ -1094,7 +1096,13 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
               </span>
               <span id="mqBridgeSubtitle" style="font-size:.68rem;font-weight:600;color:var(--t3);">Actuals → Gross 100% → Top 5 → Others → | Churn Top 5 → Others → Net Forecast → Gap</span>
             </span>
-            <div id="mqTargetBadge" style="font-size:.72rem;font-weight:700;color:var(--acc);padding:.25rem .65rem;background:var(--nab);border:1px solid var(--nab2);border-radius:8px;">Target: —</div>
+            <div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;">
+              <div id="mqTargetBadge" style="font-size:.72rem;font-weight:700;color:var(--acc);padding:.25rem .65rem;background:var(--nab);border:1px solid var(--nab2);border-radius:8px;">Target: —</div>
+              <button type="button" class="export-btn" onclick="mqExportBridgePpt()" title="Download bridge chart as PowerPoint" style="font-size:.72rem;padding:.35rem .65rem;">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                Export PPT
+              </button>
+            </div>
           </div>
           <div class="mq-bridge-scroll" id="mqBridgeScroll">
             <div id="mqChartOuter">
@@ -5851,6 +5859,121 @@ function glkMobileQtdInit(){
     glkMobileQtdRefreshUI();
   });
 }
+function mqStripHtml(s){
+  var d=document.createElement('div');
+  d.innerHTML=s||'';
+  return (d.textContent||d.innerText||'').trim();
+}
+function mqCaptureBridgeForExport(cb){
+  var scroll=el('mqBridgeScroll');
+  var outer=el('mqChartOuter');
+  var chart=CHARTS.mobileQtd;
+  if(!scroll||!outer||!chart){
+    return cb(new Error('Chart not ready. Open Mobile QTD Bridge after the report loads.'));
+  }
+  if(typeof html2canvas==='undefined'){
+    try{ return cb(null,chart.toBase64Image('image/png',2)); }
+    catch(e){ return cb(new Error('Capture libraries not loaded')); }
+  }
+  var prevOverflow=scroll.style.overflow;
+  var prevScroll=scroll.scrollLeft;
+  var prevOuterMin=outer.style.minWidth;
+  var prevOuterW=outer.style.width;
+  scroll.style.overflow='visible';
+  scroll.scrollLeft=0;
+  var fullW=Math.max(outer.scrollWidth,outer.offsetWidth,scroll.scrollWidth);
+  outer.style.minWidth=fullW+'px';
+  outer.style.width=fullW+'px';
+  if(CHARTS.mobileQtd) CHARTS.mobileQtd.resize();
+  mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS||[]);
+  setTimeout(function(){
+    html2canvas(scroll,{
+      scale:2,
+      backgroundColor:'#ffffff',
+      useCORS:true,
+      logging:false,
+      scrollX:0,
+      scrollY:-window.scrollY,
+      width:fullW,
+      windowWidth:fullW+80
+    }).then(function(canvas){
+      scroll.style.overflow=prevOverflow;
+      scroll.scrollLeft=prevScroll;
+      outer.style.minWidth=prevOuterMin;
+      outer.style.width=prevOuterW;
+      if(CHARTS.mobileQtd) CHARTS.mobileQtd.resize();
+      mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS||[]);
+      cb(null,canvas.toDataURL('image/png'));
+    }).catch(function(err){
+      scroll.style.overflow=prevOverflow;
+      scroll.scrollLeft=prevScroll;
+      outer.style.minWidth=prevOuterMin;
+      outer.style.width=prevOuterW;
+      if(CHARTS.mobileQtd) CHARTS.mobileQtd.resize();
+      try{ cb(null,chart.toBase64Image('image/png',2)); }
+      catch(e2){ cb(err||e2); }
+    });
+  },120);
+}
+window.mqExportBridgePpt=function(){
+  if(typeof PptxGenJS==='undefined'){
+    alert('PowerPoint library still loading. Wait a few seconds and try again.');
+    return;
+  }
+  if(!CHARTS.mobileQtd||!GLK_MOBILE_REPORT){
+    alert('Upload the GLK report and wait for the bridge chart to render before exporting.');
+    return;
+  }
+  glkShowLoader('Building PowerPoint…');
+  mqCaptureBridgeForExport(function(err,imgData){
+    if(err||!imgData){
+      glkHideLoader();
+      alert('Could not capture chart: '+(err?err.message:'unknown error'));
+      return;
+    }
+    try{
+      var calc=GLK_MQ_CALC_LAST||{};
+      var pptx=new PptxGenJS();
+      pptx.layout='LAYOUT_WIDE';
+      pptx.author='GLK Pipeline Dashboard';
+      pptx.title='Mobile Net Adds QTD Bridge';
+      pptx.subject='Mobile QTD Bridge Export';
+      var slide=pptx.addSlide();
+      slide.background={color:'FFFFFF'};
+      slide.addText('Mobile Net Adds — QTD Bridge',{
+        x:0.35,y:0.12,w:12.5,h:0.42,fontSize:22,bold:true,color:'1e1133',fontFace:'Arial'
+      });
+      var caseLbl=(calc.isBest?'Best Case':'Worst Case');
+      var qLbl=calc.quarter&&calc.year?('Q'+calc.quarter+' '+calc.year):'';
+      var scopeLbl=calc.vertical||'GLK Overall';
+      slide.addText(caseLbl+(qLbl?(' · '+qLbl):'')+' · '+scopeLbl,{
+        x:0.35,y:0.52,w:12.5,h:0.28,fontSize:11,color:'64748b',fontFace:'Arial'
+      });
+      var badge=el('mqTargetBadge');
+      if(badge&&badge.textContent){
+        slide.addText(badge.textContent,{x:0.35,y:0.78,w:12.5,h:0.22,fontSize:10,bold:true,color:'0891b2',fontFace:'Arial'});
+      }
+      var sumEl=el('mobileQtdSummaryWrap');
+      var sumTxt=sumEl?mqStripHtml(sumEl.innerHTML):'';
+      if(sumTxt){
+        slide.addText(sumTxt,{x:0.35,y:0.98,w:12.5,h:0.22,fontSize:9,color:'475569',fontFace:'Arial'});
+      }
+      slide.addImage({data:imgData,x:0.2,y:1.22,w:12.9,h:5.75});
+      var legEl=el('mqBridgeLegend');
+      if(legEl&&legEl.textContent){
+        slide.addText(legEl.textContent,{x:0.35,y:7.05,w:12.5,h:0.28,fontSize:8,color:'64748b',fontFace:'Arial'});
+      }
+      var dt=new Date().toISOString().slice(0,10);
+      var fnScope=String(scopeLbl).replace(/[^\w\s-]+/g,'').trim().replace(/\s+/g,'_')||'GLK';
+      pptx.writeFile({fileName:'GLK_Mobile_QTD_Bridge_'+fnScope+'_'+dt+'.pptx'});
+      glkHideLoader();
+    }catch(e){
+      glkHideLoader();
+      console.error('[GLK] PPT export error:',e);
+      alert('PowerPoint export failed: '+e.message);
+    }
+  });
+};
 
 // ══════════════════════════════════════════════════════════════════
 //  INIT
