@@ -386,10 +386,20 @@ body[data-theme="dark"] .status-dot,body[data-theme="duralux-dark"] .status-dot{
 .chart-title{font-size:.8rem;font-weight:700;color:var(--t2);margin-bottom:.65rem;display:flex;align-items:center;gap:.35rem}
 .chart-title svg{width:16px;height:16px;stroke:var(--acc);fill:none;stroke-width:2}
 .chart-container{position:relative;height:260px}
-.mq-bridge-scroll{overflow-x:auto;overflow-y:hidden;margin:0 -.15rem;padding:0 .15rem .15rem;border-radius:10px}
+.mq-bridge-scroll{overflow-x:auto;overflow-y:visible;margin:0 -.15rem;padding:0 .15rem .15rem;border-radius:10px}
 .mq-bridge-scroll::-webkit-scrollbar{height:8px}
 .mq-bridge-scroll::-webkit-scrollbar-thumb{background:var(--border-s);border-radius:4px}
-#mqChartWrap{height:520px;min-width:100%}
+#mqChartOuter{display:flex;flex-direction:column;min-width:100%}
+#mqChartWrap{position:relative;height:340px;min-width:100%;flex-shrink:0}
+#mqChartWrap canvas{display:block;width:100%!important;height:100%!important}
+#mqBracketRow{display:flex;align-items:flex-end;min-height:20px;margin-top:4px}
+.mq-bracket-cell{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex-shrink:0}
+.mq-bracket-line{display:block;width:calc(100% - 6px);height:0;border-top:1.5px solid rgba(100,116,139,.55);margin-bottom:2px}
+.mq-bracket-label{font-size:8px;font-weight:700;color:#64748b;line-height:1.2;text-align:center;padding:0 2px}
+#mqXAxisStrip{display:flex;align-items:flex-start;margin-top:2px;padding-bottom:4px}
+.mq-x-cell{text-align:center;font-size:9px;font-weight:600;color:var(--t3);line-height:1.3;padding:0 3px;word-break:break-word;hyphens:auto;cursor:pointer;flex-shrink:0;border-radius:4px;transition:color .15s,background .15s}
+.mq-x-cell:hover{color:var(--acc);background:var(--nab)}
+.mq-x-cell.sel{color:var(--acc);font-weight:800;background:var(--nab);border:1px solid var(--nab2)}
 #mqBridgeLegend{display:flex;flex-wrap:wrap;gap:.35rem .65rem;margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border)}
 .mq-leg-chip{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;font-weight:600;color:var(--t3)}
 .mq-leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
@@ -1051,19 +1061,23 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
             </div>
             <div class="filter-group">
               <label class="filter-label">Report level</label>
-              <select id="mqVerticalSel" class="fb-select" onchange="glkSetMobileQtdVertical(this.value)" style="width:100%;">
-                <option value="">GLK Overall</option>
-              </select>
+              <div class="ms-wrap" id="mqms_reportLevel">
+                <div class="ms-trigger" id="mqmst_reportLevel" onclick="event.stopPropagation();mqToggleReportLevel()">
+                  <span id="mqmstext_reportLevel">GLK Overall</span>
+                  <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <div class="ms-dropdown" id="mqmsd_reportLevel"></div>
+              </div>
             </div>
           </div>
 
           <div class="filters-date-divider">Pipeline filters</div>
-          <p style="font-size:.72rem;color:var(--t3);margin:-.35rem 0 .65rem;">QTD activation window is built in (current month → quarter-end). Select Product Family, Vertical, MNP, Services, Type of Request only.</p>
+          <p style="font-size:.72rem;color:var(--t3);margin:-.35rem 0 .65rem;">Mobile pipeline only · QTD activation window is built in (current month → quarter-end). Filter by MNP, Services, Type of Request.</p>
           <div class="filters-grid" id="mqFiltersGrid"></div>
           <div class="filter-actions" style="margin-top:.65rem;">
             <button type="button" class="reset-btn" onclick="mqResetAllFilters()">
               <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
-              Reset Pipeline Filters
+              Reset Filters
             </button>
           </div>
         </div>
@@ -1081,7 +1095,11 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
             <div id="mqTargetBadge" style="font-size:.72rem;font-weight:700;color:var(--acc);padding:.25rem .65rem;background:var(--nab);border:1px solid var(--nab2);border-radius:8px;">Target: —</div>
           </div>
           <div class="mq-bridge-scroll" id="mqBridgeScroll">
-            <div class="chart-container" id="mqChartWrap"><canvas id="chartMobileQtd"></canvas></div>
+            <div id="mqChartOuter">
+              <div class="chart-container" id="mqChartWrap"><canvas id="chartMobileQtd"></canvas></div>
+              <div id="mqBracketRow"></div>
+              <div id="mqXAxisStrip"></div>
+            </div>
           </div>
           <div id="mqBridgeLegend"></div>
           <div id="mqBarDetailHint">Click any bar for account details · click again to close</div>
@@ -1174,15 +1192,17 @@ let bridgeDrillVal='';
 let GLK_MOBILE_REPORT=null;
 let GLK_MOBILE_REPORT_META=null;
 let mqCase='worst';
-let mqVertical='';
+let mqReportLevels=[];
 let GLK_MQ_DETAIL_IDX=-1;
 let mqPeriod='qtd';
 let mqDateRules=[];
 let mqRuleSeq=0;
 let GLK_MQ_CALC_LAST=null;
+let GLK_MQ_LAST_BARS=null;
+let GLK_MQ_LAST_BAR_META=null;
+let GLK_MQ_LAST_BAR_SLOT=72;
+let GLK_MQ_LAST_CHART_W=900;
 const MQ_FILTER_DEFS=[
-  {key:'productFamily',label:'Product Family'},
-  {key:'vertical',label:'Vertical'},
   {key:'mnp',label:'MNP'},
   {key:'services',label:'Services'},
   {key:'typeOfRequest',label:'Type of Request'},
@@ -4451,34 +4471,95 @@ window.glkSetMobileQtdCase=function(c){
   el('mqCaseBest')?.classList.toggle('active',mqCase==='best');
   renderMobileQtdBridge();
 };
-window.glkSetMobileQtdVertical=function(v){
-  mqVertical=v||'';
-  mqSyncPipelineVerticalFromReportLevel(mqVertical);
+function mqGetReportLevelsChecked(){
+  var drop=el('mqmsd_reportLevel');
+  if(!drop) return mqReportLevels.slice();
+  return Array.from(drop.querySelectorAll('input:checked')).map(function(c){return c.value;});
+}
+function mqUpdateReportLevelText(){
+  var checked=mqGetReportLevelsChecked();
+  var te=el('mqmstext_reportLevel'); if(!te) return;
+  if(!checked.length){ te.textContent='GLK Overall'; return; }
+  if(checked.length===1) te.textContent=checked[0];
+  else te.textContent=checked.length+' verticals';
+  mqReportLevels=checked.slice();
+}
+window.mqToggleReportLevel=function(){
+  var drop=el('mqmsd_reportLevel'),trig=el('mqmst_reportLevel');
+  if(!drop||!trig) return;
+  var isOpen=drop.classList.contains('open');
+  document.querySelectorAll('#mobile-qtd-view .ms-dropdown.open').forEach(function(d){
+    d.classList.remove('open');
+    var t=el('mqmst_reportLevel'); if(t) t.classList.remove('open');
+  });
+  document.querySelectorAll('#mqFiltersGrid .ms-dropdown.open').forEach(function(d){d.classList.remove('open');});
+  if(!isOpen){
+    var rect=trig.getBoundingClientRect();
+    drop.style.top=(rect.bottom+4)+'px';
+    drop.style.left=rect.left+'px';
+    drop.style.width=Math.max(rect.width,200)+'px';
+    drop.classList.add('open');
+    trig.classList.add('open');
+  }
+};
+window.mqOnReportLevelChange=function(){
+  mqUpdateReportLevelText();
   GLK_MQ_DETAIL_IDX=-1;
   renderMobileQtdBridge();
 };
+function mqBuildReportLevelFilter(){
+  var drop=el('mqmsd_reportLevel'); if(!drop) return;
+  var prev=mqGetReportLevelsChecked();
+  drop.innerHTML='';
+  (GLK_MOBILE_REPORT?.verticals||[]).forEach(function(v){
+    if(!v.name) return;
+    var opt=document.createElement('div'); opt.className='ms-option';
+    var cid='mqrl_'+v.name.replace(/[^a-zA-Z0-9]/g,'_');
+    var checked=prev.indexOf(v.name)>=0;
+    opt.innerHTML='<input type="checkbox" id="'+cid+'" value="'+v.name+'"'+(checked?' checked':'')+' onchange="mqOnReportLevelChange()"><label for="'+cid+'">'+v.name+'</label>';
+    drop.appendChild(opt);
+  });
+  mqUpdateReportLevelText();
+}
+function mqGetActiveReportLevels(){
+  return mqGetReportLevelsChecked();
+}
+function mqResolveReportScope(report,levelNames){
+  if(!report) return {actualsQtd:0,target:0,label:'GLK Overall',scopes:[],missing:[]};
+  if(!levelNames||!levelNames.length){
+    var ov=report.overall||null;
+    return {
+      actualsQtd:ov?num(ov.actualQtd):0,
+      target:ov?num(ov.target):0,
+      label:'GLK Overall',
+      scopes:ov?[ov]:[],
+      missing:[]
+    };
+  }
+  var scopes=[],missing=[],actuals=0,target=0;
+  levelNames.forEach(function(name){
+    var sc=mqFindReportScope(report,name);
+    if(sc){ scopes.push(sc); actuals+=num(sc.actualQtd); target+=num(sc.target); }
+    else missing.push(name);
+  });
+  return {
+    actualsQtd:actuals,
+    target:target,
+    label:levelNames.length===1?levelNames[0]:levelNames.length+' verticals',
+    scopes:scopes,
+    missing:missing
+  };
+}
+function mqBidMatchesReportLevels(bid,levelNames){
+  if(!levelNames||!levelNames.length) return true;
+  return levelNames.some(function(v){return mqMatchVerticalName(bid.vertical,v);});
+}
+function mqIsMobileBid(b){
+  var pf=String(b.productFamily||'').trim().toLowerCase();
+  return pf==='mobile'||pf.indexOf('mobile')>=0;
+}
 function mqNormVertKey(s){
   return String(s||'').trim().toLowerCase().replace(/[\s\-–—_]+/g,'');
-}
-function mqGetReportLevelFromSelect(){
-  var sel=el('mqVerticalSel');
-  return sel?String(sel.value||'').trim():'';
-}
-function mqGetActiveReportVertical(){
-  var reportLevel=mqGetReportLevelFromSelect()||String(mqVertical||'').trim();
-  if(reportLevel) return reportLevel;
-  var vertVals=mqGetChecked('vertical');
-  if(vertVals.length===1) return vertVals[0];
-  return '';
-}
-function mqSyncPipelineVerticalFromReportLevel(v){
-  if(!v) return;
-  var drop=el('mqmsd_vertical');
-  if(!drop) return;
-  drop.querySelectorAll('input[type=checkbox]').forEach(function(cb){
-    cb.checked=!!(v&&mqMatchVerticalName(cb.value,v));
-  });
-  mqUpdateMsText('vertical');
 }
 function glkRowVertName(drow,startCol,monthCols){
   var prefer=monthCols.length?monthCols[0].col-1:Math.max(0,startCol-1);
@@ -4743,24 +4824,7 @@ function glkMobileQtdRefreshUI(){
       if(repBtn) repBtn.style.display='none';
     }
   }
-  var sel=el('mqVerticalSel');
-  if(sel){
-    var cur=mqVertical;
-    sel.innerHTML='<option value="">GLK Overall</option>';
-    (GLK_MOBILE_REPORT?.verticals||[]).forEach(function(v){
-      var opt=document.createElement('option');
-      opt.value=v.name; opt.textContent=v.name;
-      sel.appendChild(opt);
-    });
-    var matched=false;
-    if(cur){
-      for(var i=0;i<sel.options.length;i++){
-        if(sel.options[i].value===cur||mqMatchVerticalName(sel.options[i].value,cur)){ sel.value=sel.options[i].value; matched=true; break; }
-      }
-      if(!matched) sel.value=cur;
-    }
-    mqVertical=sel.value||'';
-  }
+  mqBuildReportLevelFilter();
 }
 function mqRulePrefix(id){ return 'mqR_'+id; }
 function mqDefaultDateRule(field){
@@ -4977,6 +5041,9 @@ function buildMqFilters(){
   });
 }
 window.mqResetAllFilters=function(){
+  var rlDrop=el('mqmsd_reportLevel');
+  if(rlDrop) rlDrop.querySelectorAll('input').forEach(function(c){c.checked=false;});
+  mqUpdateReportLevelText();
   MQ_FILTER_DEFS.forEach(function(fd){
     var drop=el('mqmsd_'+fd.key);
     if(drop) drop.querySelectorAll('input').forEach(function(c){c.checked=false;});
@@ -4998,10 +5065,8 @@ function glkMobilePipelineBids(){
   return mqApplyFilters();
 }
 function mqApplyBridgeBaseFilters(){
-  var bridgeKeys=['productFamily','vertical','mnp','services','typeOfRequest'];
-  var bids=ALL_BIDS.slice();
+  var bids=ALL_BIDS.filter(mqIsMobileBid);
   MQ_FILTER_DEFS.forEach(function(fd){
-    if(bridgeKeys.indexOf(fd.key)<0) return;
     var vals=mqGetChecked(fd.key);
     if(!vals.length) return;
     bids=bids.filter(function(b){return vals.indexOf(mqBidFieldVal(b,fd.key))>=0;});
@@ -5067,6 +5132,8 @@ function mqMatchVerticalName(bidVert,selVert){
 }
 function mqGetSelectedFilterLabels(){
   var out={};
+  var rl=mqGetReportLevelsChecked();
+  out['Report level']=rl.length?rl.join(', '):'GLK Overall';
   MQ_FILTER_DEFS.forEach(function(fd){
     var vals=mqGetChecked(fd.key);
     out[fd.label]=vals.length?vals.join(', '):'All';
@@ -5078,8 +5145,9 @@ function mqBuildRulesHtml(calc){
   var monthNames=MONTH_NAMES.slice(Math.max(0,(calc.quarter-1)*3),(calc.quarter)*3).join(', ');
   var html='<strong style="color:var(--acc);">Bridge rules (backend)</strong><br><br>';
   html+='<strong>Report level:</strong> '+calc.vertical+' · Actuals QTD '+fmtLines(calc.actualsQtd)+' · Target '+fmtLines(calc.target);
-  if(calc.reportScopeMissing) html+=' <span style="color:#f59e0b;">(vertical not found in uploaded report — check name)</span>';
+  if(calc.reportScopeMissing) html+=' <span style="color:#f59e0b;">(some verticals not found in report)</span>';
   html+='<br>';
+  html+='<strong>Pipeline scope:</strong> Mobile only<br>';
   html+='<strong>Scenario:</strong> '+(calc.isBest?'Best Case (Proposed + Opportunity in-flight)':'Worst Case (Proposed only in-flight)')+'<br>';
   html+='<strong>Activation window:</strong> Q'+calc.quarter+' '+calc.year+' — current month through quarter-end ('+monthNames+')<br><br>';
   html+='<strong>Gross Adds (100%):</strong> Closure Prob = 100% · Contracts: Acquisition, Cross Sell, New, Relocation, Upgrade, Upsell, blank<br>';
@@ -5179,16 +5247,16 @@ function glkMobileQtdCalc(){
   var isBest=mqCase==='best';
   var year=report?report.year:new Date().getFullYear();
   var quarter=report?report.quarter:Math.floor(new Date().getMonth()/3)+1;
-  var activeVert=mqGetActiveReportVertical();
-  var scope=mqFindReportScope(report,activeVert);
-  var actualsQtd=scope?num(scope.actualQtd):0;
-  var target=scope?num(scope.target):0;
+  var activeLevels=mqGetActiveReportLevels();
+  var scope=mqResolveReportScope(report,activeLevels);
+  var actualsQtd=scope.actualsQtd;
+  var target=scope.target;
   var actualsByVertical=null;
-  if(!activeVert&&report&&report.verticals){
+  if(!activeLevels.length&&report&&report.verticals){
     actualsByVertical=report.verticals.map(function(v){return {name:v.name,actualQtd:num(v.actualQtd),target:num(v.target)};});
   }
   var base=mqApplyBridgeBaseFilters();
-  if(activeVert) base=base.filter(function(b){return mqMatchVerticalName(b.vertical,activeVert);});
+  if(activeLevels.length) base=base.filter(function(b){return mqBidMatchesReportLevels(b,activeLevels);});
   var g100=mqGrossAdds100Detail(base,year,quarter);
   var grossPool=mqInflightGrossPools(base,year,quarter,isBest);
   var churnPool=mqInflightChurnPools(base,year,quarter,isBest);
@@ -5197,16 +5265,15 @@ function glkMobileQtdCalc(){
   var hasChurn=churnPool.top.length>0||churnPool.others!==0;
   var forecast=actualsQtd+g100.total+inflightGross+inflightChurn;
   var diff=target-forecast;
-  var scopeLabel=activeVert||(scope&&scope.name?scope.name:'GLK Overall');
   var calc={
     report:report,year:year,quarter:quarter,isBest:isBest,
     actualsQtd:actualsQtd,target:target,actualsByVertical:actualsByVertical,
     gross100:g100.total,gross100Bids:g100.bids,grossPool:grossPool,churnPool:churnPool,
     inflightGross:inflightGross,inflightChurn:inflightChurn,hasChurn:hasChurn,
     forecast:forecast,diff:diff,gap:diff>0?diff:0,growth:diff<0?Math.abs(diff):0,
-    vertical:scopeLabel,
-    activeReportVertical:activeVert,
-    reportScopeMissing:!!(activeVert&&!scope)
+    vertical:scope.label,
+    activeReportLevels:activeLevels.slice(),
+    reportScopeMissing:scope.missing.length>0
   };
   calc.rulesHtml=mqBuildRulesHtml(calc);
   GLK_MQ_CALC_LAST=calc;
@@ -5234,13 +5301,43 @@ function mqAxisLabelLines(b){
   return [name.slice(0,mid), name.slice(mid)];
 }
 function mqCalcAxisBottomPad(bars){
-  var maxLines=1;
-  bars.forEach(function(b){
-    maxLines=Math.max(maxLines,mqAxisLabelLines(b).length);
-  });
-  var hasBrackets=bars.some(function(b){return b.bracketGroup;});
-  return 28+maxLines*12+(hasBrackets?22:8);
+  return 8;
 }
+function mqEscHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+}
+function mqRenderBracketRow(bars,barSlot,minChartW){
+  var brow=el('mqBracketRow'); if(!brow) return;
+  brow.style.minWidth=minChartW+'px';
+  var html='', i=0;
+  while(i<bars.length){
+    var b=bars[i];
+    if(b.bracketGroup){
+      var label=b.bracketLabel||'';
+      var start=i;
+      while(i<bars.length&&bars[i].bracketGroup===b.bracketGroup) i++;
+      var w=(i-start)*barSlot;
+      html+='<div class="mq-bracket-cell" style="width:'+w+'px;min-width:'+w+'px"><span class="mq-bracket-line"></span><span class="mq-bracket-label">'+mqEscHtml(label)+'</span></div>';
+    }else{
+      html+='<div class="mq-bracket-cell" style="width:'+barSlot+'px;min-width:'+barSlot+'px"></div>';
+      i++;
+    }
+  }
+  brow.innerHTML=html;
+}
+function mqRenderAxisStrip(bars,barSlot,minChartW){
+  var strip=el('mqXAxisStrip'); if(!strip) return;
+  strip.style.minWidth=minChartW+'px';
+  strip.innerHTML=bars.map(function(b,i){
+    var lines=mqAxisLabelLines(b);
+    var cls='mq-x-cell'+(GLK_MQ_DETAIL_IDX===i?' sel':'');
+    return '<div class="'+cls+'" style="width:'+barSlot+'px;min-width:'+barSlot+'px" onclick="mqClickAxisCell('+i+')" title="'+mqEscHtml(b.custName||'')+'">'+lines.map(function(l){return mqEscHtml(l);}).join('<br>')+'</div>';
+  }).join('');
+}
+window.mqClickAxisCell=function(idx){
+  if(!GLK_MQ_LAST_BARS) return;
+  mqToggleBarDetail(idx,GLK_MQ_LAST_BARS,GLK_MQ_LAST_BAR_META||[]);
+};
 function mqRenderBridgeLegend(){
   var leg=el('mqBridgeLegend'); if(!leg) return;
   var chips=[
@@ -5380,6 +5477,7 @@ function mqBuildBarDetailHtml(b,metaLabel){
 window.mqCloseBarDetail=function(){
   GLK_MQ_DETAIL_IDX=-1;
   var p=el('mqBarDetailPanel'); if(p) p.style.display='none';
+  if(GLK_MQ_LAST_BARS) mqRenderAxisStrip(GLK_MQ_LAST_BARS,GLK_MQ_LAST_BAR_SLOT||72,GLK_MQ_LAST_CHART_W||900);
   if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
 };
 function mqToggleBarDetail(idx,bars,barMeta){
@@ -5389,6 +5487,7 @@ function mqToggleBarDetail(idx,bars,barMeta){
   var b=bars[idx], m=barMeta[idx];
   p.style.display='block';
   p.innerHTML=mqBuildBarDetailHtml(b,m?m.label:'');
+  mqRenderAxisStrip(bars,GLK_MQ_LAST_BAR_SLOT||72,GLK_MQ_LAST_CHART_W||900);
   if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
   p.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -5490,7 +5589,7 @@ function renderMobileQtdBridge(){
   function pushBar(b,meta){
     var idx=bars.length; bars.push(b); barMeta.push({label:meta||'',bar:b}); return idx;
   }
-  var actualsVert=(!calc.activeReportVertical&&calc.actualsByVertical)?calc.actualsByVertical.map(function(v){return {name:v.name,value:v.actualQtd};}):null;
+  var actualsVert=(!calc.activeReportLevels.length&&calc.actualsByVertical)?calc.actualsByVertical.map(function(v){return {name:v.name,value:v.actualQtd};}):null;
   trueCum=calc.actualsQtd; dispTop=calc.actualsQtd;
   pushBar({
     value:calc.actualsQtd,trueCum:trueCum,displayStart:0,displayEnd:Math.max(dispTop,minStep),
@@ -5503,7 +5602,7 @@ function renderMobileQtdBridge(){
     pushBar({
       value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:'#2563eb',type:'increase',
       custName:'Gross Adds (100%)',section:'actuals',bids:calc.gross100Bids||[],
-      vertBreakdown:calc.activeReportVertical?null:mqVerticalBreakdown(calc.gross100Bids||[],function(b){return num(b.gaLines);})
+      vertBreakdown:(calc.activeReportLevels&&calc.activeReportLevels.length)?null:mqVerticalBreakdown(calc.gross100Bids||[],function(b){return num(b.gaLines);})
     },'Gross Adds 100% · '+fmtLines(calc.gross100));
   }
   calc.grossPool.top.forEach(function(p,i){
@@ -5568,14 +5667,20 @@ function renderMobileQtdBridge(){
       pushBar({value:calc.growth,trueCum:calc.target,displayStart:gs3,displayEnd:ge3,color:'#0ea5e9',type:'growth',custName:'Growth vs Target',section:'outcome'},'Growth · +'+fmtLines(calc.growth));
     }
   }
-  var yMax=Math.max(dispTop,tgtDisp,fcDisp,calc.target)*1.12;
-  var axisPad=mqCalcAxisBottomPad(bars);
+  var yMax=0;
+  bars.forEach(function(b){ yMax=Math.max(yMax,b.displayStart,b.displayEnd,Math.abs(b.value)); });
+  yMax=Math.max(yMax,calc.target,calc.forecast,fcDisp,tgtDisp,1)*1.08;
+  var axisPad=8;
+  var chartOuter=el('mqChartOuter');
   var chartWrap=el('mqChartWrap');
   var scrollWrap=el('mqBridgeScroll');
   var parentW=scrollWrap?scrollWrap.clientWidth:900;
-  var barSlot=Math.max(58,Math.min(88,Math.floor(parentW/Math.max(bars.length,1))));
+  var barSlot=Math.max(72,Math.min(96,Math.floor(parentW/Math.max(bars.length,1))));
+  if(bars.length>14) barSlot=Math.max(barSlot,80);
   var minChartW=Math.max(parentW,bars.length*barSlot+48);
-  if(chartWrap) chartWrap.style.minWidth=minChartW+'px';
+  if(chartOuter) chartOuter.style.minWidth=minChartW+'px';
+  GLK_MQ_LAST_BAR_SLOT=barSlot;
+  GLK_MQ_LAST_CHART_W=minChartW;
   var canvas=el('chartMobileQtd');
   if(!canvas) return;
   canvas.style.cursor='pointer';
@@ -5583,8 +5688,6 @@ function renderMobileQtdBridge(){
     glkMobileQtdSectionPlugin(bars),
     glkMobileQtdFlowPlugin(bars),
     glkMobileQtdLabelPlugin(bars),
-    glkMobileQtdBracketPlugin(bars),
-    glkMobileQtdAxisPlugin(bars,axisPad),
     glkMobileQtdSepPlugin(churnSepIdx,c)
   ];
   try{
@@ -5597,7 +5700,7 @@ function renderMobileQtdBridge(){
         barPercentage:.82,categoryPercentage:.88,minBarLength:10,maxBarThickness:56
       }]},
       options:{responsive:true,maintainAspectRatio:false,
-        layout:{padding:{bottom:axisPad,top:20,left:4,right:8}},
+        layout:{padding:{bottom:axisPad,top:16,left:4,right:8}},
         onClick:function(evt,elements){
           if(!elements.length){ mqCloseBarDetail(); return; }
           mqToggleBarDetail(elements[0].index,bars,barMeta);
@@ -5622,6 +5725,10 @@ function renderMobileQtdBridge(){
       }
     });
   }catch(err){ console.error('[GLK] Mobile QTD chart error:',err); }
+  GLK_MQ_LAST_BARS=bars;
+  GLK_MQ_LAST_BAR_META=barMeta;
+  mqRenderBracketRow(bars,barSlot,minChartW);
+  mqRenderAxisStrip(bars,barSlot,minChartW);
   mqRenderBridgeLegend();
   mqRenderBridgeInfoPanel(calc);
   var sum=el('mobileQtdSummaryWrap');
