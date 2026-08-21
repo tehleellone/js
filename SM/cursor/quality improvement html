@@ -262,6 +262,17 @@ function qiaShowFatal(msg) {
 
 function qiaEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+function qiaStripHtml(html) {
+  if (html == null || html === '') return '';
+  var s = String(html);
+  if (s.indexOf('<') < 0) return s.trim();
+  s = s.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<\/div>/gi, '\n');
+  var el = document.createElement('div');
+  el.innerHTML = s;
+  var text = el.textContent || el.innerText || '';
+  return text.replace(/\u00a0/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 window.onerror = function(msg, src, line) {
   var el = document.getElementById('taLoading');
   if (el && el.style.display !== 'none') {
@@ -545,13 +556,14 @@ async function qiaFetchTopics() {
 
 function taSp(k){ return TA_SP[k]; }
 function taNormalizeRow(r){
-  var row={ ID:r.ID, Title:r.Title };
+  var row={ ID:r.ID, Title:qiaStripHtml(r.Title) };
   Object.keys(TA_SP).forEach(function(k){
     var f=TA_SP[k], v=r[f];
     if (k === 'Owner') v = qiaPersonTitle(r.Owner) || v;
     if (TA_BOOL_KEYS.indexOf(k) >= 0) { row[f] = taFromSpBool(v); return; }
     if(['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'].indexOf(k)>=0)
       row[f]=Number(v||0);
+    else if (TA_TEXT_KEYS.indexOf(k) >= 0) row[f] = qiaStripHtml(v);
     else row[f]=v==null?'':v;
   });
   return row;
@@ -623,7 +635,10 @@ function qaNormalizeRow(a) {
   a.Email_Subject = a.Email_Subject || '';
   a.Avg_Score = Number(a.Avg_Score || 0);
   a.NA_Fields = a.NA_Fields || '';
+  if (a.Comments) a.Comments = qiaStripHtml(a.Comments);
   QA_CALL_CRITERIA.concat(QA_EMAIL_CRITERIA).forEach(function(c) {
+    var ck = c.id + '_Comment';
+    if (a[ck]) a[ck] = qiaStripHtml(a[ck]);
     if (a[c.id] === undefined || a[c.id] === null) a[c.id] = null;
     else a[c.id] = Number(a[c.id]);
   });
@@ -809,7 +824,7 @@ function taRenderGrid(data){
   var F=taSp;
   var cols=[
     {field:F('Date_Time'),headerName:'Date',width:110,filter:QiaSetColumnFilter,valueFormatter:function(p){return qiaFmtDate(p.value);}},
-    {field:F('Customer_Claim'),headerName:'Customer Claim',flex:1,minWidth:200,filter:QiaSetColumnFilter},
+    {field:F('Customer_Claim'),headerName:'Customer Claim',flex:1,minWidth:200,filter:QiaSetColumnFilter,valueFormatter:function(p){return qiaStripHtml(p.value);}},
     qiaSetFilterCol({field:F('Segment'),headerName:'Segment',width:110},['Consumer','Enterprise']),
     qiaSetFilterCol({field:F('LOB'),headerName:'LOB',width:110},['Front Office','Retention','Back Office','Billing','Enterprise']),
     qiaSetFilterCol({field:F('Product'),headerName:'Product',width:100},['Postpaid','Prepaid','Home Wireless','Fiber','Roaming','Billing']),
@@ -858,6 +873,7 @@ function taRenderCharts(data){
 
 var TA_NUM_KEYS = ['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'];
 var TA_BOOL_KEYS = ['Identified_Gap_Process','Identified_Gap_Agent','Repeated_Call'];
+var TA_TEXT_KEYS = ['Customer_Claim','Agent_Resolution','Deep_Root_Cause_Details','Action_Plan','Manager_QA_Comments'];
 
 function taToSpBool(v) {
   if (v === true || v === false) return v;
