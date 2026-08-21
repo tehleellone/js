@@ -4,13 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QIA — Quality Improvement & Assurance</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/32.0.2/ag-grid-community.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-grid.css">
 <link rel="stylesheet" href="https://unpkg.com/ag-grid-community@32.0.2/styles/ag-theme-alpine.css">
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 /* QIA TEAL LIGHT */
 :root{
   --bg-body:linear-gradient(145deg,#f0fdf9,#ecfdf5,#f0fdfa);
@@ -168,7 +165,7 @@ body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-b
     </aside>
     <main class="content">
       <section id="mod-topics" class="module-section active">
-        <div id="taLoading" class="loading-wrap"><div class="spinner"></div><div>Loading Topic Analysis...</div></div>
+        <div id="taLoading" class="loading-wrap"><div class="spinner"></div><div id="taLoadStatus">Starting QIA portal…</div></div>
         <div id="taContent" style="display:none;"></div>
       </section>
       <section id="mod-qa" class="module-section">
@@ -181,17 +178,7 @@ body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-b
 <script>
 // CONFIG
 var QIA_DUMMY_MODE = false;
-function qiaResolveSpUrl() {
-  try {
-    if (window.location && window.location.pathname.indexOf('/sites/') >= 0) {
-      var parts = window.location.pathname.split('/').filter(Boolean);
-      var i = parts.indexOf('sites');
-      if (i >= 0 && parts[i + 1]) return window.location.origin + '/' + parts.slice(0, i + 2).join('/');
-    }
-  } catch(e) {}
-  return 'http://sharedspaces:8116/sites/QIA';
-}
-var SP_URL = qiaResolveSpUrl();
+var SP_URL = 'http://sharedspaces:8116/sites/QIA';
 var LIST_TOPIC = 'Topic Analysis';
 var LIST_QA = 'QIA_QA_Audit';
 var qiaTeams = [], qiaTopics = [], qiaQaAudits = [];
@@ -199,6 +186,55 @@ var taGridApi = null, qaGridApi = null;
 var taChartsVisible = false, qaChartsVisible = false;
 var taCurrentTab = 'analytics', qaCurrentTab = 'analytics', qaAnalyticsTab = 'Call', qaChartPeriod = 'M';
 window.USER_CONTEXT = { userName: 'Demo User', role: 'Admin' };
+
+function qiaInitSpUrl() {
+  try {
+    if (window._spPageContextInfo && window._spPageContextInfo.webAbsoluteUrl) {
+      SP_URL = String(window._spPageContextInfo.webAbsoluteUrl).replace(/\/$/, '');
+      return;
+    }
+    var m = window.location.pathname.match(/(\/sites\/[^/]+)/i);
+    if (m) SP_URL = window.location.origin + m[1];
+  } catch(e) {}
+}
+qiaInitSpUrl();
+
+function qiaListApi(listTitle, path) {
+  var safe = String(listTitle).replace(/'/g, "''");
+  return SP_URL + "/_api/web/lists/getbytitle('" + safe + "')" + (path || '');
+}
+
+function qiaShowShell() {
+  var taL = document.getElementById('taLoading');
+  var taC = document.getElementById('taContent');
+  var qaL = document.getElementById('qaLoading');
+  var qaC = document.getElementById('qaContent');
+  if (taL) taL.style.display = 'none';
+  if (taC) taC.style.display = 'block';
+  if (qaL) qaL.style.display = 'none';
+  if (qaC) qaC.style.display = 'block';
+}
+
+function qiaShowFatal(msg) {
+  var el = document.getElementById('taLoading');
+  if (!el) return;
+  el.style.display = 'block';
+  el.innerHTML = '<div style="text-align:center;padding:40px;max-width:620px;margin:0 auto;">' +
+    '<div style="font-weight:800;margin-bottom:10px;">QIA portal could not start</div>' +
+    '<div style="font-size:.82rem;color:var(--t3);margin-bottom:12px;word-break:break-word;">' + qiaEsc(msg) + '</div>' +
+    '<button type="button" class="export-btn" onclick="location.reload()">Reload</button></div>';
+}
+
+function qiaEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+window.onerror = function(msg, src, line) {
+  var el = document.getElementById('taLoading');
+  if (el && el.style.display !== 'none') {
+    el.innerHTML = '<div style="text-align:center;padding:40px;max-width:560px;margin:0 auto;">' +
+      '<div style="font-weight:700;margin-bottom:8px;">JavaScript error</div>' +
+      '<div style="font-size:.82rem;color:var(--t3);word-break:break-word;">' + qiaEsc(String(msg)) + ' (line ' + line + ')</div></div>';
+  }
+};
 
 // Topic Analysis — existing SP internal names
 var TA_SP = {
@@ -248,56 +284,117 @@ var QA_EMAIL_CRITERIA = [
 ];
 
 function qiaSetLoadingMsg(msg) {
-  var el = document.getElementById('taLoading');
-  if (el) el.innerHTML = '<div class="spinner"></div><div style="margin-top:12px;">' + msg + '</div>';
+  var el = document.getElementById('taLoadStatus');
+  if (el) el.textContent = msg;
+}
+
+function qiaShowLoadBanner(msg, isError) {
+  var el = document.getElementById('taLoadBanner');
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.background = isError ? 'rgba(239,68,68,.1)' : 'rgba(13,148,136,.08)';
+  el.style.borderColor = isError ? 'rgba(239,68,68,.4)' : 'rgba(13,148,136,.25)';
+  el.style.color = isError ? '#dc2626' : 'var(--t2)';
+  el.textContent = msg;
+}
+
+function qiaHideLoadBanner() {
+  var el = document.getElementById('taLoadBanner');
+  if (el) el.style.display = 'none';
 }
 
 function qiaFetchSp(url, timeoutMs) {
-  timeoutMs = timeoutMs || 20000;
-  return Promise.race([
-    fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' }),
-    new Promise(function(_, reject) {
-      setTimeout(function() { reject(new Error('SharePoint request timed out (' + timeoutMs + 'ms). URL: ' + url)); }, timeoutMs);
-    })
-  ]);
+  timeoutMs = timeoutMs || 25000;
+  return new Promise(function(resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    var done = false;
+    var timer = setTimeout(function() {
+      if (done) return;
+      done = true;
+      try { xhr.abort(); } catch(e) {}
+      reject(new Error('SharePoint request timed out after ' + timeoutMs + 'ms'));
+    }, timeoutMs);
+    xhr.open('GET', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Accept', 'application/json;odata=verbose');
+    xhr.onload = function() {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        text: function() { return Promise.resolve(xhr.responseText || ''); },
+        json: function() {
+          try { return Promise.resolve(JSON.parse(xhr.responseText || '{}')); }
+          catch(e) { return Promise.reject(new Error('Invalid JSON from SharePoint')); }
+        }
+      });
+    };
+    xhr.onerror = function() {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      reject(new Error('Network error calling SharePoint REST API'));
+    };
+    xhr.send();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-  qiaInit();
+  window.__qiaStarted = true;
+  try {
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    qiaInit();
+  } catch(e) {
+    console.error('[QIA] boot', e);
+    qiaShowFatal(e.message || String(e));
+  }
 });
 
+setTimeout(function() {
+  if (window.__qiaStarted) return;
+  qiaShowFatal('JavaScript did not start. If this file is opened from a SharePoint library, upload it to Site Assets and open it from there, or host it in a Content Editor Web Part on a site page.');
+}, 6000);
+
 async function qiaInit() {
+  qiaInitSpUrl();
   document.getElementById('modeBadge').innerHTML = QIA_DUMMY_MODE
-    ? '<span class="status-dot"></span> Demo Mode' : '<span class="status-dot"></span> Live · ' + SP_URL;
+    ? '<span class="status-dot"></span> Demo Mode'
+    : '<span class="status-dot"></span> Live · ' + SP_URL;
+
+  qiaShowShell();
+  taRenderShell();
+  qaRenderShell();
+
+  if (QIA_DUMMY_MODE) {
+    qiaTopics = taGenDummyTopics();
+    qiaQaAudits = qaGenDummyAudits();
+    qiaTeams = ['A', 'B', 'C'];
+    taRenderAnalytics();
+    qaRenderAnalytics();
+    return;
+  }
+
+  qiaShowLoadBanner('Loading Topic Analysis…', false);
   try {
-    qiaSetLoadingMsg('Loading Topic Analysis...');
     await qiaFetchTopics();
-    qiaSetLoadingMsg('Loading Quality Assurance...');
-    try {
-      await qiaFetchQaAudits();
-      await qiaLoadTeamChoices();
-    } catch(qaErr) {
-      console.warn('[QIA] QA module load failed — Topic Analysis will still open', qaErr);
-      qiaQaAudits = qiaQaAudits || [];
-    }
-    document.getElementById('taLoading').style.display = 'none';
-    document.getElementById('taContent').style.display = 'block';
-    document.getElementById('qaLoading').style.display = 'none';
-    document.getElementById('qaContent').style.display = 'block';
-    try { taRenderShell(); } catch(re) { console.error('[QIA] Topic render failed', re); throw re; }
-    try { qaRenderShell(); } catch(re) { console.warn('[QIA] QA render failed', re); }
+    qiaHideLoadBanner();
+    taRenderAnalytics();
   } catch(e) {
-    console.error('[QIA]', e);
-    var msg = (e && e.message) ? e.message : String(e);
-    document.getElementById('taLoading').innerHTML =
-      '<div style="text-align:center;padding:40px;max-width:560px;margin:0 auto;">' +
-      '<div style="font-size:2rem;margin-bottom:12px;">⚠️</div>' +
-      '<div style="font-weight:700;margin-bottom:8px;">Could not load QIA data</div>' +
-      '<div style="font-size:.82rem;color:var(--t3);margin-bottom:8px;word-break:break-word;">' + qiaEsc(msg) + '</div>' +
-      '<div style="font-size:.75rem;color:var(--t3);margin-bottom:16px;">SP URL: ' + qiaEsc(SP_URL) + '</div>' +
-      '<button type="button" class="export-btn" onclick="qiaInit()">Retry</button></div>';
-    document.getElementById('qaLoading').style.display = 'none';
+    console.error('[QIA] Topic Analysis', e);
+    qiaShowLoadBanner('Topic Analysis: ' + (e.message || e), true);
+  }
+
+  try {
+    qiaShowLoadBanner('Loading Quality Assurance…', false);
+    await qiaFetchQaAudits();
+    await qiaLoadTeamChoices();
+    qiaHideLoadBanner();
+    qaRenderAnalytics();
+  } catch(e) {
+    console.warn('[QIA] QA module', e);
+    qiaShowLoadBanner('QA module: ' + (e.message || e) + ' (Topic Analysis still works)', true);
   }
 }
 
@@ -320,7 +417,7 @@ async function qiaLoadTeamChoices() {
   if (QIA_DUMMY_MODE) { qiaTeams = ['A','B','C']; return; }
   qiaTeams = [];
   try {
-    var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_QA + "')/fields/getbyinternalnameortitle('Team')";
+    var url = qiaListApi(LIST_QA, "/fields/getbyinternalnameortitle('Team')");
     var res = await qiaFetchSp(url);
     if (res.ok) {
       var data = await res.json();
@@ -336,11 +433,11 @@ async function qiaLoadTeamChoices() {
 
 async function qiaFetchTopics() {
   if (QIA_DUMMY_MODE) { qiaTopics = taGenDummyTopics(); return; }
-  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_TOPIC + "')/items?$top=500&$orderby=Created desc";
+  var url = qiaListApi(LIST_TOPIC, '/items?$top=500&$orderby=Id desc');
   var res = await qiaFetchSp(url);
   if (!res.ok) {
     var errText = await res.text();
-    throw new Error('Topic Analysis failed (' + res.status + '): ' + errText.substring(0, 400));
+    throw new Error('HTTP ' + res.status + ' — ' + errText.substring(0, 400));
   }
   var json = await res.json();
   var rows = (json.d && json.d.results) ? json.d.results : [];
@@ -401,11 +498,15 @@ function taGenDummyTopics() {
 
 async function qiaFetchQaAudits() {
   if (QIA_DUMMY_MODE) { qiaQaAudits = qaGenDummyAudits(); return; }
-  var url = SP_URL + "/_api/web/lists/getbytitle('" + LIST_QA + "')/items?$orderby=Created desc&$top=500";
+  var url = qiaListApi(LIST_QA, '/items?$expand=Evaluator&$top=500&$orderby=Id desc');
   var res = await qiaFetchSp(url);
   if (!res.ok) {
+    url = qiaListApi(LIST_QA, '/items?$top=500&$orderby=Id desc');
+    res = await qiaFetchSp(url);
+  }
+  if (!res.ok) {
     var errText = await res.text();
-    throw new Error('QA Audit failed (' + res.status + '): ' + errText.substring(0, 400));
+    throw new Error('HTTP ' + res.status + ' — ' + errText.substring(0, 400));
   }
   var json = await res.json();
   var rows = (json.d && json.d.results) ? json.d.results : [];
@@ -414,22 +515,21 @@ async function qiaFetchQaAudits() {
 
 function qaNormalizeRow(a) {
   a.Evaluator = qiaPersonTitle(a.Evaluator);
-  a.Reference_ID = qiaFirstKey(a, ['Reference_ID','Reference_x0020_ID','ReferenceID','ReferenceId']) || '';
-  a.Audit_Type = qiaFirstKey(a, ['Audit_Type','Audit_x0020_Type','AuditType']) || a.Audit_Type || '';
-  a.Agent_Name = qiaFirstKey(a, ['Agent_Name','Agent_x0020_Name','AgentName']) || '';
-  a.Date_of_Eval = qiaFirstKey(a, ['Date_of_Eval','Date_x0020_of_x0020_Eval','DateOfEval']) || a.Date_of_Eval;
-  a.Date_of_Call = qiaFirstKey(a, ['Date_of_Call','Date_x0020_of_x0020_Call','DateOfCall']) || a.Date_of_Call;
-  a.Date_of_Email = qiaFirstKey(a, ['Date_of_Email','Date_x0020_of_x0020_Email','DateOfEmail']) || a.Date_of_Email;
-  a.Call_Reason = qiaFirstKey(a, ['Call_Reason','Call_x0020_Reason','CallReason']) || a.Call_Reason;
-  a.Email_Reason = qiaFirstKey(a, ['Email_Reason','Email_x0020_Reason','EmailReason']) || a.Email_Reason;
-  a.Email_Subject = qiaFirstKey(a, ['Email_Subject','Email_x0020_Subject','EmailSubject']) || a.Email_Subject;
-  a.Avg_Score = Number(qiaFirstKey(a, ['Avg_Score','Avg_x0020_Score','AvgScore']) || 0);
-  a.NA_Fields = qiaFirstKey(a, ['NA_Fields','NA_x0020_Fields','NAFields','NAFileds']) || '';
+  a.Reference_ID = a.Reference_ID || '';
+  a.Audit_Type = a.Audit_Type || '';
+  a.Team = a.Team || '';
+  a.Agent_Name = a.Agent_Name || '';
+  a.Date_of_Eval = a.Date_of_Eval || '';
+  a.Date_of_Call = a.Date_of_Call || '';
+  a.Date_of_Email = a.Date_of_Email || '';
+  a.Call_Reason = a.Call_Reason || '';
+  a.Email_Reason = a.Email_Reason || '';
+  a.Email_Subject = a.Email_Subject || '';
+  a.Avg_Score = Number(a.Avg_Score || 0);
+  a.NA_Fields = a.NA_Fields || '';
   QA_CALL_CRITERIA.concat(QA_EMAIL_CRITERIA).forEach(function(c) {
-    if (a[c.id] === undefined || a[c.id] === null) {
-      var alts = [c.id.replace(/_/g,'_x0020_'), c.id.replace(/_/g,'')];
-      for (var i = 0; i < alts.length; i++) { if (a[alts[i]] !== undefined) { a[c.id] = a[alts[i]]; break; } }
-    }
+    if (a[c.id] === undefined || a[c.id] === null) a[c.id] = null;
+    else a[c.id] = Number(a[c.id]);
   });
   return a;
 }
@@ -451,7 +551,6 @@ function qiaToggleDark(){
 }
 function qiaSetScheme(v){ document.body.setAttribute('data-theme', v==='duralux'?'duralux':''); qiaToggleDark(); qiaToggleDark(); }
 function qiaTeamOptions(){ return qiaTeams.map(function(t){ return '<option value="'+t+'">'+t+'</option>'; }).join(''); }
-function qiaEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function qiaFmtDate(v){ if(!v)return'—'; try{return new Date(v).toLocaleDateString('en-GB');}catch(e){return v;} }
 function qiaMoney(n){ return 'AED '+Number(n||0).toLocaleString(); }
 
@@ -534,7 +633,8 @@ window.taSetTab=function(tab){
 
 function taRenderAnalyticsSection(){
   var el=document.getElementById('taTabAnalyticsSection');
-  el.innerHTML='<div class="filters-section"><div class="filters-grid">'+
+  el.innerHTML='<div id="taLoadBanner" style="display:none;padding:10px 14px;border-radius:10px;border:1px solid;margin-bottom:1rem;font-size:.82rem;font-weight:600;"></div>'+
+    '<div class="filters-section"><div class="filters-grid">'+
     '<div class="filter-group"><label class="filter-label">LOB</label><select class="filter-select" id="taFilterLOB" onchange="taRenderAnalytics()"><option value="">All</option><option>Front Office</option><option>Retention</option><option>Billing</option></select></div>'+
     '<div class="filter-group"><label class="filter-label">Product</label><select class="filter-select" id="taFilterProduct" onchange="taRenderAnalytics()"><option value="">All</option><option>Postpaid</option><option>Prepaid</option><option>Fiber</option></select></div>'+
     '<div class="filter-group"><label class="filter-label">Driver</label><select class="filter-select" id="taFilterDriver" onchange="taRenderAnalytics()"><option value="">All</option><option>Billing</option><option>Network</option><option>Cancellation</option><option>Refund</option><option>Roaming</option></select></div>'+
@@ -607,7 +707,8 @@ function taRenderDriverTiles(data){
 
 function taRenderGrid(data){
   var wrap=document.getElementById('taGridWrap');
-  if(taGridApi){ try{taGridApi.destroy();}catch(e){} taGridApi=null; }
+  if(!wrap) return;
+  if(typeof agGrid==='undefined'){ wrap.innerHTML='<div style="padding:20px;color:#ef4444;">AG Grid failed to load — check CDN access.</div>'; return; }
   wrap.innerHTML='<div class="table-section"><div class="table-header"><div class="table-title">Submitted Topics</div><div><button class="export-btn" type="button" onclick="taExportCSV()">Export</button></div></div><div id="taGridDiv" class="ag-theme-alpine" style="height:480px;width:100%;"></div></div>';
   var F=taSp;
   var cols=[
@@ -1062,5 +1163,8 @@ function qaRenderBottom5(data){
 }
 
 </script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/32.0.2/ag-grid-community.min.js"></script>
+<script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </body>
 </html>
