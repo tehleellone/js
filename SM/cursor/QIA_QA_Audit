@@ -1,0 +1,94 @@
+
+List Information
+Name:	QIA_QA_Audit
+Web Address:	http://sharedspaces:8116/sites/QIA/Lists/QIA_QA_Audit/AllItems.aspx
+
+
+Columns
+A column stores information about each item in the list. The following columns are currently available in this list:
+Column (click to edit)	Type	Required
+Title	Single line of text	
+Audit_Type	Choice	
+Team	Choice	
+Agent_Name	Single line of text	
+Evaluator	Person or Group	
+Date_of_Eval	Date and Time	
+Date_of_Call	Date and Time	
+Call_Duration	Number	
+Call_Duration_Type	Choice	
+MSISDN	Single line of text	
+Call_Reason	Single line of text	
+Date_of_Email	Date and Time	
+Email_Reason	Single line of text	
+Email_Subject	Single line of text	
+Avg_Score	Number	
+Outcome	Choice	
+Comments	Multiple lines of text	
+NA_Fields	Single line of text	
+C01_Welcoming	Number	
+C03_FormOfAppeal	Number	
+C04_OfficialSpeech	Number	
+C07_ActiveListening	Number	
+C10_HandlingTime	Number	
+C12_CustomerID	Number	
+C14_Transaction	Number	
+C16_CorrectInfo	Number	
+C20_ClarifyingQuestions	Number	
+E01_FormOfAppeal	Number	
+E02_OfficialText	Number	
+E03_ReadingAttentively	Number	
+E05_HandlingTime	Number	
+E07_CustomerID	Number	
+E09_Transaction	Number	
+E11_CorrectInfo	Number	
+E13_ClarifyingQuestions	Number	
+C06_HoldTechniques	Number	
+Reference_ID	Single line of text	
+Modified	Date and Time	
+Created	Date and Time	
+Created By	Person or Group	
+Modified By	Person or Group
+
+
+Internal names
+Title -> Title
+VM5675:9 Audit_Type -> Audit_Type
+VM5675:9 Team -> Team
+VM5675:9 Agent_Name -> Agent_Name
+VM5675:9 Evaluator -> Evaluator
+VM5675:9 Date_of_Eval -> Date_of_Eval
+VM5675:9 Date_of_Call -> Date_of_Call
+VM5675:9 Call_Duration -> Call_Duration
+VM5675:9 Call_Duration_Type -> Call_Duration_Type
+VM5675:9 MSISDN -> MSISDN
+VM5675:9 Call_Reason -> Call_Reason
+VM5675:9 Date_of_Email -> Date_of_Email
+VM5675:9 Email_Reason -> Email_Reason
+VM5675:9 Email_Subject -> Email_Subject
+VM5675:9 Avg_Score -> Avg_Score
+VM5675:9 Outcome -> Outcome
+VM5675:9 Comments -> Comments
+VM5675:9 NA_Fields -> NA_Fields
+VM5675:9 C01_Welcoming -> C01_Welcoming
+VM5675:9 C03_FormOfAppeal -> C03_FormOfAppeal
+VM5675:9 C04_OfficialSpeech -> C04_OfficialSpeech
+VM5675:9 C07_ActiveListening -> C07_ActiveListening
+VM5675:9 C10_HandlingTime -> C10_HandlingTime
+VM5675:9 C12_CustomerID -> C12_CustomerID
+VM5675:9 C14_Transaction -> C14_Transaction
+VM5675:9 C16_CorrectInfo -> C16_CorrectInfo
+VM5675:9 C20_ClarifyingQuestions -> C20_ClarifyingQuestions
+VM5675:9 E01_FormOfAppeal -> E01_FormOfAppeal
+VM5675:9 E02_OfficialText -> E02_OfficialText
+VM5675:9 E03_ReadingAttentively -> E03_ReadingAttentively
+VM5675:9 E05_HandlingTime -> E05_HandlingTime
+VM5675:9 E07_CustomerID -> E07_CustomerID
+VM5675:9 E09_Transaction -> E09_Transaction
+VM5675:9 E11_CorrectInfo -> E11_CorrectInfo
+VM5675:9 E13_ClarifyingQuestions -> E13_ClarifyingQuestions
+VM5675:9 C06_HoldTechniques -> C06_HoldTechniques
+VM5675:9 Reference_ID -> Reference_ID
+VM5675:9 Modified -> Modified
+VM5675:9 Created -> Created
+VM5675:9 Created By -> Author
+VM5675:9 Modified By -> Editor
