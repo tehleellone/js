@@ -4710,15 +4710,17 @@ function glkParseFixedNetMrcBlock(rows,sec){
   if(!qMonths.length) qMonths=monthCols;
   var dataStart=headerRow+1;
   if(rows[dataStart]){
-    var hdrTxt=glkNormCellTxt((rows[dataStart]||[]).join(' '));
+    var hdrTxt=glkQtdBlockJoined(rows[dataStart],startCol,blockEnd);
     if(hdrTxt.indexOf('actual')>=0||hdrTxt.indexOf('achiev')>=0) dataStart++;
   }
   var entries=[],overall=null;
   for(var dr=dataStart;dr<rows.length;dr++){
     var drow=rows[dr]||[];
-    var joined=glkNormCellTxt(drow.join(' '));
-    if(!joined&&!(drow.some(function(x){return glkParseReportNum(x)!=null;}))) continue;
-    if(/fixed\s*net\s*mrc|mobile\s*net\s*adds|fixed\s*net\s*adds|fixed\s*gross|broadcast|datamena|revenue trend|mrc trend|^note$/i.test(joined)) break;
+    if(/^note$/i.test(String(drow[0]||'').trim())) break;
+    var blockSlice=drow.slice(startCol,blockEnd+1);
+    var blockJoined=glkQtdBlockJoined(drow,startCol,blockEnd);
+    if(!blockJoined&&!(blockSlice.some(function(x){return glkParseReportNum(x)!=null;}))) continue;
+    if(glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,dataStart)) break;
     var name=glkRowVertName(drow,startCol,monthCols);
     if(/^note$/i.test(name)) break;
     var actualSum=0,hasNum=false;
@@ -4754,6 +4756,26 @@ function glkParseQtdWorkbook(wb){
   if(!mobile&&!fixed) return null;
   return {mobile:mobile,fixed:fixed};
 }
+function glkQtdBlockJoined(drow,startCol,blockEnd){
+  var parts=[];
+  for(var c=startCol;c<=blockEnd;c++) parts.push(drow[c]);
+  return glkNormCellTxt(parts.join(' '));
+}
+function glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,dataStart){
+  if(dr<=dataStart) return false;
+  var titleAtStart=glkNormCellTxt(String(drow[startCol]||''));
+  if(!titleAtStart) return false;
+  return /fixed\s*net\s*mrc|fixed\s*(gross|net)\s*adds|mobile\s*(gross|net)\s*adds|broadcast|datamena|revenue trend|mrc trend/i.test(titleAtStart);
+}
+function glkIsVertNameCell(s){
+  if(!s) return false;
+  var t=String(s).trim();
+  if(!t||t==='—') return false;
+  if(/actual|target|achiev|mobile|net adds|fixed|gross|revenue|mrc trend|^note$/i.test(t)) return false;
+  if(/^\d+([.,]\d+)?%?$/.test(t.replace(/,/g,''))) return false;
+  if(glkParseReportNum(t)!=null&&!/[a-zA-Z]/.test(t)) return false;
+  return true;
+}
 function mqNormVertKey(s){
   return String(s||'').trim().toLowerCase().replace(/[\s\-–—_]+/g,'');
 }
@@ -4761,13 +4783,13 @@ function glkRowVertName(drow,startCol,monthCols){
   var prefer=monthCols.length?monthCols[0].col-1:Math.max(0,startCol-1);
   if(prefer>=0){
     var n=String(drow[prefer]||'').trim();
-    if(n&&!/actual|target|achiev|mobile|net adds|Q\d/i.test(n)) return n;
+    if(glkIsVertNameCell(n)) return n;
   }
   for(var c=0;c<startCol;c++){
     var cand=String(drow[c]||'').trim();
-    if(cand&&!/actual|target|achiev|mobile|net adds|Q\d/i.test(cand)) return cand;
+    if(glkIsVertNameCell(cand)) return cand;
   }
-  return String(drow[0]||'').trim();
+  return '';
 }
 function glkParseReportNum(v){
   if(v==null||v==='') return null;
@@ -4968,17 +4990,18 @@ function glkParseMobileNetAddsRows(rows){
   if(!qMonths.length) qMonths=monthCols;
   var dataStart=headerRow+1;
   if(rows[dataStart]){
-    var hdrTxt=glkNormCellTxt((rows[dataStart]||[]).join(' '));
+    var hdrTxt=glkQtdBlockJoined(rows[dataStart],startCol,blockEnd);
     if(hdrTxt.indexOf('actual')>=0||hdrTxt.indexOf('achiev')>=0) dataStart++;
   }
   var nameCol=monthCols.length?Math.max(0,monthCols[0].col-1):Math.max(0,startCol-1);
   var entries=[],overall=null;
   for(var dr=dataStart;dr<rows.length;dr++){
     var drow=rows[dr]||[];
-    var joined=glkNormCellTxt(drow.join(' '));
-    if(!joined&&!(drow.some(function(x){return glkParseReportNum(x)!=null;}))) continue;
-    if(/mobile\s*net\s*adds|net\s*adds\s*lines?/.test(joined)) break;
-    if(/fixed\s*net\s*mrc|broadcast|datamena|fixed gross|revenue trend|mrc trend|^note$/i.test(joined)) break;
+    if(/^note$/i.test(String(drow[0]||'').trim())) break;
+    var blockSlice=drow.slice(startCol,blockEnd+1);
+    var blockJoined=glkQtdBlockJoined(drow,startCol,blockEnd);
+    if(!blockJoined&&!(blockSlice.some(function(x){return glkParseReportNum(x)!=null;}))) continue;
+    if(glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,dataStart)) break;
     var name=glkRowVertName(drow,startCol,monthCols);
     if(/^note$/i.test(name)) break;
     var actuals={},actualSum=0,hasNum=false;
@@ -5013,6 +5036,8 @@ function glkParseAndSetMobileReport(arrayBuffer,cb){
       return cb(new Error('Could not find Mobile Net Adds or Fixed Net MRC sections. Use the daily GLK Excel template (.xlsx/.xlsm).'));
     GLK_QTD_REPORT={mobile:parsed.mobile||null,fixed:parsed.fixed||null};
     mqSyncActiveReport();
+    if(!GLK_QTD_REPORT.mobile) console.warn('[GLK] Mobile Net Adds – Lines section not found in report.');
+    if(!GLK_QTD_REPORT.fixed) console.warn('[GLK] Fixed Net MRC section not found in report.');
     if(!mqGetActiveReport()){
       var alt=mqProductFamily==='fixed'?'mobile':'fixed';
       if(GLK_QTD_REPORT[alt]) mqProductFamily=alt;
@@ -5861,9 +5886,15 @@ function renderMobileQtdBridge(){
   if(sub) sub.textContent=(calc.isBest?'Best Case · Proposed + Opportunity':'Worst Case · Proposed only')+' · Q'+calc.quarter+' '+calc.year+' · '+mqMetricUnit()+' · Act: current month → quarter-end';
   if(!mqGetActiveReport()){
     var wrap=el('mobileQtdSummaryWrap');
-    if(wrap) wrap.innerHTML='<span style="color:#f59e0b;">Upload the daily GLK report — no '+(mqProductFamily==='fixed'?'Fixed Net MRC':'Mobile Net Adds')+' section found for this product family.</span>';
+    var chartWrap=el('mqChartWrap');
+    var msg='No '+(mqProductFamily==='fixed'?'Fixed Net MRC':'Mobile Net Adds – Lines')+' section in the uploaded GLK report.';
+    if(wrap) wrap.innerHTML='<span style="color:#f59e0b;">'+msg+' Re-upload the daily GLK Excel or switch product family.</span>';
+    if(chartWrap) chartWrap.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:340px;color:var(--t3);font-size:.82rem;text-align:center;padding:1rem;">'+msg+'</div>';
+    if(badge) badge.textContent='Target: —';
     return;
   }
+  var chartWrapReset=el('mqChartWrap');
+  if(chartWrapReset&&!chartWrapReset.querySelector('canvas')) chartWrapReset.innerHTML='<canvas id="chartMobileQtd"></canvas>';
   var bars=[],barMeta=[],churnSepIdx=-1;
   var top5GrossStart=-1,top5GrossEnd=-1,top5ChurnStart=-1,top5ChurnEnd=-1;
   var trueCum=0,dispTop=0;
