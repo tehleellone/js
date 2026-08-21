@@ -96,9 +96,33 @@ body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-b
 .table-section{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--cs)}
 .table-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.65rem;margin-bottom:.85rem}
 .table-title{font-size:.9rem;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:.35rem}
-.chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;box-shadow:var(--cs);margin-bottom:1rem}
-.chart-title{font-size:.8rem;font-weight:700;color:var(--t2);margin-bottom:.65rem}
-.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;box-shadow:var(--cs);min-width:0}
+.chart-card-head{margin-bottom:.45rem}
+.chart-title{font-size:.72rem;font-weight:800;color:var(--t1);text-transform:uppercase;letter-spacing:.06em}
+.chart-subtitle{font-size:.68rem;color:var(--t3);margin-top:2px;font-weight:500}
+.charts-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--cs)}
+.charts-panel-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.85rem;padding-bottom:.65rem;border-bottom:1px solid var(--border)}
+.charts-panel-title{font-size:.82rem;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:.4rem}
+.charts-dashboard{display:flex;flex-direction:column;gap:.75rem}
+.charts-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
+.chart-span-2{grid-column:span 2}
+.chart-span-4{grid-column:1/-1}
+.chart-canvas-wrap{position:relative;height:168px;width:100%}
+.chart-canvas-wrap.tall{height:190px}
+.chart-canvas-wrap.compact{height:148px}
+.chart-canvas-wrap canvas{display:block;width:100%!important;height:100%!important}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem}
+.qia-mini-list{display:flex;flex-direction:column;gap:.35rem}
+.qia-mini-row{display:flex;align-items:center;gap:.65rem;padding:.55rem .65rem;border-radius:10px;background:var(--bg-secondary);border:1px solid var(--border)}
+.qia-mini-row-rank{font-size:.78rem;font-weight:900;color:var(--acc);min-width:1.4rem}
+.qia-mini-row-label{flex:1;font-size:.8rem;font-weight:600;color:var(--t1);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qia-mini-row-meta{font-size:.72rem;color:var(--t3);white-space:nowrap}
+.qia-mini-row-val{font-size:.82rem;font-weight:800;min-width:3rem;text-align:right}
+.qia-heat-row{display:flex;align-items:center;gap:.75rem;padding:.45rem 0}
+.qia-heat-label{width:11rem;font-size:.78rem;font-weight:600;color:var(--t1);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qia-heat-track{flex:1;height:7px;background:var(--bg-secondary);border-radius:999px;overflow:hidden}
+.qia-heat-fill{height:100%;border-radius:999px;transition:width .35s ease}
+.qia-heat-val{width:3.2rem;text-align:right;font-size:.78rem;font-weight:800}
 .tab-bar{display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap}
 .tab-btn{padding:10px 24px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);display:inline-flex;align-items:center;gap:6px}
 .tab-btn.active{background:var(--grad);color:#fff;border-color:transparent}
@@ -164,7 +188,9 @@ body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-b
 .loading-wrap{text-align:center;padding:60px 20px}
 .loading-wrap .spinner{width:48px;height:48px;border-radius:50%;border:4px solid var(--border);border-top-color:var(--acc);animation:spin .8s linear infinite;margin:0 auto 16px}
 @keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1200px){.charts-row{grid-template-columns:repeat(2,minmax(0,1fr))}.chart-span-2{grid-column:span 2}}
 @media(max-width:1100px){.form-grid,.charts-grid{grid-template-columns:1fr 1fr}.sidebar{display:none}}
+@media(max-width:640px){.charts-row,.charts-grid{grid-template-columns:1fr}.chart-span-2{grid-column:span 1}}
 .qia-ag-set-filter{padding:.5rem;min-width:200px;max-width:260px}
 .qia-ag-set-search{width:100%;box-sizing:border-box;margin-bottom:.45rem;padding:.35rem .5rem;border:1px solid var(--border);border-radius:8px;font-size:.75rem;background:var(--bg-card);color:var(--t1)}
 .qia-ag-set-list{max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:.2rem}
@@ -218,7 +244,7 @@ var LIST_TOPIC = 'Topic Analysis';
 var LIST_QA = 'QIA_QA_Audit';
 var qiaTeams = [], qiaTopics = [], qiaQaAudits = [];
 var taGridApi = null, qaGridApi = null;
-var taChartsVisible = false, qaChartsVisible = false;
+var taChartsVisible = true, qaChartsVisible = true;
 var taCurrentTab = 'analytics', qaCurrentTab = 'analytics', qaAnalyticsTab = 'Call', qaChartPeriod = 'M', qaSelectedOutcome = '';
 window.USER_CONTEXT = { userName: 'Demo User', role: 'Admin' };
 
@@ -659,11 +685,54 @@ function qiaToggleDark(){
   var icon=document.getElementById('themeIcon');
   if(icon) icon.setAttribute('data-lucide', b.getAttribute('data-theme').indexOf('dark')>=0?'sun':'moon');
   if(typeof lucide!=='undefined') lucide.createIcons();
+  if(taChartsVisible&&document.getElementById('taTrendChart')) taRenderCharts(taGetFiltered());
+  if(qaChartsVisible&&document.getElementById('qaScoreTrendChart')) qaRenderCharts(qaGetFiltered());
 }
 function qiaSetScheme(v){ document.body.setAttribute('data-theme', v==='duralux'?'duralux':''); qiaToggleDark(); qiaToggleDark(); }
 function qiaTeamOptions(){ return qiaTeams.map(function(t){ return '<option value="'+t+'">'+t+'</option>'; }).join(''); }
 function qiaFmtDate(v){ if(!v)return'—'; try{return new Date(v).toLocaleDateString('en-GB');}catch(e){return v;} }
+function qiaFmtMonth(ym){
+  if(!ym) return ym;
+  try{ var p=String(ym).split('-'); return new Date(+p[0],+p[1]-1,1).toLocaleDateString('en-GB',{month:'short',year:'2-digit'}); }catch(e){ return ym; }
+}
 function qiaMoney(n){ return 'AED '+Number(n||0).toLocaleString(); }
+
+function qiaChartTheme(){
+  var theme=document.body.getAttribute('data-theme')||'';
+  var isDark=theme.indexOf('dark')>=0;
+  return {
+    text:isDark?'#99f6e4':'#2d6b60',
+    muted:isDark?'#5eead4':'#5f9e92',
+    grid:isDark?'rgba(94,234,212,.1)':'rgba(13,148,136,.08)',
+    card:isDark?'#0a2420':'#ffffff',
+    accent:getComputedStyle(document.body).getPropertyValue('--acc').trim()||'#0d9488',
+    accent2:getComputedStyle(document.body).getPropertyValue('--acc2').trim()||'#14b8a6'
+  };
+}
+function qiaChartCard(id, title, subtitle, size, span){
+  var cls=size==='tall'?' tall':(size==='compact'?' compact':'');
+  return '<div class="chart-card'+(span?' '+span:'')+'"><div class="chart-card-head"><div class="chart-title">'+qiaEsc(title)+'</div>'+
+    (subtitle?'<div class="chart-subtitle">'+qiaEsc(subtitle)+'</div>':'')+
+    '</div><div class="chart-canvas-wrap'+cls+'"><canvas id="'+id+'"></canvas></div></div>';
+}
+function qiaChartOpts(c, extra){
+  var o={
+    responsive:true,maintainAspectRatio:false,
+    animation:{duration:420,easing:'easeOutQuart'},
+    plugins:{
+      legend:{labels:{color:c.text,font:{size:11,weight:'600',family:'Inter'},usePointStyle:true,padding:10,boxWidth:8}},
+      tooltip:{backgroundColor:c.card,titleColor:c.text,bodyColor:c.muted,borderColor:c.grid,borderWidth:1,padding:10,cornerRadius:8,titleFont:{weight:'700',size:12},bodyFont:{size:11}}
+    }
+  };
+  if(extra) Object.keys(extra).forEach(function(k){ o[k]=extra[k]; });
+  return o;
+}
+function qiaChartScales(c, yStacked){
+  return {
+    x:{stacked:!!yStacked,ticks:{color:c.muted,font:{size:10,weight:'600'}},grid:{color:c.grid,drawBorder:false}},
+    y:{stacked:!!yStacked,beginAtZero:true,ticks:{color:c.muted,font:{size:10}},grid:{color:c.grid,drawBorder:false}}
+  };
+}
 
 // AG Grid multi-select set filter (same pattern as SM)
 function QiaSetColumnFilter(){}
@@ -755,8 +824,10 @@ function taRenderAnalyticsSection(){
     '<div class="filter-group"><label class="filter-label">To</label><input type="date" class="filter-select" id="taFilterTo" onchange="taRenderAnalytics()"></div>'+
     '</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="reset-btn" type="button" onclick="taResetFilters()">Reset</button></div></div>'+
     '<div id="taKPITiles"></div><div id="taSelectionTiles" style="margin-bottom:1rem;"></div>'+
-    '<div style="text-align:center;margin-bottom:1rem;"><button class="export-btn" type="button" onclick="taToggleCharts()"><span id="taChartsBtnText">Show Charts</span></button></div>'+
-    '<div id="taChartsSection" style="display:none;"></div><div id="taGridWrap"></div>';
+    '<div class="charts-panel"><div class="charts-panel-head"><div class="charts-panel-title"><i data-lucide="bar-chart-2" style="width:15px;height:15px;color:var(--acc);"></i>Visual Analytics</div>'+
+    '<button type="button" class="reset-btn" onclick="taToggleCharts()"><span id="taChartsBtnText">'+(taChartsVisible?'Hide Charts':'Show Charts')+'</span></button></div>'+
+    '<div id="taChartsSection" style="display:'+(taChartsVisible?'block':'none')+';"></div></div>'+
+    '<div id="taGridWrap"></div>';
   taRenderAnalytics();
 }
 
@@ -800,8 +871,12 @@ window.taRenderAnalytics=function(){
     return '<div class="stat-card"><div class="stat-label">'+k.label+'</div><div class="stat-value" style="color:'+k.color+'">'+k.val+'</div></div>';
   }).join('')+'</div>';
   taRenderDriverTiles(data);
+  if(taChartsVisible){
+    var csec=document.getElementById('taChartsSection');
+    if(csec&&!csec.querySelector('canvas')) csec.innerHTML=taChartsHTML();
+    taRenderCharts(data);
+  }
   taRenderGrid(data);
-  if(taChartsVisible) taRenderCharts(data);
   if(typeof lucide!=='undefined') lucide.createIcons();
 };
 
@@ -846,29 +921,51 @@ window.taExportCSV=function(){ if(taGridApi) taGridApi.exportDataAsCsv({fileName
 window.taToggleCharts=function(){
   taChartsVisible=!taChartsVisible;
   var sec=document.getElementById('taChartsSection');
+  if(!sec) return;
   sec.style.display=taChartsVisible?'block':'none';
   document.getElementById('taChartsBtnText').textContent=taChartsVisible?'Hide Charts':'Show Charts';
-  if(taChartsVisible){ sec.innerHTML='<div class="charts-grid"><div class="chart-card"><div class="chart-title">Risk Distribution</div><canvas id="taRiskChart" height="220"></canvas></div><div class="chart-card"><div class="chart-title">Driver Breakdown</div><canvas id="taDriverChart" height="220"></canvas></div></div><div class="charts-grid"><div class="chart-card"><div class="chart-title">Status Overview</div><canvas id="taStatusChart" height="220"></canvas></div><div class="chart-card"><div class="chart-title">Monthly Submissions</div><canvas id="taTrendChart" height="220"></canvas></div></div>'; taRenderCharts(taGetFiltered()); }
+  if(taChartsVisible){ sec.innerHTML=taChartsHTML(); taRenderCharts(taGetFiltered()); }
+  else ['taRiskChart','taDriverChart','taStatusChart','taTrendChart'].forEach(taDestroyChart);
 };
+
+function taChartsHTML(){
+  return '<div class="charts-dashboard">'+
+    '<div class="charts-row">'+
+      qiaChartCard('taTrendChart','Volume Trend','Monthly submissions','tall','chart-span-2')+
+      qiaChartCard('taRiskChart','Risk Level','By severity','compact')+
+      qiaChartCard('taStatusChart','Status','Pipeline overview','compact')+
+    '</div>'+
+    '<div class="charts-row">'+qiaChartCard('taDriverChart','Top Drivers','Most frequent VoC drivers','compact','chart-span-4')+'</div>'+
+    '</div>';
+}
 
 function taDestroyChart(id){ var c=document.getElementById(id); if(c&&c._chart){c._chart.destroy();c._chart=null;} }
 
+function taTopCounts(data, field, limit){
+  var map={};
+  data.forEach(function(r){ var v=r[field]; if(!v) return; map[v]=(map[v]||0)+1; });
+  return Object.keys(map).sort(function(a,b){ return map[b]-map[a]; }).slice(0, limit||8).map(function(k){ return {label:k,count:map[k]}; });
+}
+
 function taRenderCharts(data){
+  if(typeof Chart==='undefined') return;
   taDestroyChart('taRiskChart'); taDestroyChart('taDriverChart'); taDestroyChart('taStatusChart'); taDestroyChart('taTrendChart');
+  var c=qiaChartTheme();
   var risks=['Low','Medium','High','Critical'];
+  var riskColors=['#10b981','#f59e0b','#f97316','#ef4444'];
   var rc=document.getElementById('taRiskChart');
-  if(rc) rc._chart=new Chart(rc,{type:'doughnut',data:{labels:risks,datasets:[{data:risks.map(function(r){return data.filter(function(d){return d[taSp('Risk_Level')]===r;}).length;}),backgroundColor:['#10b981','#f59e0b','#f97316','#ef4444']}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
-  var drivers=[...new Set(data.map(function(r){return r[taSp('Driver')];}))].filter(Boolean);
-  var dc=document.getElementById('taDriverChart');
-  if(dc) dc._chart=new Chart(dc,{type:'bar',data:{labels:drivers,datasets:[{label:'Count',data:drivers.map(function(d){return data.filter(function(r){return r[taSp('Driver')]===d;}).length;}),backgroundColor:'#0d9488',borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  if(rc) rc._chart=new Chart(rc,{type:'doughnut',data:{labels:risks,datasets:[{data:risks.map(function(r){return data.filter(function(d){return d[taSp('Risk_Level')]===r;}).length;}),backgroundColor:riskColors,borderWidth:3,borderColor:c.card,hoverOffset:8}]},options:qiaChartOpts(c,{cutout:'62%',plugins:{legend:{position:'bottom',labels:{padding:8,font:{size:10}}}}})});
   var statuses=['Open','In Progress','Pending','Closed'];
   var sc=document.getElementById('taStatusChart');
-  if(sc) sc._chart=new Chart(sc,{type:'pie',data:{labels:statuses,datasets:[{data:statuses.map(function(s){return data.filter(function(d){return d[taSp('Status')]===s;}).length;}),backgroundColor:['#4c6fff','#f59e0b','#8b5cf6','#10b981']}]},options:{plugins:{legend:{position:'bottom'}}}});
+  if(sc) sc._chart=new Chart(sc,{type:'doughnut',data:{labels:statuses,datasets:[{data:statuses.map(function(s){return data.filter(function(d){return d[taSp('Status')]===s;}).length;}),backgroundColor:['#0d9488','#f59e0b','#8b5cf6','#10b981'],borderWidth:3,borderColor:c.card,hoverOffset:8}]},options:qiaChartOpts(c,{cutout:'62%',plugins:{legend:{position:'bottom',labels:{padding:8,font:{size:10}}}}})});
+  var drivers=taTopCounts(data, taSp('Driver'), 8);
+  var dc=document.getElementById('taDriverChart');
+  if(dc) dc._chart=new Chart(dc,{type:'bar',data:{labels:drivers.map(function(d){return d.label;}),datasets:[{label:'Topics',data:drivers.map(function(d){return d.count;}),backgroundColor:c.accent,borderRadius:6,maxBarThickness:22}]},options:qiaChartOpts(c,{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.muted,font:{size:10}},grid:{color:c.grid,drawBorder:false},beginAtZero:true},y:{ticks:{color:c.text,font:{size:10,weight:'600'}},grid:{display:false}}}})});
   var months={};
   data.forEach(function(r){ if(!r[taSp('Date_Time')])return; var k=new Date(r[taSp('Date_Time')]).toISOString().slice(0,7); months[k]=(months[k]||0)+1; });
   var mk=Object.keys(months).sort();
   var tc=document.getElementById('taTrendChart');
-  if(tc) tc._chart=new Chart(tc,{type:'line',data:{labels:mk,datasets:[{label:'Submissions',data:mk.map(function(k){return months[k];}),borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,.15)',fill:true,tension:.35}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  if(tc) tc._chart=new Chart(tc,{type:'line',data:{labels:mk.map(qiaFmtMonth),datasets:[{label:'Submissions',data:mk.map(function(k){return months[k];}),borderColor:c.accent2,backgroundColor:'rgba(20,184,166,.14)',pointBackgroundColor:c.accent2,pointRadius:3,pointHoverRadius:5,borderWidth:2,fill:true,tension:.35}]},options:qiaChartOpts(c,{interaction:{mode:'index',intersect:false},plugins:{legend:{display:false}},scales:qiaChartScales(c)})});
 }
 
 var TA_NUM_KEYS = ['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'];
@@ -1356,8 +1453,10 @@ function qaRenderAnalyticsSection(){
     '</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="reset-btn" type="button" onclick="qaResetFilters()">Reset</button></div></div>'+
     '<div style="display:flex;gap:8px;margin-bottom:1rem;"><button type="button" class="qa-atab-btn active" onclick="qaSetAnalyticsTab(\'Call\')">Call</button><button type="button" class="qa-atab-btn" onclick="qaSetAnalyticsTab(\'Email\')">Email</button></div>'+
     '<div id="qaKPITiles"></div><div id="qaSelectionTiles" style="margin-bottom:1rem;"></div>'+
-    '<div style="text-align:center;margin-bottom:1rem;"><button class="export-btn" type="button" onclick="qaToggleCharts()"><span id="qaChartsBtnText">Show Analytics Charts</span></button></div>'+
-    '<div id="qaChartsSection" style="display:none;"></div><div id="qaGridWrap"></div>';
+    '<div class="charts-panel"><div class="charts-panel-head"><div class="charts-panel-title"><i data-lucide="bar-chart-2" style="width:15px;height:15px;color:var(--acc);"></i>Visual Analytics</div>'+
+    '<button type="button" class="reset-btn" onclick="qaToggleCharts()"><span id="qaChartsBtnText">'+(qaChartsVisible?'Hide Charts':'Show Charts')+'</span></button></div>'+
+    '<div id="qaChartsSection" style="display:'+(qaChartsVisible?'block':'none')+';"></div></div>'+
+    '<div id="qaGridWrap"></div>';
   qaRenderAnalytics();
 }
 
@@ -1410,8 +1509,12 @@ window.qaRenderAnalytics=function(){
     return '<div class="stat-card"><div class="stat-label">'+k.label+'</div><div class="stat-value" style="color:'+k.color+'">'+k.val+'</div></div>';
   }).join('')+'</div>';
   qaRenderAgentTiles(data);
+  if(qaChartsVisible){
+    var csec=document.getElementById('qaChartsSection');
+    if(csec&&!csec.querySelector('canvas')) csec.innerHTML=qaChartsHTML();
+    qaRenderCharts(data);
+  }
   qaRenderQaGrid(data);
-  if(qaChartsVisible) qaRenderCharts(data);
 };
 
 function qaPopulateFilterDropdowns(data){
@@ -1457,52 +1560,61 @@ window.qaExportCSV=function(){ if(qaGridApi) qaGridApi.exportDataAsCsv({fileName
 window.qaToggleCharts=function(){
   qaChartsVisible=!qaChartsVisible;
   var sec=document.getElementById('qaChartsSection');
+  if(!sec) return;
   sec.style.display=qaChartsVisible?'block':'none';
-  document.getElementById('qaChartsBtnText').textContent=qaChartsVisible?'Hide Analytics Charts':'Show Analytics Charts';
+  document.getElementById('qaChartsBtnText').textContent=qaChartsVisible?'Hide Charts':'Show Charts';
   if(qaChartsVisible){ sec.innerHTML=qaChartsHTML(); qaRenderCharts(qaGetFiltered()); }
+  else ['qaScoreTrendChart','qaAgentScoreChart','qaOutcomeChart','qaMonthlyTrendChart','qaEvaluatorChart'].forEach(qaDestroyChart);
 };
 
 function qaChartsHTML(){
-  return '<div class="chart-card"><div class="chart-title">Score Trend</div><canvas id="qaScoreTrendChart" height="220"></canvas></div>'+
-    '<div class="charts-grid"><div class="chart-card"><div class="chart-title">Agent Performance</div><canvas id="qaAgentScoreChart" height="240"></canvas></div>'+
-    '<div class="chart-card"><div class="chart-title">Outcome Distribution</div><canvas id="qaOutcomeChart" height="240"></canvas></div></div>'+
-    '<div class="charts-grid"><div class="chart-card"><div class="chart-title">Pass / Fail Trend</div><canvas id="qaMonthlyTrendChart" height="220"></canvas></div>'+
-    '<div class="chart-card"><div class="chart-title">Evaluator Productivity</div><canvas id="qaEvaluatorChart" height="220"></canvas></div></div>'+
-    '<div class="chart-card"><div class="chart-title">Criteria Heatmap</div><div id="qaHeatmap"></div></div>'+
-    '<div class="chart-card"><div class="chart-title">Bottom 5 Agents</div><div id="qaBottom5"></div></div>';
+  return '<div class="charts-dashboard">'+
+    '<div class="charts-row">'+qiaChartCard('qaScoreTrendChart','Outcome Trend','Pass / needs / fail over time','tall','chart-span-4')+'</div>'+
+    '<div class="charts-row">'+
+      qiaChartCard('qaAgentScoreChart','Agent Scores','Average % by agent','compact','chart-span-2')+
+      qiaChartCard('qaOutcomeChart','Outcomes','Current distribution','compact')+
+      qiaChartCard('qaEvaluatorChart','Evaluators','Audits completed','compact')+
+    '</div>'+
+    '<div class="charts-row">'+qiaChartCard('qaMonthlyTrendChart','Monthly Outcomes','Stacked pass / needs / fail','compact','chart-span-4')+'</div>'+
+    '<div class="charts-grid">'+
+      '<div class="chart-card"><div class="chart-card-head"><div class="chart-title">Criteria Strength</div><div class="chart-subtitle">Average score per criterion</div></div><div id="qaHeatmap" class="qia-mini-list" style="padding:.25rem 0;"></div></div>'+
+      '<div class="chart-card"><div class="chart-card-head"><div class="chart-title">Bottom 5 Agents</div><div class="chart-subtitle">Lowest average scores</div></div><div id="qaBottom5" class="qia-mini-list" style="padding:.25rem 0;"></div></div>'+
+    '</div></div>';
 }
 
 function qaDestroyChart(id){ var c=document.getElementById(id); if(c&&c._chart){c._chart.destroy();c._chart=null;} }
 
 function qaRenderCharts(data){
+  if(typeof Chart==='undefined') return;
   qaDestroyChart('qaScoreTrendChart'); qaDestroyChart('qaAgentScoreChart'); qaDestroyChart('qaOutcomeChart');
   qaDestroyChart('qaMonthlyTrendChart'); qaDestroyChart('qaEvaluatorChart');
+  var c=qiaChartTheme();
   function getDate(a){ return a.Date_of_Call||a.Date_of_Email||a.Date_of_Eval||''; }
   var monthMap={};
-  data.forEach(function(a){ var d=getDate(a); if(!d)return; var k=new Date(d).toISOString().slice(0,7); if(!monthMap[k]) monthMap[k]={pass:0,needs:0,fail:0}; if(a.Outcome==='Pass')monthMap[k].pass++; else if(a.Outcome==='Needs Improvement')monthMap[k].needs++; else monthMap[k].fail++; });
+  data.forEach(function(a){ var d=getDate(a); if(!d)return; var k=new Date(d).toISOString().slice(0,7); if(!monthMap[k]) monthMap[k]={pass:0,needs:0,fail:0,scores:[]}; if(a.Outcome==='Pass')monthMap[k].pass++; else if(a.Outcome==='Needs Improvement')monthMap[k].needs++; else monthMap[k].fail++; monthMap[k].scores.push(a.Avg_Score||0); });
   var mk=Object.keys(monthMap).sort();
   var st=document.getElementById('qaScoreTrendChart');
-  if(st) st._chart=new Chart(st,{type:'line',data:{labels:mk,datasets:[
-    {label:'Pass',data:mk.map(function(k){return monthMap[k].pass;}),borderColor:'#10b981',tension:.35},
-    {label:'Needs',data:mk.map(function(k){return monthMap[k].needs;}),borderColor:'#f59e0b',tension:.35},
-    {label:'Fail',data:mk.map(function(k){return monthMap[k].fail;}),borderColor:'#ef4444',tension:.35}
-  ]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true}}}});
+  if(st) st._chart=new Chart(st,{type:'line',data:{labels:mk.map(qiaFmtMonth),datasets:[
+    {label:'Pass',data:mk.map(function(k){return monthMap[k].pass;}),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.08)',pointRadius:2,borderWidth:2,tension:.35,fill:false},
+    {label:'Needs',data:mk.map(function(k){return monthMap[k].needs;}),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',pointRadius:2,borderWidth:2,tension:.35,fill:false},
+    {label:'Fail',data:mk.map(function(k){return monthMap[k].fail;}),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',pointRadius:2,borderWidth:2,tension:.35,fill:false}
+  ]},options:qiaChartOpts(c,{interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{padding:12}}},scales:qiaChartScales(c)})});
   var agents=[...new Set(data.map(function(a){return a.Agent_Name;}))].filter(Boolean).sort();
   var agentAvgs=agents.map(function(ag){ var d=data.filter(function(a){return a.Agent_Name===ag;}); return d.length?+(d.reduce(function(s,a){return s+(a.Avg_Score||0);},0)/d.length).toFixed(1):0; });
   var a1=document.getElementById('qaAgentScoreChart');
-  if(a1) a1._chart=new Chart(a1,{type:'bar',data:{labels:agents,datasets:[{label:'Avg %',data:agentAvgs,backgroundColor:'#0d9488',borderRadius:6}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{max:100,beginAtZero:true}}}});
+  if(a1) a1._chart=new Chart(a1,{type:'bar',data:{labels:agents.slice(0,10),datasets:[{label:'Avg %',data:agentAvgs.slice(0,10),backgroundColor:agentAvgs.slice(0,10).map(function(v){return v>=70?'#10b981':v>=50?'#f59e0b':'#ef4444';}),borderRadius:6,maxBarThickness:18}]},options:qiaChartOpts(c,{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{max:100,beginAtZero:true,ticks:{color:c.muted,callback:function(v){return v+'%';}},grid:{color:c.grid,drawBorder:false}},y:{ticks:{color:c.text,font:{size:10,weight:'600'}},grid:{display:false}}}})});
   var passC=data.filter(function(a){return a.Outcome==='Pass';}).length, needsC=data.filter(function(a){return a.Outcome==='Needs Improvement';}).length, failC=data.filter(function(a){return a.Outcome==='Fail';}).length;
   var o1=document.getElementById('qaOutcomeChart');
-  if(o1) o1._chart=new Chart(o1,{type:'doughnut',data:{labels:['Pass','Needs Improvement','Fail'],datasets:[{data:[passC,needsC,failC],backgroundColor:['#10b981','#f59e0b','#ef4444']}]},options:{plugins:{legend:{position:'bottom'}}}});
+  if(o1) o1._chart=new Chart(o1,{type:'doughnut',data:{labels:['Pass','Needs','Fail'],datasets:[{data:[passC,needsC,failC],backgroundColor:['#10b981','#f59e0b','#ef4444'],borderWidth:3,borderColor:c.card,hoverOffset:8}]},options:qiaChartOpts(c,{cutout:'58%',plugins:{legend:{position:'bottom',labels:{padding:8,font:{size:10}}}}})});
   var m1=document.getElementById('qaMonthlyTrendChart');
-  if(m1) m1._chart=new Chart(m1,{type:'bar',data:{labels:mk,datasets:[
-    {label:'Pass',data:mk.map(function(k){return monthMap[k].pass;}),backgroundColor:'#10b981'},
-    {label:'Needs',data:mk.map(function(k){return monthMap[k].needs;}),backgroundColor:'#f59e0b'},
-    {label:'Fail',data:mk.map(function(k){return monthMap[k].fail;}),backgroundColor:'#ef4444'}
-  ]},options:{scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}}});
+  if(m1) m1._chart=new Chart(m1,{type:'bar',data:{labels:mk.map(qiaFmtMonth),datasets:[
+    {label:'Pass',data:mk.map(function(k){return monthMap[k].pass;}),backgroundColor:'#10b981',borderRadius:4,maxBarThickness:28},
+    {label:'Needs',data:mk.map(function(k){return monthMap[k].needs;}),backgroundColor:'#f59e0b',borderRadius:4,maxBarThickness:28},
+    {label:'Fail',data:mk.map(function(k){return monthMap[k].fail;}),backgroundColor:'#ef4444',borderRadius:4,maxBarThickness:28}
+  ]},options:qiaChartOpts(c,{plugins:{legend:{position:'top',labels:{padding:10}}},scales:qiaChartScales(c,true)})});
   var evaluators=[...new Set(data.map(function(a){return a.Evaluator;}))].filter(Boolean).sort();
   var e1=document.getElementById('qaEvaluatorChart');
-  if(e1) e1._chart=new Chart(e1,{type:'bar',data:{labels:evaluators,datasets:[{label:'Audits',data:evaluators.map(function(ev){return data.filter(function(a){return a.Evaluator===ev;}).length;}),backgroundColor:'#14b8a6',borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  if(e1) e1._chart=new Chart(e1,{type:'bar',data:{labels:evaluators,datasets:[{label:'Audits',data:evaluators.map(function(ev){return data.filter(function(a){return a.Evaluator===ev;}).length;}),backgroundColor:c.accent,borderRadius:6,maxBarThickness:24}]},options:qiaChartOpts(c,{plugins:{legend:{display:false}},scales:qiaChartScales(c)})});
   qaRenderHeatmap(data);
   qaRenderBottom5(data);
 }
@@ -1518,8 +1630,8 @@ function qaRenderHeatmap(data){
   }).filter(Boolean).sort(function(a,b){return a.avg-b.avg;});
   el.innerHTML=rows.map(function(r){
     var pct=(r.avg/QA_MAX_PER_CRITERION*100).toFixed(0), color=r.avg>=1.4?'#10b981':r.avg>=0.8?'#f59e0b':'#ef4444';
-    return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;"><div style="width:200px;font-size:.82rem;font-weight:600;">'+r.cat.label+'</div><div style="flex:1;background:var(--bg-secondary);border-radius:20px;height:8px;"><div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:20px;"></div></div><div style="width:60px;text-align:right;font-weight:700;color:'+color+'">'+r.avg.toFixed(2)+'/2</div></div>';
-  }).join('')||'<div style="color:var(--t3);padding:20px;text-align:center;">No data</div>';
+    return '<div class="qia-heat-row"><div class="qia-heat-label" title="'+qiaEsc(r.cat.label)+'">'+qiaEsc(r.cat.label)+'</div><div class="qia-heat-track"><div class="qia-heat-fill" style="width:'+pct+'%;background:'+color+';"></div></div><div class="qia-heat-val" style="color:'+color+'">'+r.avg.toFixed(2)+'</div></div>';
+  }).join('')||'<div style="color:var(--t3);padding:16px;text-align:center;font-size:.82rem;">No scored criteria yet</div>';
 }
 
 function qaRenderBottom5(data){
@@ -1531,8 +1643,8 @@ function qaRenderBottom5(data){
   }).sort(function(a,b){return a.avg-b.avg;}).slice(0,5);
   el.innerHTML=stats.map(function(s,i){
     var color=s.avg>=70?'#10b981':s.avg>=50?'#f59e0b':'#ef4444';
-    return '<div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid var(--border);"><div style="font-weight:900;color:#ef4444;">#'+(i+1)+'</div><div style="flex:1;font-weight:700;">'+qiaEsc(s.name)+'</div><div style="font-size:.78rem;color:var(--t3);">'+s.count+' audits</div><div style="font-weight:900;color:'+color+'">'+s.avg.toFixed(1)+'%</div></div>';
-  }).join('')||'<div style="color:var(--t3);padding:20px;text-align:center;">No data</div>';
+    return '<div class="qia-mini-row"><div class="qia-mini-row-rank">#'+(i+1)+'</div><div class="qia-mini-row-label" title="'+qiaEsc(s.name)+'">'+qiaEsc(s.name)+'</div><div class="qia-mini-row-meta">'+s.count+' audits</div><div class="qia-mini-row-val" style="color:'+color+'">'+s.avg.toFixed(1)+'%</div></div>';
+  }).join('')||'<div style="color:var(--t3);padding:16px;text-align:center;font-size:.82rem;">No agent data yet</div>';
 }
 
 </script>
