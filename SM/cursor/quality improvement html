@@ -103,7 +103,9 @@ body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-b
 .tab-btn{padding:10px 24px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);display:inline-flex;align-items:center;gap:6px}
 .tab-btn.active{background:var(--grad);color:#fff;border-color:transparent}
 .form-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--cs)}
-.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;width:100%}
+#taForm.form-grid{display:grid!important;grid-template-columns:repeat(4,minmax(180px,1fr))!important}
+@media(max-width:1200px){#taForm.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 .form-field{display:flex;flex-direction:column;gap:.35rem}
 .form-field.full{grid-column:1/-1}
 .form-field label{font-size:.72rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.05em}
@@ -122,9 +124,24 @@ body[data-theme="dark"] .live-badge-pill,body[data-theme="duralux-dark"] .live-b
 .lm-stat-value{font-size:1.2rem;font-weight:900;color:var(--sc)}
 .qa-atab-btn{padding:8px 18px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg-input);color:var(--t1)}
 .qa-atab-btn.active{background:var(--grad);color:#fff;border-color:transparent}
-.qa-criterion-row{display:flex;align-items:center;padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);min-height:44px;gap:6px;margin-bottom:6px}
-.qa-crit-label{flex:1;font-size:.84rem;font-weight:600}
-.qa-score-select{padding:6px 4px;border-radius:7px;border:2px solid var(--border);background:var(--bg-input);color:var(--t1);font-size:.9rem;font-weight:800;width:70px;text-align:center}
+.qa-criterion-row{display:flex;align-items:center;padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);min-height:44px;gap:6px;margin-bottom:6px;transition:opacity .2s,background .15s}
+.qa-criterion-row.qa-na-active{opacity:.45;background:var(--bg-secondary)}
+.qa-criterion-row.qa-row-err{border-color:#ef4444!important;background:rgba(239,68,68,.05)}
+.qa-crit-label{flex:1;display:flex;align-items:center;font-size:.84rem;font-weight:600;min-width:0}
+.qa-crit-score{width:80px;display:flex;justify-content:center;flex-shrink:0}
+.qa-na-btn{width:52px;display:flex;justify-content:center;flex-shrink:0}
+.qa-na-toggle{padding:4px 8px;border-radius:6px;font-size:.72rem;font-weight:800;cursor:pointer;border:1px solid;white-space:nowrap}
+.qa-na-toggle.na-on{background:rgba(99,102,241,.15);border-color:#6366f1;color:#6366f1}
+.qa-na-toggle.na-off{background:var(--bg-secondary);border-color:var(--border);color:var(--t3)}
+.qa-crit-comment{width:88px;display:flex;justify-content:center;flex-shrink:0}
+.qa-check{width:14px;height:14px;accent-color:var(--acc);cursor:pointer}
+.qa-score-select{padding:6px 4px;border-radius:7px;border:2px solid var(--border);background:var(--bg-input);color:var(--t1);font-size:.9rem;font-weight:800;width:70px;text-align:center;cursor:pointer}
+.qa-score-select:disabled{opacity:.25;cursor:not-allowed}
+.qa-score-select.qa-required-err{border-color:#ef4444!important;background:rgba(239,68,68,.07)}
+.qa-score-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700}
+.qa-info-btn{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--bg-secondary);border:1px solid var(--border);color:var(--t3);font-size:9px;font-weight:700;cursor:pointer;margin-left:5px;position:relative;flex-shrink:0}
+.qa-info-btn:hover .qa-tooltip{display:block}
+.qa-tooltip{display:none;position:absolute;left:20px;top:50%;transform:translateY(-50%);background:#1e1b2e;color:#e2e8f0;font-size:11px;line-height:1.5;padding:8px 12px;border-radius:8px;width:240px;z-index:9999;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.4);font-weight:400}
 .qa-error-banner{display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);color:#dc2626;padding:12px 16px;border-radius:10px;margin-bottom:1rem;font-size:.84rem;font-weight:600}
 .loading-wrap{text-align:center;padding:60px 20px}
 .loading-wrap .spinner{width:48px;height:48px;border-radius:50%;border:4px solid var(--border);border-top-color:var(--acc);animation:spin .8s linear infinite;margin:0 auto 16px}
@@ -184,7 +201,7 @@ var LIST_QA = 'QIA_QA_Audit';
 var qiaTeams = [], qiaTopics = [], qiaQaAudits = [];
 var taGridApi = null, qaGridApi = null;
 var taChartsVisible = false, qaChartsVisible = false;
-var taCurrentTab = 'analytics', qaCurrentTab = 'analytics', qaAnalyticsTab = 'Call', qaChartPeriod = 'M';
+var taCurrentTab = 'analytics', qaCurrentTab = 'analytics', qaAnalyticsTab = 'Call', qaChartPeriod = 'M', qaSelectedOutcome = '';
 window.USER_CONTEXT = { userName: 'Demo User', role: 'Admin' };
 
 function qiaInitSpUrl() {
@@ -261,27 +278,28 @@ function taFieldId(k){ return 'ta_'+TA_SP[k].replace(/[^a-zA-Z0-9_]/g,'_'); }
 
 var QA_MAX_PER_CRITERION = 2;
 var QA_CALL_CRITERIA = [
-  {id:'C01_Welcoming',label:'Welcoming & Farewell'},
-  {id:'C03_FormOfAppeal',label:'Form of Appeal'},
-  {id:'C04_OfficialSpeech',label:'Professional Language'},
-  {id:'C06_HoldTechniques',label:'Hold Techniques'},
-  {id:'C07_ActiveListening',label:'Active Listening'},
-  {id:'C10_HandlingTime',label:'Handling Time'},
-  {id:'C12_CustomerID',label:'Customer Identification'},
-  {id:'C14_Transaction',label:'Transaction Registration'},
-  {id:'C16_CorrectInfo',label:'Correct Information'},
-  {id:'C20_ClarifyingQuestions',label:'Clarifying Questions'}
+  {id:'C01_Welcoming',label:'Welcoming & Farewell',desc:'Did the agent greet and close the call professionally?'},
+  {id:'C03_FormOfAppeal',label:'Form of Appeal',desc:'Did the agent address the customer appropriately throughout the call?'},
+  {id:'C04_OfficialSpeech',label:'Professional Language',desc:'Was language formal, professional, and tone calm and clear?'},
+  {id:'C06_HoldTechniques',label:'Hold Techniques',desc:'Was the customer informed before hold and was hold time reasonable?'},
+  {id:'C07_ActiveListening',label:'Active Listening',desc:'Did the agent listen without interrupting and acknowledge the customer?'},
+  {id:'C10_HandlingTime',label:'Handling Time',desc:'Was the call handled efficiently without unnecessary delays?'},
+  {id:'C12_CustomerID',label:'Customer Identification',desc:'Was the customer properly verified before account actions?'},
+  {id:'C14_Transaction',label:'Transaction Registration',desc:'Was the transaction completed and issue logged accurately?'},
+  {id:'C16_CorrectInfo',label:'Correct Information',desc:'Was all information provided accurate and complete?'},
+  {id:'C20_ClarifyingQuestions',label:'Clarifying Questions',desc:'Did the agent ask relevant questions to understand the issue?'}
 ];
 var QA_EMAIL_CRITERIA = [
-  {id:'E01_FormOfAppeal',label:'Form of Appeal'},
-  {id:'E02_OfficialText',label:'Official Text & Grammar'},
-  {id:'E03_ReadingAttentively',label:'Reading Attentively'},
-  {id:'E05_HandlingTime',label:'Handling Time'},
-  {id:'E07_CustomerID',label:'Customer Identification'},
-  {id:'E09_Transaction',label:'Transaction Fulfillment'},
-  {id:'E11_CorrectInfo',label:'Correct Information'},
-  {id:'E13_ClarifyingQuestions',label:'Clarifying Questions'}
+  {id:'E01_FormOfAppeal',label:'Form of Appeal',desc:'Did the agent address the customer appropriately in the email?'},
+  {id:'E02_OfficialText',label:'Official Text & Grammar',desc:'Was the email formal, professional, and grammatically correct?'},
+  {id:'E03_ReadingAttentively',label:'Reading Attentively',desc:'Did the response show the agent fully understood the email?'},
+  {id:'E05_HandlingTime',label:'Handling Time',desc:'Was the email responded to within SLA?'},
+  {id:'E07_CustomerID',label:'Customer Identification',desc:'Was the customer properly identified before account actions?'},
+  {id:'E09_Transaction',label:'Transaction Fulfillment',desc:'Was the requested transaction addressed correctly?'},
+  {id:'E11_CorrectInfo',label:'Correct Information',desc:'Was all information in the email accurate and complete?'},
+  {id:'E13_ClarifyingQuestions',label:'Clarifying Questions',desc:'Did the agent ask relevant clarifying questions?'}
 ];
+function qaAllCriteriaCols(){ return QA_CALL_CRITERIA.concat(QA_EMAIL_CRITERIA); }
 
 function qiaSetLoadingMsg(msg) {
   var el = document.getElementById('taLoadStatus');
@@ -339,6 +357,45 @@ function qiaFetchSp(url, timeoutMs) {
     };
     xhr.send();
   });
+}
+
+var qiaListItemTypes = {};
+async function qiaGetDigest() {
+  var res = await fetch(SP_URL + '/_api/contextinfo', { method: 'POST', headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+  if (!res.ok) throw new Error('Could not get form digest');
+  return (await res.json()).d.GetContextWebInformation.FormDigestValue;
+}
+async function qiaGetListItemType(listTitle) {
+  if (qiaListItemTypes[listTitle]) return qiaListItemTypes[listTitle];
+  var res = await qiaFetchSp(qiaListApi(listTitle, '?$select=ListItemEntityTypeFullName'));
+  if (!res.ok) throw new Error('Could not read list metadata for ' + listTitle);
+  qiaListItemTypes[listTitle] = (await res.json()).d.ListItemEntityTypeFullName;
+  return qiaListItemTypes[listTitle];
+}
+async function qiaGetCurrentUserId() {
+  var res = await qiaFetchSp(SP_URL + '/_api/web/currentuser');
+  if (!res.ok) throw new Error('Could not get current user');
+  return (await res.json()).d.Id;
+}
+async function qiaSpCreateItem(listTitle, fields) {
+  var digest = await qiaGetDigest();
+  var itemType = await qiaGetListItemType(listTitle);
+  var body = { __metadata: { type: itemType } };
+  Object.keys(fields).forEach(function(k) {
+    if (fields[k] !== undefined && fields[k] !== null && fields[k] !== '') body[k] = fields[k];
+  });
+  var res = await fetch(qiaListApi(listTitle, '/items'), {
+    method: 'POST',
+    headers: { 'Accept': 'application/json;odata=verbose', 'Content-Type': 'application/json;odata=verbose', 'X-RequestDigest': digest },
+    credentials: 'include',
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()).d;
+}
+function qiaToSpDate(v) {
+  if (!v) return '';
+  try { return new Date(v).toISOString(); } catch(e) { return v; }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -498,12 +555,8 @@ function taGenDummyTopics() {
 
 async function qiaFetchQaAudits() {
   if (QIA_DUMMY_MODE) { qiaQaAudits = qaGenDummyAudits(); return; }
-  var url = qiaListApi(LIST_QA, '/items?$expand=Evaluator&$top=500&$orderby=Id desc');
+  var url = qiaListApi(LIST_QA, '/items?$top=500&$orderby=Id desc');
   var res = await qiaFetchSp(url);
-  if (!res.ok) {
-    url = qiaListApi(LIST_QA, '/items?$top=500&$orderby=Id desc');
-    res = await qiaFetchSp(url);
-  }
   if (!res.ok) {
     var errText = await res.text();
     throw new Error('HTTP ' + res.status + ' — ' + errText.substring(0, 400));
@@ -760,81 +813,104 @@ function taRenderCharts(data){
   if(tc) tc._chart=new Chart(tc,{type:'line',data:{labels:mk,datasets:[{label:'Submissions',data:mk.map(function(k){return months[k];}),borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,.15)',fill:true,tension:.35}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
 }
 
+var TA_LABELS = {
+  Date_Time:'Date & Time', INUM:'INUM', Calling_Number:'Calling Number', Status_of_Number:'Status of Number',
+  Impacted_Number:'Impacted Number', Account_Number:'Account Number', Segment:'Segment', LOB:'LOB',
+  Product:'Product', Site:'Site', Agent_Name_ID:'Agent Name / ID', Call_ID:'Call ID',
+  Customer_Claim:'Customer Claim', Agent_Resolution:'Agent Resolution', Driver:'Driver',
+  Primary_Driver:'Primary Driver', Secondary_Driver:'Secondary Driver', Sub_Driver:'Sub Driver',
+  Root_Cause:'Root Cause', Identified_Gap_Process:'Identified Gap (Process)', Identified_Gap_Agent:'Identified Gap (Agent)',
+  Risk_Level:'Risk Level', Deep_Root_Cause_Details:'Deep Root Cause Details', Repeated_Call:'Repeated Call',
+  Repeated_Calls_Count:'Repeated Calls Count', Repeated_TTs_Count:'Repeated TTs Count', Reopened_TTs_Count:'Reopened TTs Count',
+  FCR_Impact_pct:'FCR Impact %', Event_Triplet_Valid:'Event Triplet Valid', Ticket_Triplet_Valid:'Ticket Triplet Valid',
+  FO_Resolution_Valid:'FO Resolution Valid', Validation_Process_Followed:'Validation Process Followed',
+  Leakage_Cost_AED:'Leakage Cost (AED)', Saving_Potential_AED:'Saving Potential (AED)', Status:'Status',
+  Owner:'Owner', Target_Date:'Target Date', Expected_Outcome:'Expected Outcome', Priority:'Priority',
+  Action_Plan:'Action Plan', Manager_QA_Comments:'Manager / QA Comments'
+};
+var TA_NUM_KEYS = ['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'];
+
+function taFormInput(k, type, req) {
+  var id = taFieldId(k), label = TA_LABELS[k] || k, star = req ? ' *' : '';
+  if (type === 'textarea') return '<div class="form-field full"><label>' + label + star + '</label><textarea id="' + id + '"' + (req ? ' required' : '') + '></textarea></div>';
+  if (type === 'select') return '<div class="form-field"><label>' + label + star + '</label><select id="' + id + '">' + (type.opts || '') + '</select></div>';
+  return '<div class="form-field"><label>' + label + star + '</label><input type="' + (type || 'text') + '" id="' + id + '"' + (req ? ' required' : '') + '></div>';
+}
+function taFormSelect(k, options, req) {
+  var id = taFieldId(k), label = TA_LABELS[k] || k, star = req ? ' *' : '';
+  return '<div class="form-field"><label>' + label + star + '</label><select id="' + id + '">' + options.map(function(o){ return '<option>' + o + '</option>'; }).join('') + '</select></div>';
+}
+
 function taRenderSubmitSection(){
-  document.getElementById('taTabSubmitSection').innerHTML='<div class="form-card"><div class="table-title" style="margin-bottom:1rem;">New Topic Analysis</div><form id="taForm" class="form-grid" onsubmit="return taSubmit(event)">'+
-    '<div class="section-divider">Customer & Interaction</div>'+
-    '<div class="form-field"><label>Date_Time *</label><input type="datetime-local" id="taDate_Time" required></div>'+
-    '<div class="form-field"><label>INUM</label><input id="taINUM"></div>'+
-    '<div class="form-field"><label>Calling_Number</label><input id="taCalling_Number"></div>'+
-    '<div class="form-field"><label>Status_of_Number</label><select id="taStatus_of_Number"><option>Active</option><option>Suspended</option><option>Deactivated</option></select></div>'+
-    '<div class="form-field"><label>Impacted_Number</label><input id="taImpacted_Number"></div>'+
-    '<div class="form-field"><label>Account_Number</label><input id="taAccount_Number"></div>'+
-    '<div class="form-field"><label>Segment</label><select id="taSegment"><option>Consumer</option><option>Enterprise</option></select></div>'+
-    '<div class="form-field"><label>LOB</label><select id="taLOB"><option>Front Office</option><option>Retention</option><option>Back Office</option><option>Billing</option></select></div>'+
-    '<div class="form-field"><label>Product</label><select id="taProduct"><option>Postpaid</option><option>Prepaid</option><option>Home Wireless</option><option>Fiber</option></select></div>'+
-    '<div class="form-field"><label>Site</label><input id="taSite"></div>'+
-    '<div class="form-field"><label>Agent_Name_ID</label><input id="taAgent_Name_ID"></div>'+
-    '<div class="form-field"><label>Call_ID</label><input id="taCall_ID"></div>'+
-    '<div class="form-field full"><label>Customer_Claim *</label><textarea id="taCustomer_Claim" required></textarea></div>'+
-    '<div class="form-field full"><label>Agent_Resolution</label><textarea id="taAgent_Resolution"></textarea></div>'+
-    '<div class="section-divider">Driver & Root Cause</div>'+
-    '<div class="form-field"><label>Driver</label><select id="taDriver"><option>Billing</option><option>Network</option><option>Cancellation</option><option>Refund</option><option>Roaming</option></select></div>'+
-    '<div class="form-field"><label>Primary_Driver</label><input id="taPrimary_Driver"></div>'+
-    '<div class="form-field"><label>Secondary_Driver</label><input id="taSecondary_Driver"></div>'+
-    '<div class="form-field"><label>Sub_Driver</label><input id="taSub_Driver"></div>'+
-    '<div class="form-field"><label>Root_Cause</label><select id="taRoot_Cause"><option>Process Gap</option><option>Agent Knowledge Gap</option><option>System Gap</option><option>Policy Gap</option></select></div>'+
-    '<div class="form-field"><label>Identified_Gap_Process</label><select id="taIdentified_Gap_Process"><option>No</option><option>Yes</option></select></div>'+
-    '<div class="form-field"><label>Identified_Gap_Agent</label><select id="taIdentified_Gap_Agent"><option>No</option><option>Yes</option></select></div>'+
-    '<div class="form-field"><label>Risk_Level</label><select id="taRisk_Level"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>'+
-    '<div class="form-field full"><label>Deep_Root_Cause_Details</label><textarea id="taDeep_Root_Cause_Details"></textarea></div>'+
-    '<div class="section-divider">FCR / TT Impact</div>'+
-    '<div class="form-field"><label>Repeated_Call</label><select id="taRepeated_Call"><option>No</option><option>Yes</option></select></div>'+
-    '<div class="form-field"><label>Repeated_Calls_Count</label><input type="number" id="taRepeated_Calls_Count" value="0"></div>'+
-    '<div class="form-field"><label>Repeated_TTs_Count</label><input type="number" id="taRepeated_TTs_Count" value="0"></div>'+
-    '<div class="form-field"><label>Reopened_TTs_Count</label><input type="number" id="taReopened_TTs_Count" value="0"></div>'+
-    '<div class="form-field"><label>FCR_Impact_pct</label><input type="number" id="taFCR_Impact_pct" value="0"></div>'+
-    '<div class="form-field"><label>Event_Triplet_Valid</label><select id="taEvent_Triplet_Valid"><option>Yes</option><option>No</option><option>N/A</option></select></div>'+
-    '<div class="form-field"><label>Ticket_Triplet_Valid</label><select id="taTicket_Triplet_Valid"><option>Yes</option><option>No</option><option>N/A</option></select></div>'+
-    '<div class="form-field"><label>FO_Resolution_Valid</label><select id="taFO_Resolution_Valid"><option>Yes</option><option>No</option><option>N/A</option></select></div>'+
-    '<div class="form-field"><label>Validation_Process_Followed</label><select id="taValidation_Process_Followed"><option>Yes</option><option>No</option><option>Partially</option></select></div>'+
-    '<div class="form-field"><label>Leakage_Cost_AED</label><input type="number" id="taLeakage_Cost_AED" value="0"></div>'+
-    '<div class="form-field"><label>Saving_Potential_AED</label><input type="number" id="taSaving_Potential_AED" value="0"></div>'+
-    '<div class="form-field"><label>Status</label><select id="taStatus"><option>Open</option><option>In Progress</option><option>Pending</option><option>Closed</option></select></div>'+
-    '<div class="section-divider">Action Plan</div>'+
-    '<div class="form-field"><label>Owner</label><input id="taOwner"></div>'+
-    '<div class="form-field"><label>Target_Date</label><input type="date" id="taTarget_Date"></div>'+
-    '<div class="form-field"><label>Expected_Outcome</label><select id="taExpected_Outcome"><option>Reduce Repeat Calls</option><option>Improve FCR</option><option>Reduce Cost Leakage</option></select></div>'+
-    '<div class="form-field"><label>Priority</label><select id="taPriority"><option>Low</option><option>Medium</option><option>High</option><option>Urgent</option></select></div>'+
-    '<div class="form-field full"><label>Action_Plan</label><textarea id="taAction_Plan"></textarea></div>'+
-    '<div class="form-field full"><label>Manager_QA_Comments</label><textarea id="taManager_QA_Comments"></textarea></div>'+
-    '<div class="form-field full" style="display:flex;gap:8px;justify-content:flex-end;"><button type="button" class="reset-btn" onclick="document.getElementById(\'taForm\').reset()">Clear</button><button type="submit" class="export-btn">Save Analysis</button></div>'+
-    '</form><div id="taSubmitMsg" style="margin-top:8px;font-size:.84rem;"></div></div>';
+  var h = '<div class="form-card"><div class="table-title" style="margin-bottom:1rem;">New Topic Analysis</div><form id="taForm" class="form-grid" onsubmit="return taSubmit(event)">';
+  h += '<div class="section-divider">Customer & Interaction</div>';
+  h += taFormInput('Date_Time', 'datetime-local', true);
+  h += taFormInput('INUM'); h += taFormInput('Calling_Number'); 
+  h += taFormSelect('Status_of_Number', ['Active','Suspended','Deactivated']);
+  h += taFormInput('Impacted_Number'); h += taFormInput('Account_Number');
+  h += taFormSelect('Segment', ['Consumer','Enterprise']);
+  h += taFormSelect('LOB', ['Front Office','Retention','Back Office','Billing']);
+  h += taFormSelect('Product', ['Postpaid','Prepaid','Home Wireless','Fiber']);
+  h += taFormInput('Site'); h += taFormInput('Agent_Name_ID'); h += taFormInput('Call_ID');
+  h += taFormInput('Customer_Claim', 'textarea', true);
+  h += taFormInput('Agent_Resolution', 'textarea');
+  h += '<div class="section-divider">Driver & Root Cause</div>';
+  h += taFormSelect('Driver', ['Billing','Network','Cancellation','Refund','Roaming']);
+  h += taFormInput('Primary_Driver'); h += taFormInput('Secondary_Driver'); h += taFormInput('Sub_Driver');
+  h += taFormSelect('Root_Cause', ['Process Gap','Agent Knowledge Gap','System Gap','Policy Gap']);
+  h += taFormSelect('Identified_Gap_Process', ['No','Yes']);
+  h += taFormSelect('Identified_Gap_Agent', ['No','Yes']);
+  h += taFormSelect('Risk_Level', ['Low','Medium','High','Critical']);
+  h += taFormInput('Deep_Root_Cause_Details', 'textarea');
+  h += '<div class="section-divider">FCR / TT Impact</div>';
+  h += taFormSelect('Repeated_Call', ['No','Yes']);
+  h += taFormInput('Repeated_Calls_Count', 'number'); h += taFormInput('Repeated_TTs_Count', 'number');
+  h += taFormInput('Reopened_TTs_Count', 'number'); h += taFormInput('FCR_Impact_pct', 'number');
+  h += taFormSelect('Event_Triplet_Valid', ['Yes','No','N/A']);
+  h += taFormSelect('Ticket_Triplet_Valid', ['Yes','No','N/A']);
+  h += taFormSelect('FO_Resolution_Valid', ['Yes','No','N/A']);
+  h += taFormSelect('Validation_Process_Followed', ['Yes','No','Partially']);
+  h += taFormInput('Leakage_Cost_AED', 'number'); h += taFormInput('Saving_Potential_AED', 'number');
+  h += taFormSelect('Status', ['Open','In Progress','Pending','Closed']);
+  h += '<div class="section-divider">Action Plan</div>';
+  h += taFormInput('Owner'); h += taFormInput('Target_Date', 'date');
+  h += taFormSelect('Expected_Outcome', ['Reduce Repeat Calls','Improve FCR','Reduce Cost Leakage']);
+  h += taFormSelect('Priority', ['Low','Medium','High','Urgent']);
+  h += taFormInput('Action_Plan', 'textarea');
+  h += taFormInput('Manager_QA_Comments', 'textarea');
+  h += '<div class="form-field full" style="display:flex;gap:8px;justify-content:flex-end;"><button type="button" class="reset-btn" onclick="document.getElementById(\'taForm\').reset()">Clear</button><button type="submit" class="export-btn">Save Analysis</button></div>';
+  h += '</form><div id="taSubmitMsg" style="margin-top:8px;font-size:.84rem;"></div></div>';
+  document.getElementById('taTabSubmitSection').innerHTML = h;
 }
 
 window.taSubmit=function(e){
   e.preventDefault();
   var body={};
-  var numKeys=['Repeated_Calls_Count','Repeated_TTs_Count','Reopened_TTs_Count','FCR_Impact_pct','Leakage_Cost_AED','Saving_Potential_AED'];
   Object.keys(TA_SP).forEach(function(k){
-    var el=document.getElementById(taFieldId(k))||document.getElementById('ta'+k); if(!el) return;
-    body[TA_SP[k]]=numKeys.indexOf(k)>=0?Number(el.value||0):el.value;
+    var el=document.getElementById(taFieldId(k)); if(!el) return;
+    var v=el.value;
+    if(TA_NUM_KEYS.indexOf(k)>=0) body[TA_SP[k]]=Number(v||0);
+    else body[TA_SP[k]]=v;
   });
   body.Title=(body[TA_SP.Customer_Claim]||'Topic').substring(0,255);
+  if(body[TA_SP.Date_Time]) body[TA_SP.Date_Time]=qiaToSpDate(body[TA_SP.Date_Time]);
+  if(body[TA_SP.Target_Date]) body[TA_SP.Target_Date]=qiaToSpDate(body[TA_SP.Target_Date]);
   if(!body[TA_SP.Date_Time]||!body[TA_SP.Customer_Claim]){ alert('Date & Time and Customer Claim are required'); return false; }
-  if(QIA_DUMMY_MODE){ var row=Object.assign({ID:qiaTopics.length+1},body); qiaTopics.unshift(row); document.getElementById('taSubmitMsg').innerHTML='<span style="color:#10b981;">Saved locally (demo mode)</span>'; taSetTab('analytics'); return false; }
+  if(QIA_DUMMY_MODE){ var row=Object.assign({ID:qiaTopics.length+1},body); qiaTopics.unshift(row); document.getElementById('taSubmitMsg').innerHTML='<span style="color:#10b981;">Saved locally (demo mode)</span>'; taSetTab('analytics'); taRenderAnalytics(); return false; }
   taSubmitToSp(body);
   return false;
 };
 
 async function taSubmitToSp(body){
+  var msgEl=document.getElementById('taSubmitMsg');
+  if(msgEl) msgEl.innerHTML='<span style="color:var(--t3);">Saving…</span>';
   try{
-    var digestRes=await fetch(SP_URL+'/_api/contextinfo',{method:'POST',headers:{'Accept':'application/json;odata=verbose'},credentials:'include'});
-    var digest=(await digestRes.json()).d.GetContextWebInformation.FormDigestValue;
-    var res=await fetch(SP_URL+"/_api/web/lists/getbytitle('"+LIST_TOPIC+"')/items",{method:'POST',headers:{'Accept':'application/json;odata=verbose','Content-Type':'application/json;odata=verbose','X-RequestDigest':digest},credentials:'include',body:JSON.stringify(body)});
-    if(!res.ok) throw new Error(await res.text());
-    await qiaFetchTopics(); taSetTab('analytics');
-    document.getElementById('taSubmitMsg').innerHTML='<span style="color:#10b981;">Saved to SharePoint</span>';
-  }catch(err){ document.getElementById('taSubmitMsg').innerHTML='<span style="color:#ef4444;">'+err.message+'</span>'; }
+    await qiaSpCreateItem(LIST_TOPIC, body);
+    await qiaFetchTopics(); taSetTab('analytics'); taRenderAnalytics();
+    if(msgEl) msgEl.innerHTML='<span style="color:#10b981;">Saved to SharePoint</span>';
+  }catch(err){
+    if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">'+qiaEsc(err.message||String(err))+'</span>';
+  }
 }
 
 // QUALITY ASSURANCE (QIA — Call & Email only)
@@ -885,90 +961,276 @@ window.qaSetTab=function(tab){
   else qaRenderAnalyticsSection();
 };
 
+function qaShowError(msg){ var el=document.getElementById('qaErrorBanner'); if(!el) return; el.style.display='block'; el.innerHTML=msg; }
+function qaHideError(){ var el=document.getElementById('qaErrorBanner'); if(el){ el.style.display='none'; el.innerHTML=''; } }
+
 function qaRenderSubmitForm(){
-  document.getElementById('qaTabSubmitSection').innerHTML='<div id="qaErrorBanner" class="qa-error-banner"></div><div class="form-card"><div class="table-title" style="margin-bottom:1rem;">Submit QA Audit</div>'+
-    '<div class="form-grid">'+
-    '<div class="form-field"><label>Audit_Type *</label><select id="qaAuditType" onchange="qaHandleTypeChange()"><option value="">Select...</option><option>Call</option><option>Email</option></select></div>'+
+  document.getElementById('qaTabSubmitSection').innerHTML=
+    '<div id="qaErrorBanner" class="qa-error-banner"></div><div class="form-card">'+
+    '<div class="table-title" style="margin-bottom:1rem;">Submit QA Audit</div>'+
+    '<div style="background:var(--bg-secondary);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;">'+
+    '<div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--t3);letter-spacing:.06em;margin-bottom:1rem;">Audit Information</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">'+
+    '<div class="form-field"><label>Audit Type *</label><select id="qaAuditType" onchange="qaHandleTypeChange()"><option value="">Select...</option><option>Call</option><option>Email</option></select></div>'+
     '<div class="form-field"><label>Team *</label><select id="qaTeam"><option value="">Select team...</option>'+qiaTeamOptions()+'</select></div>'+
-    '<div class="form-field"><label>Agent_Name *</label><input id="qaAgentName" placeholder="Free text agent name"></div>'+
-    '<div class="form-field"><label>Reference_ID</label><input id="qaReferenceID"></div>'+
-    '<div class="form-field"><label>Date_of_Eval</label><input type="date" id="qaDateOfEval"></div>'+
-    '<div id="qaTypeFields" class="form-field full"></div>'+
-    '<div class="section-divider full">Scoring Criteria (0 / 1 / 2)</div>'+
-    '<div id="qaCriteriaList" class="form-field full"></div>'+
-    '<div class="form-field"><label>Total Score</label><div id="qaTotalScore" style="font-size:1.5rem;font-weight:900;color:var(--sc);">— / 100</div></div>'+
-    '<div class="form-field"><label>Outcome</label><div id="qaOutcomeDisplay" style="font-weight:700;">—</div></div>'+
-    '<div class="form-field full"><label>Comments</label><textarea id="qaComments"></textarea></div>'+
-    '<div class="form-field full" style="display:flex;gap:8px;justify-content:flex-end;"><button type="button" class="reset-btn" onclick="qaClearForm()">Clear</button><button type="button" class="export-btn" onclick="qaSubmitAudit()">Submit Audit</button></div>'+
-    '</div><div id="qaSubmitMsg" style="margin-top:8px;font-size:.84rem;"></div></div>';
+    '<div class="form-field"><label>Agent Name *</label><input id="qaAgentName" placeholder="Agent name"></div>'+
+    '<div class="form-field"><label>Reference ID</label><input id="qaReferenceID"></div>'+
+    '<div class="form-field"><label>Date of Evaluation</label><input type="date" id="qaDateOfEval" readonly style="opacity:.75;cursor:not-allowed;"></div>'+
+    '<div class="form-field" id="qaDateFieldWrap" style="display:none;"><label id="qaDateFieldLabel">Date</label><input type="date" id="qaDateField"></div>'+
+    '<div class="form-field" id="qaMSISDNWrap" style="display:none;"><label>MSISDN</label><input id="qaMSISDN"></div>'+
+    '<div class="form-field" id="qaDurWrap" style="display:none;"><label>Call Duration</label><div style="display:flex;gap:6px;align-items:center;"><input type="number" id="qaDurMin" min="0" value="0" style="width:60px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);"><span style="font-size:.75rem;color:var(--t3);">min</span><input type="number" id="qaDurSec" min="0" max="59" value="0" oninput="qaUpdateDurBadge()" style="width:60px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);"><span style="font-size:.75rem;color:var(--t3);">sec</span><span id="qaDurBadge" style="font-size:.72rem;font-weight:700;padding:4px 8px;border-radius:20px;background:var(--chip);">—</span></div></div>'+
+    '<div class="form-field" id="qaCallReasonWrap" style="display:none;"><label>Call Reason</label><input id="qaCallReason"></div>'+
+    '<div class="form-field" id="qaEmailReasonWrap" style="display:none;"><label>Email Reason</label><input id="qaEmailReason"></div>'+
+    '<div class="form-field" id="qaEmailSubjectWrap" style="display:none;"><label>Email Subject</label><input id="qaEmailSubject"></div>'+
+    '</div></div>'+
+    '<div style="background:var(--bg-secondary);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;">'+
+    '<div style="font-size:.85rem;font-weight:800;text-transform:uppercase;margin-bottom:.5rem;">Scoring Criteria</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;padding:.65rem 1rem;background:var(--bg-card);border-radius:9px;border:1px solid var(--border);">'+
+    '<span class="qa-score-pill" style="background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3);">0 — Not done</span>'+
+    '<span class="qa-score-pill" style="background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);">1 — Partial</span>'+
+    '<span class="qa-score-pill" style="background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.3);">2 — Done well</span>'+
+    '<span class="qa-score-pill" style="background:rgba(99,102,241,.12);color:#6366f1;border:1px solid rgba(99,102,241,.3);">— / N/A — Excluded</span>'+
+    '<span style="font-size:.72rem;color:#ef4444;font-weight:700;margin-left:auto;">All criteria default to N/A — click N/A to score</span></div>'+
+    '<div id="qaScoringPlaceholder" style="text-align:center;padding:2rem;color:var(--t3);">Select audit type to load criteria</div>'+
+    '<div id="qaScoringGrid" style="display:none;">'+
+    '<div style="display:flex;padding:6px 12px;margin-bottom:6px;border-radius:7px;background:var(--bg-card);border:1px solid var(--border);font-size:.7rem;font-weight:800;text-transform:uppercase;color:var(--t2);">'+
+    '<div style="flex:1;">Criterion</div><div style="width:80px;text-align:center;flex-shrink:0;">Score</div><div style="width:52px;text-align:center;flex-shrink:0;color:#6366f1;">N/A</div><div style="width:88px;text-align:center;flex-shrink:0;">Comment</div></div>'+
+    '<div id="qaCriteriaRows"></div></div>'+
+    '<div id="qaScoreSummary" style="display:none;margin-top:.85rem;padding:.85rem 1rem;background:var(--bg-card);border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">'+
+    '<div><div style="font-size:.88rem;font-weight:700;color:var(--t2);">Total Score</div><div id="qaScoreBreakdown" style="font-size:.7rem;color:var(--t3);">No scores yet</div></div>'+
+    '<div id="qaTotalScoreDisplay" style="font-size:1.7rem;font-weight:900;color:var(--t3);">— / 100</div></div></div>'+
+    '<div id="qaCommentBlock" style="display:none;background:var(--bg-secondary);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;"><div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--t3);margin-bottom:1rem;">Criterion Comments</div><div id="qaCommentInputs"></div></div>'+
+    '<div id="qaOutcomeSection" style="display:none;background:var(--bg-secondary);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;"><div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--t3);margin-bottom:1rem;">Outcome *</div><div style="display:flex;gap:12px;">'+
+    '<label id="qaOutcomePass" style="flex:1;padding:14px;border-radius:10px;border:2px solid var(--border);cursor:pointer;text-align:center;" onclick="qaSelectOutcome(\'Pass\')"><div style="font-weight:700;color:#10b981;">Pass</div><div style="font-size:.75rem;color:var(--t3);">70+</div></label>'+
+    '<label id="qaOutcomeNeeds" style="flex:1;padding:14px;border-radius:10px;border:2px solid var(--border);cursor:pointer;text-align:center;" onclick="qaSelectOutcome(\'Needs Improvement\')"><div style="font-weight:700;color:#f59e0b;">Needs Improvement</div><div style="font-size:.75rem;color:var(--t3);">50–69</div></label>'+
+    '<label id="qaOutcomeFail" style="flex:1;padding:14px;border-radius:10px;border:2px solid var(--border);cursor:pointer;text-align:center;" onclick="qaSelectOutcome(\'Fail\')"><div style="font-weight:700;color:#ef4444;">Fail</div><div style="font-size:.75rem;color:var(--t3);">&lt;50</div></label></div></div>'+
+    '<div class="form-field full"><label>General Comments</label><textarea id="qaComments" placeholder="Optional overall comments"></textarea></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;"><button type="button" class="reset-btn" onclick="qaClearForm()">Clear</button><button type="button" class="export-btn" onclick="qaSubmitAudit()">Submit Audit</button></div>'+
+    '<div id="qaSubmitMsg" style="margin-top:8px;font-size:.84rem;"></div></div>';
   document.getElementById('qaDateOfEval').value=new Date().toISOString().split('T')[0];
+  qaSelectedOutcome='';
   qaHandleTypeChange();
 }
 
 window.qaHandleTypeChange=function(){
   var type=(document.getElementById('qaAuditType')||{}).value||'';
-  var tf=document.getElementById('qaTypeFields');
-  var cl=document.getElementById('qaCriteriaList');
-  if(!type){ tf.innerHTML=''; cl.innerHTML='<div style="color:var(--t3);">Select audit type first</div>'; return; }
-  if(type==='Call'){
-    tf.innerHTML='<div class="form-grid" style="grid-column:1/-1;">'+
-      '<div class="form-field"><label>Date_of_Call</label><input type="date" id="qaDateField"></div>'+
-      '<div class="form-field"><label>MSISDN</label><input id="qaMSISDN"></div>'+
-      '<div class="form-field"><label>Call_Reason</label><input id="qaCallReason"></div>'+
-      '<div class="form-field"><label>Call_Duration (sec)</label><input type="number" id="qaCallDuration" value="0"></div></div>';
-  } else {
-    tf.innerHTML='<div class="form-grid" style="grid-column:1/-1;">'+
-      '<div class="form-field"><label>Date_of_Email</label><input type="date" id="qaDateField"></div>'+
-      '<div class="form-field"><label>Email_Reason</label><input id="qaEmailReason"></div>'+
-      '<div class="form-field"><label>Email_Subject</label><input id="qaEmailSubject"></div></div>';
+  ['qaDateFieldWrap','qaMSISDNWrap','qaDurWrap','qaCallReasonWrap','qaEmailReasonWrap','qaEmailSubjectWrap'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  var ph=document.getElementById('qaScoringPlaceholder'), grid=document.getElementById('qaScoringGrid'), sum=document.getElementById('qaScoreSummary'), out=document.getElementById('qaOutcomeSection');
+  if(!type){
+    if(ph) ph.style.display='block'; if(grid) grid.style.display='none'; if(sum) sum.style.display='none'; if(out) out.style.display='none';
+    var rows=document.getElementById('qaCriteriaRows'); if(rows) rows.innerHTML=''; qaUpdateCommentBlock(false); return;
   }
-  cl.innerHTML=qaGetCriteria(type).map(function(c){
-    return '<div class="qa-criterion-row"><div class="qa-crit-label">'+c.label+'</div><select class="qa-score-select" id="qa_'+c.id+'" onchange="qaUpdateScore()"><option value="">—</option><option>0</option><option>1</option><option>2</option></select></div>';
-  }).join('');
-  qaUpdateScore();
+  if(type==='Call'){
+    ['qaDateFieldWrap','qaMSISDNWrap','qaDurWrap','qaCallReasonWrap'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='block'; });
+    var l=document.getElementById('qaDateFieldLabel'); if(l) l.textContent='Date of Call';
+  } else {
+    ['qaDateFieldWrap','qaEmailReasonWrap','qaEmailSubjectWrap'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='block'; });
+    var l2=document.getElementById('qaDateFieldLabel'); if(l2) l2.textContent='Date of Email';
+  }
+  if(ph) ph.style.display='none'; if(grid) grid.style.display='block'; if(sum) sum.style.display='flex'; if(out) out.style.display='block';
+  qaRenderCriteriaRows(type);
+  qaHideError();
 };
 
-window.qaUpdateScore=function(){
-  var type=(document.getElementById('qaAuditType')||{}).value||'Call';
-  var scores={};
-  qaGetCriteria(type).forEach(function(c){ scores[c.id]=(document.getElementById('qa_'+c.id)||{}).value; });
-  var score=qaCalcScore(scores,type), outcome=qaOutcomeFromScore(score);
-  document.getElementById('qaTotalScore').textContent=score+' / 100';
-  document.getElementById('qaOutcomeDisplay').textContent=outcome;
-  document.getElementById('qaOutcomeDisplay').style.color=outcome==='Pass'?'#10b981':outcome==='Fail'?'#ef4444':'#f59e0b';
+function qaRenderCriteriaRows(type){
+  var container=document.getElementById('qaCriteriaRows'); if(!container) return;
+  container.innerHTML='';
+  qaGetCriteria(type).forEach(function(cat){
+    var row=document.createElement('div');
+    row.id='qaRow_'+cat.id;
+    row.className='qa-criterion-row qa-na-active';
+    row.dataset.naOn='true';
+    row.innerHTML=
+      '<div class="qa-crit-label"><span>'+cat.label+'</span><span class="qa-info-btn">i<span class="qa-tooltip">'+(cat.desc||'')+'</span></span></div>'+
+      '<div class="qa-crit-score"><select id="qaScore_'+cat.id+'" class="qa-score-select" disabled style="display:none;" onchange="qaLiveScore();qaHideError()">'+
+      '<option value="">—</option><option value="0">0</option><option value="1">1</option><option value="2">2</option></select>'+
+      '<span id="qaScoreBadge_'+cat.id+'" style="font-size:.72rem;font-weight:700;color:#6366f1;">—</span></div>'+
+      '<div class="qa-na-btn"><button type="button" id="qaNaBtn_'+cat.id+'" class="qa-na-toggle na-on" onclick="qaToggleNA(\''+cat.id+'\')">N/A</button></div>'+
+      '<div class="qa-crit-comment"><input type="checkbox" class="qa-check" id="qaAddComment_'+cat.id+'" onchange="qaUpdateCommentBlock(true)"></div>';
+    container.appendChild(row);
+  });
+  qaLiveScore();
+  qaUpdateCommentBlock(false);
+}
+
+window.qaToggleNA=function(catId){
+  var row=document.getElementById('qaRow_'+catId), sc=document.getElementById('qaScore_'+catId), badge=document.getElementById('qaScoreBadge_'+catId), btn=document.getElementById('qaNaBtn_'+catId), co=document.getElementById('qaAddComment_'+catId);
+  if(!row||!sc||!btn) return;
+  var naOn=row.dataset.naOn==='true';
+  if(naOn){
+    row.dataset.naOn='false'; row.classList.remove('qa-na-active');
+    sc.style.display='block'; sc.disabled=false;
+    if(badge) badge.style.display='none';
+    btn.classList.remove('na-on'); btn.classList.add('na-off');
+  } else {
+    row.dataset.naOn='true'; row.classList.add('qa-na-active');
+    sc.style.display='none'; sc.disabled=true; sc.value=''; sc.classList.remove('qa-required-err');
+    if(badge) badge.style.display='inline';
+    if(co) co.checked=false;
+    btn.classList.add('na-on'); btn.classList.remove('na-off');
+  }
+  qaLiveScore(); qaUpdateCommentBlock(false); qaHideError();
+};
+
+window.qaUpdateDurBadge=function(){
+  var min=parseInt((document.getElementById('qaDurMin')||{}).value||0,10);
+  var sec=parseInt((document.getElementById('qaDurSec')||{}).value||0,10);
+  var total=min*60+sec, badge=document.getElementById('qaDurBadge'); if(!badge) return;
+  if(!total){ badge.textContent='—'; return; }
+  badge.textContent=total<=120?'Short':total<=300?'Standard':'Long';
+};
+
+window.qaLiveScore=function(){
+  var type=(document.getElementById('qaAuditType')||{}).value||'';
+  var criteria=qaGetCriteria(type), scores={};
+  criteria.forEach(function(cat){
+    var row=document.getElementById('qaRow_'+cat.id), sc=document.getElementById('qaScore_'+cat.id);
+    if(row&&row.dataset.naOn==='true'){ scores[cat.id]=null; return; }
+    var v=sc?sc.value:''; scores[cat.id]=(v===''||v===undefined)?null:parseFloat(v);
+  });
+  var filled=criteria.filter(function(c){ var s=scores[c.id]; return s!==null&&s!==undefined&&!isNaN(s); });
+  var pct=qaCalcScore(scores,type);
+  var bd=document.getElementById('qaScoreBreakdown'), td=document.getElementById('qaTotalScoreDisplay');
+  if(!filled.length){ if(bd) bd.textContent='No scores entered yet'; if(td) td.textContent='— / 100'; return; }
+  if(bd) bd.textContent='Based on '+filled.length+' of '+criteria.length+' criteria scored';
+  if(td){ td.textContent=pct+' / 100'; td.style.color=pct>=70?'#10b981':pct>=50?'#f59e0b':'#ef4444'; }
+};
+
+window.qaUpdateCommentBlock=function(scroll){
+  var block=document.getElementById('qaCommentBlock'), inputs=document.getElementById('qaCommentInputs'); if(!block||!inputs) return;
+  var type=(document.getElementById('qaAuditType')||{}).value||'', html='', any=false;
+  qaGetCriteria(type).forEach(function(cat){
+    var cb=document.getElementById('qaAddComment_'+cat.id); if(!cb||!cb.checked) return;
+    any=true;
+    var prev=(document.querySelector('#qaCommentInputs input[data-cid="'+cat.id+'"]')||{}).value||'';
+    html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-size:.78rem;font-weight:700;min-width:140px;">'+cat.label+'</span>'+
+      '<input type="text" data-cid="'+cat.id+'" value="'+String(prev).replace(/"/g,'&quot;')+'" placeholder="Comment for this criterion..." style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--t1);"></div>';
+  });
+  block.style.display=any?'block':'none';
+  inputs.innerHTML=html;
+  if(scroll&&any) block.scrollIntoView({behavior:'smooth',block:'nearest'});
+};
+
+function qaGetMergedComments(){
+  var parts=[], general=((document.getElementById('qaComments')||{}).value||'').trim();
+  document.querySelectorAll('#qaCommentInputs input[data-cid]').forEach(function(el){
+    var val=(el.value||'').trim(); if(!val) return;
+    var cat=qaAllCriteriaCols().find(function(c){ return c.id===el.getAttribute('data-cid'); });
+    parts.push((cat?cat.label:el.getAttribute('data-cid'))+': '+val);
+  });
+  if(general) parts.unshift('General: '+general);
+  return parts.join('\n');
+}
+
+window.qaSelectOutcome=function(outcome){
+  qaSelectedOutcome=outcome;
+  var map={'Pass':'qaOutcomePass','Needs Improvement':'qaOutcomeNeeds','Fail':'qaOutcomeFail'};
+  Object.keys(map).forEach(function(o){
+    var el=document.getElementById(map[o]); if(!el) return;
+    if(o===outcome){ el.style.border='2px solid '+(o==='Pass'?'#10b981':o==='Fail'?'#ef4444':'#f59e0b'); el.style.background='var(--bg-card)'; }
+    else { el.style.border='2px solid var(--border)'; el.style.background='transparent'; }
+  });
+  qaHideError();
 };
 
 window.qaClearForm=function(){
-  document.getElementById('qaAuditType').selectedIndex=0;
-  ['qaTeam','qaAgentName','qaReferenceID','qaComments'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  qaSelectedOutcome='';
+  var t=document.getElementById('qaAuditType'); if(t) t.selectedIndex=0;
+  ['qaTeam','qaAgentName','qaReferenceID','qaComments','qaMSISDN','qaCallReason','qaEmailReason','qaEmailSubject','qaDateField'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var dm=document.getElementById('qaDurMin'), ds=document.getElementById('qaDurSec'); if(dm) dm.value='0'; if(ds) ds.value='0';
   qaHandleTypeChange();
   document.getElementById('qaSubmitMsg').innerHTML='';
+  qaHideError();
 };
 
-window.qaSubmitAudit=function(){
+window.qaSubmitAudit=async function(){
   var type=(document.getElementById('qaAuditType')||{}).value;
   var team=(document.getElementById('qaTeam')||{}).value;
-  var agent=(document.getElementById('qaAgentName')||{}).value.trim();
-  if(!type||!team||!agent){ alert('Audit Type, Team and Agent Name are required'); return; }
-  var row={ID:qiaQaAudits.length+1,Title:'QIA-QA-'+Date.now(),Reference_ID:(document.getElementById('qaReferenceID')||{}).value||'',Audit_Type:type,Team:team,Agent_Name:agent,Evaluator:window.USER_CONTEXT.userName,Date_of_Eval:(document.getElementById('qaDateOfEval')||{}).value,Comments:(document.getElementById('qaComments')||{}).value||''};
+  var agent=((document.getElementById('qaAgentName')||{}).value||'').trim();
+  var errors=[];
+  if(!type) errors.push('Audit Type is required');
+  if(!team) errors.push('Team is required');
+  if(!agent) errors.push('Agent Name is required');
+  if(!qaSelectedOutcome) errors.push('Outcome is required');
+  var criteria=qaGetCriteria(type||'Call'), unscored=[];
+  criteria.forEach(function(cat){
+    var row=document.getElementById('qaRow_'+cat.id), sc=document.getElementById('qaScore_'+cat.id);
+    if(!row||row.dataset.naOn==='true') return;
+    if(!sc||sc.value===''){ unscored.push(cat.label); if(sc) sc.classList.add('qa-required-err'); if(row) row.classList.add('qa-row-err'); }
+  });
+  if(unscored.length) errors.push('Score all active criteria or set N/A. Missing: '+unscored.slice(0,3).join(', '));
+  if(errors.length){ qaShowError(errors.map(function(e,i){ return (i+1)+'. '+e; }).join('<br>')); return; }
+
+  var scoreData={}, naFields=[];
+  qaAllCriteriaCols().forEach(function(cat){
+    var inScope=criteria.find(function(c){ return c.id===cat.id; });
+    if(!inScope){ scoreData[cat.id]=null; return; }
+    var row=document.getElementById('qaRow_'+cat.id), sc=document.getElementById('qaScore_'+cat.id);
+    if(row&&row.dataset.naOn==='true'){ scoreData[cat.id]=null; naFields.push(cat.id); return; }
+    scoreData[cat.id]=sc?parseFloat(sc.value):null;
+  });
+  var totalScore=qaCalcScore(scoreData,type);
+  var ref=((document.getElementById('qaReferenceID')||{}).value||'').trim();
+  var dateEval=(document.getElementById('qaDateOfEval')||{}).value;
   var dateField=(document.getElementById('qaDateField')||{}).value;
-  if(type==='Call'){ row.Date_of_Call=dateField; row.MSISDN=(document.getElementById('qaMSISDN')||{}).value||''; row.Call_Reason=(document.getElementById('qaCallReason')||{}).value||''; row.Call_Duration=Number((document.getElementById('qaCallDuration')||{}).value||0); }
-  else { row.Date_of_Email=dateField; row.Email_Reason=(document.getElementById('qaEmailReason')||{}).value||''; row.Email_Subject=(document.getElementById('qaEmailSubject')||{}).value||''; }
-  qaGetCriteria(type).forEach(function(c){ var v=(document.getElementById('qa_'+c.id)||{}).value; if(v!=='') row[c.id]=Number(v); });
-  row.Avg_Score=qaCalcScore(row,type); row.Outcome=qaOutcomeFromScore(row.Avg_Score);
-  if(QIA_DUMMY_MODE){ qiaQaAudits.unshift(row); document.getElementById('qaSubmitMsg').innerHTML='<span style="color:#10b981;">Audit saved (demo mode)</span>'; qaClearForm(); return; }
-  qaSubmitToSp(row);
+
+  if(QIA_DUMMY_MODE){
+    var row={ID:qiaQaAudits.length+1,Title:ref||('QIA-QA-'+Date.now()),Reference_ID:ref,Audit_Type:type,Team:team,Agent_Name:agent,Evaluator:window.USER_CONTEXT.userName,Date_of_Eval:dateEval,Comments:qaGetMergedComments(),Avg_Score:totalScore,Outcome:qaSelectedOutcome};
+    qaAllCriteriaCols().forEach(function(c){ if(scoreData[c.id]!=null) row[c.id]=scoreData[c.id]; });
+    if(type==='Call'){ row.Date_of_Call=dateField; row.MSISDN=(document.getElementById('qaMSISDN')||{}).value||''; row.Call_Reason=(document.getElementById('qaCallReason')||{}).value||''; row.Call_Duration=(parseInt((document.getElementById('qaDurMin')||{}).value||0,10)*60+parseInt((document.getElementById('qaDurSec')||{}).value||0,10)); }
+    else { row.Date_of_Email=dateField; row.Email_Reason=(document.getElementById('qaEmailReason')||{}).value||''; row.Email_Subject=(document.getElementById('qaEmailSubject')||{}).value||''; }
+    qiaQaAudits.unshift(row); document.getElementById('qaSubmitMsg').innerHTML='<span style="color:#10b981;">Audit saved (demo mode)</span>'; qaClearForm(); return;
+  }
+  qaSubmitToSp({type:type,team:team,agent:agent,ref:ref,dateEval:dateEval,dateField:dateField,scoreData:scoreData,naFields:naFields,totalScore:totalScore,outcome:qaSelectedOutcome,comments:qaGetMergedComments()});
 };
 
-async function qaSubmitToSp(row){
+async function qaSubmitToSp(data){
+  var msgEl=document.getElementById('qaSubmitMsg');
+  if(msgEl) msgEl.innerHTML='<span style="color:var(--t3);">Submitting…</span>';
   try{
-    var digestRes=await fetch(SP_URL+'/_api/contextinfo',{method:'POST',headers:{'Accept':'application/json;odata=verbose'},credentials:'include'});
-    var digest=(await digestRes.json()).d.GetContextWebInformation.FormDigestValue;
-    row.Title=row.Reference_ID||row.Title;
-    var res=await fetch(SP_URL+"/_api/web/lists/getbytitle('"+LIST_QA+"')/items",{method:'POST',headers:{'Accept':'application/json;odata=verbose','Content-Type':'application/json;odata=verbose','X-RequestDigest':digest},credentials:'include',body:JSON.stringify(row)});
-    if(!res.ok) throw new Error(await res.text());
-    await qiaFetchQaAudits(); document.getElementById('qaSubmitMsg').innerHTML='<span style="color:#10b981;">Submitted to SharePoint</span>'; qaClearForm();
-  }catch(e){ document.getElementById('qaSubmitMsg').innerHTML='<span style="color:#ef4444;">'+e.message+'</span>'; }
+    var evaluatorId=await qiaGetCurrentUserId();
+    var body={
+      Title: data.ref || (data.type+'-'+new Date().toISOString().split('T')[0]),
+      Reference_ID: data.ref || '',
+      Audit_Type: data.type,
+      Team: data.team,
+      Agent_Name: data.agent,
+      EvaluatorId: evaluatorId,
+      Date_of_Eval: qiaToSpDate(data.dateEval),
+      Avg_Score: data.totalScore,
+      Outcome: data.outcome
+    };
+    if(data.comments) body.Comments=data.comments;
+    if(data.naFields.length) body.NA_Fields=data.naFields.map(function(f){ return f.split('_')[0]; }).join('|').substring(0,255);
+    if(data.type==='Call'){
+      if(data.dateField) body.Date_of_Call=qiaToSpDate(data.dateField);
+      var min=parseInt((document.getElementById('qaDurMin')||{}).value||0,10);
+      var sec=parseInt((document.getElementById('qaDurSec')||{}).value||0,10);
+      var dur=min*60+sec;
+      if(dur) body.Call_Duration=dur;
+      if(dur) body.Call_Duration_Type=dur<=120?'Short':dur<=300?'Standard':'Long';
+      var msisdn=((document.getElementById('qaMSISDN')||{}).value||'').trim();
+      var callReason=((document.getElementById('qaCallReason')||{}).value||'').trim();
+      if(msisdn) body.MSISDN=msisdn;
+      if(callReason) body.Call_Reason=callReason;
+    } else {
+      if(data.dateField) body.Date_of_Email=qiaToSpDate(data.dateField);
+      var er=((document.getElementById('qaEmailReason')||{}).value||'').trim();
+      var es=((document.getElementById('qaEmailSubject')||{}).value||'').trim();
+      if(er) body.Email_Reason=er;
+      if(es) body.Email_Subject=es;
+    }
+    qaAllCriteriaCols().forEach(function(cat){
+      var v=data.scoreData[cat.id];
+      if(v!==null&&v!==undefined&&!isNaN(v)) body[cat.id]=v;
+    });
+    await qiaSpCreateItem(LIST_QA, body);
+    await qiaFetchQaAudits();
+    if(msgEl) msgEl.innerHTML='<span style="color:#10b981;">Submitted to SharePoint</span>';
+    qaClearForm();
+  }catch(e){
+    if(msgEl) msgEl.innerHTML='<span style="color:#ef4444;">'+qiaEsc(e.message||String(e))+'</span>';
+  }
 }
 
 function qaRenderAnalyticsSection(){
