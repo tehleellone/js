@@ -1845,7 +1845,7 @@ if (fneIsAdmin()) {
       <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Upload Excel
     </div>
-    <p class="fne-upload-hint">Upload a filled <strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.xlsb</strong>, or <strong>.csv</strong> file. Rows with a matching <strong>ID</strong> will update existing records; rows without ID (or unknown ID) create new records.</p>
+    <p class="fne-upload-hint">Upload a filled <strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.xlsb</strong>, or <strong>.csv</strong> file — including exports from <strong>Tracker List → Export Excel</strong> (title rows are skipped automatically). Rows with a matching <strong>ID</strong> update existing records; blank or unknown IDs create new records.</p>
     <input type="file" id="fneUploadFileInput" accept=".xlsx,.xls,.xlsb,.csv" onchange="fnePreviewUploadFile()" style="font-size:.8rem;color:var(--t2);">
   </div>
 
@@ -3850,6 +3850,7 @@ if (!fneIsAdmin()) {
   // ══════════════════════════════════════════════════════════════════
   let FNE_UPLOAD_ROWS = [];
   let FNE_UPLOAD_HEADERS = [];
+  let FNE_UPLOAD_META_SKIPPED = 0;
   let FNE_XLSX_LOADING = false;
   const FNE_XLSX_CDN = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
 
@@ -3907,6 +3908,47 @@ if (!fneIsAdmin()) {
     return ext === 'csv';
   }
 
+  const FNE_UPLOAD_COL_ORDER = [
+    'id', 'fneManager', 'amName', 'customerName', 'subRequest', 'implType', 'projectType',
+    'vertical', 'accountDirector', 'requestStatus', 'projectHealth', 'buildingStatus', 'sla',
+    'mrc', 'otc', 'tcv', 'contractDuration', 'estimatedCost', 'pmManDays', 'startDate', 'expectedRFS',
+    'rfsBaseline', 'implStart', 'targetMigDate', 'tempConnType', 'blocker', 'criticalProjects', 'sof',
+    'ospRequired', 'ospCivilET', 'gaid', 'woNumber', 'bidRef', 'fesRef', 'siteRef', 'accountCode',
+    'unitNo', 'customerAddress', 'commentsNew', 'year',
+  ];
+
+  function fneUploadRowCellTexts(row) {
+    if (!row) return [];
+    return row.map(function(c) { return fneUploadNorm(c).toLowerCase(); });
+  }
+
+  function fneUploadRowLooksLikeHeader(row) {
+    const cells = fneUploadRowCellTexts(row);
+    if (cells.filter(Boolean).length < 4) return false;
+    const has = function(label) {
+      return cells.some(function(c) {
+        return c === label || fneUploadHeaderToKey(c) === fneUploadHeaderToKey(label);
+      });
+    };
+    return has('id') && has('fne manager') && (has('customer name') || has('request status'));
+  }
+
+  function fneUploadRowIsMetadata(row) {
+    const first = fneUploadNorm(row && row[0]).toLowerCase();
+    if (!first) return false;
+    if (first.indexOf('fne tracker export') === 0) return true;
+    if (first.indexOf('filters:') === 0) return true;
+    if (first.indexOf('exported rows:') >= 0 && first.indexOf('filters') >= 0) return true;
+    return false;
+  }
+
+  function fneFindUploadHeaderRowIndex(matrix) {
+    for (let i = 0; i < Math.min(matrix.length, 25); i++) {
+      if (fneUploadRowLooksLikeHeader(matrix[i])) return i;
+    }
+    return 0;
+  }
+
   function fneEnsureXlsx(cb) {
     if (typeof XLSX !== 'undefined') { cb(true); return; }
     const existing = document.getElementById('fne-xlsx-loader');
@@ -3959,9 +4001,18 @@ if (!fneIsAdmin()) {
   }
 
   function fneUploadVisibleHeaders() {
-    return FNE_UPLOAD_HEADERS.filter(function(h) {
-      return FNE_UPLOAD_READONLY_KEYS.has(h) === false || h === 'id';
+    const fromFile = FNE_UPLOAD_HEADERS.filter(function(h) {
+      return h && (FNE_UPLOAD_LABELS[h] || h === 'id');
     });
+    if (!fromFile.length) return ['id', 'customerName', 'fneManager', 'requestStatus'];
+    return FNE_UPLOAD_COL_ORDER.filter(function(k) {
+      return fromFile.indexOf(k) >= 0 && (!FNE_UPLOAD_READONLY_KEYS.has(k) || k === 'id');
+    });
+  }
+
+  function fneUploadRowHasData(obj) {
+    return !!(fneUploadNorm(obj.id) || fneUploadNorm(obj.customerName) ||
+      fneUploadNorm(obj.fneManager) || fneUploadNorm(obj.requestStatus));
   }
 
   function fneUploadNormCompare(key, val) {
@@ -4030,20 +4081,37 @@ if (!fneIsAdmin()) {
 
   function fneParseUploadSheetRows(matrix) {
     if (!matrix || matrix.length < 2) return null;
-    const rawHeaders = matrix[0].map(function(h) { return fneUploadNorm(h); });
+
+    const headerIdx = fneFindUploadHeaderRowIndex(matrix);
+    const headerRow = matrix[headerIdx] || [];
+    const rawHeaders = headerRow.map(function(h) { return fneUploadNorm(h); });
+
     FNE_UPLOAD_HEADERS = [];
     rawHeaders.forEach(function(h) {
       const key = fneUploadHeaderToKey(h);
       if (key && FNE_UPLOAD_HEADERS.indexOf(key) === -1) FNE_UPLOAD_HEADERS.push(key);
     });
+
+    if (!fneUploadRowLooksLikeHeader(headerRow)) {
+      return null;
+    }
+
     FNE_UPLOAD_ROWS = [];
-    for (let i = 1; i < matrix.length; i++) {
+    FNE_UPLOAD_META_SKIPPED = headerIdx;
+
+    for (let i = headerIdx + 1; i < matrix.length; i++) {
       const row = matrix[i];
-      if (!row || !row.some(function(c) { return fneUploadNorm(c); })) continue;
-      const obj = { _rowIdx: i, _markedSkip: false };
+      if (!row || fneUploadRowIsMetadata(row)) continue;
+      if (fneUploadRowLooksLikeHeader(row)) continue;
+      if (!row.some(function(c) { return fneUploadNorm(c); })) continue;
+
+      const obj = { _rowIdx: i, _markedSkip: false, _sheetRow: i + 1 };
       rawHeaders.forEach(function(rawH, idx) {
-        obj[fneUploadHeaderToKey(rawH)] = fneUploadNorm(row[idx]);
+        const key = fneUploadHeaderToKey(rawH);
+        if (key) obj[key] = fneUploadNorm(row[idx]);
       });
+
+      if (!fneUploadRowHasData(obj)) continue;
       FNE_UPLOAD_ROWS.push(obj);
     }
     return FNE_UPLOAD_ROWS.length ? FNE_UPLOAD_ROWS : null;
@@ -4162,14 +4230,19 @@ if (!fneIsAdmin()) {
   }
 
   function fneFinishUploadPreview(matrix) {
+    FNE_UPLOAD_META_SKIPPED = 0;
     if (!fneParseUploadSheetRows(matrix)) {
-      fneUploadAlert('error', 'Need a header row plus at least one data row.');
+      fneUploadAlert('error', 'Could not find a valid header row (ID, FNE Manager, Customer Name, …). Use the download template or an Export Excel file from Tracker List.');
       return;
     }
     const preview = document.getElementById('fneUploadPreview');
     if (preview) preview.style.display = 'block';
     fnePrepareUploadReview();
-    fneToast('Loaded ' + FNE_UPLOAD_ROWS.length + ' rows — review and submit', 'success');
+    let msg = 'Loaded ' + FNE_UPLOAD_ROWS.length + ' rows — review and submit';
+    if (FNE_UPLOAD_META_SKIPPED > 0) {
+      msg += ' (skipped ' + FNE_UPLOAD_META_SKIPPED + ' export title row(s))';
+    }
+    fneToast(msg, 'success');
   }
 
   function fnePreviewUploadFile() {
@@ -4228,6 +4301,7 @@ if (!fneIsAdmin()) {
     if (clearAlert !== false) fneUploadAlert('', '');
     FNE_UPLOAD_ROWS = [];
     FNE_UPLOAD_HEADERS = [];
+    FNE_UPLOAD_META_SKIPPED = 0;
     ['fneUploadNewTable', 'fneUploadUpdateTable'].forEach(function(id) {
       const t = document.getElementById(id);
       if (t) t.innerHTML = '';
