@@ -1198,6 +1198,31 @@ const MQ_CLR_NET='#6366f1';
 const MQ_CLR_TARGET='#0891b2';
 const MQ_CLR_GROWTH='#22c55e';
 const MQ_CLR_GAP='#ef4444';
+const MQ_CLR_ACTUALS='#e11d74';
+const MQ_CLR_WON='#7c3aed';
+const MQ_CLR_INFLIGHT=['#3b82f6','#60a5fa','#2563eb','#818cf8','#a5b4fc'];
+const MQ_CLR_INFLIGHT_OTHERS='#93c5fd';
+const MQ_CLR_CHURN=['#ea580c','#f97316','#fb923c','#fdba74','#fed7aa'];
+const MQ_CLR_CHURN_OTHERS='#fdba74';
+const MQ_CLR_EMPTY='#cbd5e1';
+const MQ_SECTION_FILLS={
+  actuals:'rgba(225,29,116,.07)',
+  won:'rgba(124,58,237,.07)',
+  gross:'rgba(59,130,246,.06)',
+  churn:'rgba(234,88,12,.06)',
+  outcome:'rgba(99,102,241,.05)',
+  empty:'rgba(148,163,184,.04)'
+};
+const MQ_SECTION_TITLES={
+  actuals:'Actuals QTD (Excel)',
+  won:'Won / Secured',
+  gross:'In-flight Gross',
+  churn:'Churn / Downgrade',
+  outcome:'Outcome',
+  empty:'No Churn'
+};
+function mqInflightBarColor(i){ return MQ_CLR_INFLIGHT[i%MQ_CLR_INFLIGHT.length]; }
+function mqChurnBarColor(i){ return MQ_CLR_CHURN[i%MQ_CLR_CHURN.length]; }
 const STATUS_WON  = ['Won','Billed'];
 const STATUS_IP   = ['Lead','Opportunity','On Hold','Proposed'];
 const STATUS_LOST = ['Lost','Cancelled','No Bid'];
@@ -1583,7 +1608,7 @@ function glkBridgeBarLabelPlugin(bars){
       var midY=top+h/2;
       ctx.save();
       if(h<14&&b.type==='step'){
-        ctx.fillStyle=b.color||'#2563eb';
+        ctx.fillStyle=b.color||MQ_CLR_INFLIGHT[0];
         ctx.font='bold 9px Inter';
         ctx.textAlign='center';
         ctx.textBaseline='bottom';
@@ -5537,13 +5562,14 @@ var MQ_BID_DETAIL_FIELDS=[
   {k:'projectManager',l:'Project Manager'},
   {k:'complexity',l:'Complexity'},
   {k:'duration',l:'Duration'},
-  {k:'comments',l:'Comments'}
+  {k:'comments',l:'Comments',html:true}
 ];
 function mqFormatBidField(bid,fd){
   var v=bid[fd.k];
   if(v==null||v==='') return '—';
   if(fd.date) return fmtDate(v);
   if(fd.money) return fmtLines(v);
+  if(fd.html||fd.k==='comments') return mqStripHtml(v)||'—';
   return String(v);
 }
 function mqBidRowSummaryLine(bid){
@@ -5667,6 +5693,18 @@ function mqBuildRulesHtml(calc){
     html+='In-flight / churn — grouped by customer name (Top 5 + Others)';
     html+='</div>';
   }
+  html+='<div class="mq-info-section"><h4>Color coding</h4>';
+  html+='<span style="color:'+MQ_CLR_ACTUALS+';">■</span> <strong>Pink</strong> — Actuals QTD (from Excel)<br>';
+  html+='<span style="color:'+MQ_CLR_WON+';">■</span> <strong>Purple</strong> — Won / secured (100%, includes Quarter·Year to Go Won)<br>';
+  html+='<span style="color:'+MQ_CLR_INFLIGHT[0]+';">■</span> <strong>Blue</strong> — In-flight Gross (Proposed / Opportunity pipeline)<br>';
+  html+='<span style="color:'+MQ_CLR_CHURN[0]+';">■</span> <strong>Orange</strong> — Churn / Downgrade (negative)<br>';
+  html+='<span style="color:'+MQ_CLR_NET+';">■</span> <strong>Indigo</strong> — Net Forecast / Total Aggregated Revenue<br>';
+  if(!calc.isForward){
+    html+='<span style="color:'+MQ_CLR_TARGET+';">■</span> Teal — Target · ';
+    html+='<span style="color:'+MQ_CLR_GROWTH+';">■</span> Green — Growth · ';
+    html+='<span style="color:'+MQ_CLR_GAP+';">■</span> Red — Gap';
+  }
+  html+='</div>';
   html+='<div class="mq-info-section"><h4>Current filters</h4>';
   Object.keys(f).forEach(function(k){ html+='· <strong>'+k+':</strong> '+f[k]+'<br>'; });
   html+='· <strong>Scope:</strong> '+calc.vertical+'<br>';
@@ -5925,11 +5963,11 @@ function mqRenderBridgeLegend(calc){
   calc=calc||GLK_MQ_CALC_LAST||{};
   var chips=[];
   if(!calc.isForward){
-    chips.push({c:'#1d4ed8',l:'Actuals QTD'});
+    chips.push({c:MQ_CLR_ACTUALS,l:'Actuals QTD'});
   }
-  chips.push({c:'#2563eb',l:mqWonBarLabel(calc)});
-  chips.push({c:'#60a5fa',l:'In-flight Gross'});
-  chips.push({c:'#ea580c',l:'Churn / Downgrade'});
+  chips.push({c:MQ_CLR_WON,l:mqWonBarLabel(calc)});
+  chips.push({c:MQ_CLR_INFLIGHT[0],l:'In-flight Gross (pipeline)'});
+  chips.push({c:MQ_CLR_CHURN[0],l:'Churn / Downgrade'});
   chips.push({c:MQ_CLR_NET,l:calc.isForward?('Total Aggregated Revenue'):'Net Forecast'});
   if(!calc.isForward){
     chips.push({c:MQ_CLR_TARGET,l:'Target'});
@@ -5941,7 +5979,6 @@ function mqRenderBridgeLegend(calc){
   }).join('');
 }
 function glkMobileQtdSectionPlugin(bars){
-  var fills={actuals:'rgba(29,78,216,.05)',gross:'rgba(59,130,246,.045)',churn:'rgba(234,88,12,.045)',outcome:'rgba(99,102,241,.04)',empty:'rgba(148,163,184,.04)'};
   return {id:'mqSections',beforeDatasetsDraw:function(chart){
     var meta=chart.getDatasetMeta(0), ctx=chart.ctx, area=chart.chartArea;
     if(!meta||!meta.data||!meta.data.length) return;
@@ -5957,15 +5994,14 @@ function glkMobileQtdSectionPlugin(bars){
       var b0=meta.data[sp.start], b1=meta.data[sp.end];
       if(!b0||!b1) return;
       var x1=b0.x-(b0.width||14)/2-6, x2=b1.x+(b1.width||14)/2+6;
-      ctx.fillStyle=fills[sp.key]||fills.gross;
+      ctx.fillStyle=MQ_SECTION_FILLS[sp.key]||MQ_SECTION_FILLS.gross;
       ctx.fillRect(x1,area.top,x2-x1,area.bottom-area.top);
-      var titles={actuals:'Actuals & 100%',gross:'In-flight Gross',churn:'Churn / Downgrade',outcome:'Outcome',empty:'No Churn'};
-      if(titles[sp.key]){
+      if(MQ_SECTION_TITLES[sp.key]){
         ctx.fillStyle='rgba(100,116,139,.65)';
         ctx.font='700 8px Inter';
         ctx.textAlign='left';
         ctx.textBaseline='top';
-        ctx.fillText(titles[sp.key],x1+5,area.top+6);
+        ctx.fillText(MQ_SECTION_TITLES[sp.key],x1+5,area.top+6);
       }
     });
     ctx.restore();
@@ -6161,7 +6197,7 @@ function glkMobileQtdLabelPlugin(bars){
         ctx.font='bold 10px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText(lbl,bar.x,midY);
       }else{
-        ctx.fillStyle=b.color||'#2563eb';
+        ctx.fillStyle=b.color||MQ_CLR_INFLIGHT[0];
         ctx.font='bold 9px Inter'; ctx.textAlign='center';
         ctx.textBaseline=b.type==='decrease'?'top':'bottom';
         ctx.fillText(lbl,bar.x,b.type==='decrease'?bot+4:top-4);
@@ -6238,7 +6274,7 @@ function renderMobileQtdBridge(){
     trueCum=calc.actualsQtd; dispTop=calc.actualsQtd;
     pushBar({
       value:calc.actualsQtd,trueCum:trueCum,displayStart:0,displayEnd:dispH(calc.actualsQtd,calc.actualsQtd===0),
-      color:'#1d4ed8',type:'base',custName:'Actuals QTD',section:'actuals',bids:[],
+      color:MQ_CLR_ACTUALS,type:'base',custName:'Actuals QTD',section:'actuals',bids:[],
       vertBreakdown:actualsVert
     },'Actuals QTD · '+fmtLines(calc.actualsQtd)+(calc.reportScopeMissing?' (vertical not in report!)':''));
     dispTop=dispH(calc.actualsQtd,calc.actualsQtd===0);
@@ -6247,8 +6283,8 @@ function renderMobileQtdBridge(){
       var g0s=dispTop,g0e=dispTop+dispH(calc.gross100); dispTop=g0e;
       var wonLbl=mqWonBarLabel(calc);
       pushBar({
-        value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:'#2563eb',type:'increase',
-        custName:wonLbl,section:'actuals',bids:calc.gross100Bids||[],
+        value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:MQ_CLR_WON,type:'increase',
+        custName:wonLbl,section:'won',bids:calc.gross100Bids||[],
         vertBreakdown:(calc.activeReportLevels&&calc.activeReportLevels.length)?null:mqVerticalBreakdown(calc.gross100Bids||[],mqBidMetric)
       },wonLbl+' · '+fmtLines(calc.gross100));
     }
@@ -6259,8 +6295,8 @@ function renderMobileQtdBridge(){
       var g0s=dispTop,g0e=dispTop+dispH(calc.gross100); dispTop=g0e;
       var wonLblF=mqWonBarLabel(calc);
       pushBar({
-        value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:'#2563eb',type:'increase',
-        custName:wonLblF,section:'actuals',bids:calc.gross100Bids||[],
+        value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:MQ_CLR_WON,type:'increase',
+        custName:wonLblF,section:'won',bids:calc.gross100Bids||[],
         vertBreakdown:null
       },wonLblF+' · '+fmtLines(calc.gross100));
     }
@@ -6271,7 +6307,7 @@ function renderMobileQtdBridge(){
     var ds=dispTop,de=dispTop+dispH(p.value); dispTop=de;
     pushBar({
       value:p.value,trueCum:trueCum,displayStart:ds,displayEnd:de,
-      color:['#3b82f6','#60a5fa','#6366f1','#818cf8','#a5b4fc'][i%5],type:'increase',
+      color:mqInflightBarColor(i),type:'increase',
       custName:p.name,section:'gross',bids:p.bids||[],bracketGroup:'top5gross',bracketLabel:'Top 5 Gross Adds',groupLabel:'Top 5 Gross Adds'
     },'Top Gross · '+p.name+' · '+fmtLines(p.value));
   });
@@ -6279,7 +6315,7 @@ function renderMobileQtdBridge(){
     trueCum+=calc.grossPool.others;
     var gs=dispTop,ge=dispTop+dispH(calc.grossPool.others); dispTop=ge;
     pushBar({
-      value:calc.grossPool.others,trueCum:trueCum,displayStart:gs,displayEnd:ge,color:'#93c5fd',type:'increase',
+      value:calc.grossPool.others,trueCum:trueCum,displayStart:gs,displayEnd:ge,color:MQ_CLR_INFLIGHT_OTHERS,type:'increase',
       custName:'Others Gross Adds',section:'gross',bids:calc.grossPool.othersBids||[],groupLabel:'Others Gross Adds'
     },'Others Gross · '+fmtLines(calc.grossPool.others));
   }
@@ -6287,7 +6323,7 @@ function renderMobileQtdBridge(){
   if(!calc.hasChurn){
     pushBar({
       value:0,trueCum:trueCum,displayStart:dispTop,displayEnd:dispTop+dispH(0,true),
-      color:'#cbd5e1',type:'empty',
+      color:MQ_CLR_EMPTY,type:'empty',
       custName:'No Churn',section:'empty',bids:[],groupLabel:'Churn'
     },'No Churn in pipeline');
   }else{
@@ -6296,7 +6332,7 @@ function renderMobileQtdBridge(){
       trueCum+=p.value;
       var cs=dispTop,ce=dispTop-dispH(Math.abs(p.value)); dispTop=ce;
       pushBar({
-        value:p.value,trueCum:trueCum,displayStart:cs,displayEnd:ce,color:'#ea580c',type:'decrease',
+        value:p.value,trueCum:trueCum,displayStart:cs,displayEnd:ce,color:mqChurnBarColor(i),type:'decrease',
         custName:p.name,section:'churn',bids:p.bids||[],bracketGroup:'top5churn',bracketLabel:'Top 5 Churn',groupLabel:'Top 5 Churn'
       },'Top Churn · '+p.name+' · '+fmtLines(p.value));
     });
@@ -6304,7 +6340,7 @@ function renderMobileQtdBridge(){
       trueCum+=calc.churnPool.others;
       var os=dispTop,oe=dispTop-dispH(Math.abs(calc.churnPool.others)); dispTop=oe;
       pushBar({
-        value:calc.churnPool.others,trueCum:trueCum,displayStart:os,displayEnd:oe,color:'#f97316',type:'decrease',
+        value:calc.churnPool.others,trueCum:trueCum,displayStart:os,displayEnd:oe,color:MQ_CLR_CHURN_OTHERS,type:'decrease',
         custName:'Others Churn',section:'churn',bids:calc.churnPool.othersBids||[],groupLabel:'Others Churn'
       },'Others Churn · '+fmtLines(calc.churnPool.others));
     }
