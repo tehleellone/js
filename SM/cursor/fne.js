@@ -5504,6 +5504,7 @@ if (!fneIsAdmin()) {
   window.fneToggleUploadSkip = fneToggleUploadSkip;
   window.fneUploadCellChange = fneUploadCellChange;
   window.showFneView        = showFneView;
+
   window.fneTcvCalc         = fneTcvCalc;
   window.fneInit            = fneInit;
   window.fneIsPowerUser     = fneIsPowerUser;
