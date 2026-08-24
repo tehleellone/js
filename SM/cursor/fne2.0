@@ -1425,7 +1425,7 @@ function showView(view, navEl){
   if(navEl) navEl.classList.add('active');
 
   // Show/hide views
-['viewDashboard','viewAnalytics','viewFneForm','viewFneList'].forEach(id=>{
+['viewDashboard','viewAnalytics','viewFneForm','viewFneList','viewFneBulkUpload'].forEach(id=>{
   const e=document.getElementById(id); if(e) e.style.display='none';
 });
 el('viewDashboard').style.display = view==='dashboard' ? 'block' : 'none';
@@ -2391,6 +2391,7 @@ window.addEventListener('load',function(){
   initAccess();
 });
 </script>
- <script src="/sites/FGKA/SiteAssets/fnetracker.js?v=20260701b"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="fne.js"></script>
 </body>
 </html>
