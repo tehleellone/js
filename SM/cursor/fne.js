@@ -791,6 +791,17 @@ if (fneIsAdmin()) {
     <div class="nav-label">New Entry</div>`;
   navForm.onclick = () => { fneOpenForm(null); showFneView('form', navForm); };
   navItems.appendChild(navForm);
+
+  const navBulk = document.createElement('div');
+  navBulk.className = 'nav-item';
+  navBulk.id = 'navFneBulkUpload';
+  navBulk.innerHTML = `
+    <div class="nav-icon">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <div class="nav-label">Bulk Upload</div>`;
+  navBulk.onclick = () => { showFneView('bulkUpload', navBulk); };
+  navItems.appendChild(navBulk);
 }
 
   
@@ -846,12 +857,18 @@ if (fneIsAdmin()) {
   function showFneView(view, navEl) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     if (navEl) navEl.classList.add('active');
-    ['viewDashboard','viewAnalytics','viewFneForm','viewFneList'].forEach(id => {
+    ['viewDashboard','viewAnalytics','viewFneForm','viewFneList','viewFneBulkUpload'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
     if (view === 'form') document.getElementById('viewFneForm').style.display = 'block';
     if (view === 'list') document.getElementById('viewFneList').style.display = 'block';
+    if (view === 'bulkUpload') {
+      const v = document.getElementById('viewFneBulkUpload');
+      if (v) v.style.display = 'block';
+      fneTryHydrateFromDashboard();
+      if (!FNE_LIST_DATA.length) fneEnsureList();
+    }
   }
   
   // ══════════════════════════════════════════════════════════════════
@@ -874,6 +891,15 @@ if (fneIsAdmin()) {
     listView.style.display = 'none';
     listView.innerHTML = fneListHTML();
     content.appendChild(listView);
+
+    if (fneIsAdmin()) {
+      const bulkView = document.createElement('div');
+      bulkView.id = 'viewFneBulkUpload';
+      bulkView.className = 'dashboard-section';
+      bulkView.style.display = 'none';
+      bulkView.innerHTML = fneBulkUploadHTML();
+      content.appendChild(bulkView);
+    }
 
     fneInjectHistoryModal();
   
@@ -1389,6 +1415,56 @@ if (fneIsAdmin()) {
   .fne-bulk-row-actions { white-space: nowrap; text-align: center; }
   .fne-bulk-upload-status { font-size: .78rem; font-weight: 600; margin-top: .65rem; color: var(--t3); }
 
+  /* Excel bulk upload review (Oracle-style) */
+  .fne-upload-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1rem 1.1rem; margin-bottom: .85rem; box-shadow: var(--cs);
+  }
+  .fne-upload-card-title {
+    font-size: .88rem; font-weight: 800; color: var(--t1); margin-bottom: .55rem;
+    display: flex; align-items: center; gap: .4rem;
+  }
+  .fne-upload-card-title svg { width: 16px; height: 16px; stroke: var(--acc); fill: none; stroke-width: 2; }
+  .fne-upload-hint { font-size: .78rem; color: var(--t3); line-height: 1.55; margin-bottom: .65rem; }
+  .fne-upload-table-wrap {
+    overflow: auto; max-height: 52vh; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg-card);
+  }
+  .fne-upload-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .72rem; }
+  .fne-upload-table thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--bg-secondary); color: var(--t2); font-weight: 700;
+    padding: .45rem .5rem; border-bottom: 1px solid var(--border); white-space: nowrap;
+    text-transform: uppercase; letter-spacing: .03em; font-size: .62rem;
+  }
+  .fne-upload-table tbody td {
+    padding: .2rem .25rem; border-bottom: 1px solid var(--border); vertical-align: middle;
+  }
+  .fne-upload-table tbody tr:nth-child(even) td { background: rgba(37,99,235,.03); }
+  .fne-upload-table tbody tr.fne-upload-row-deleted td { opacity: .45; }
+  .fne-upload-table tbody td.fne-upload-editable input {
+    width: 100%; min-width: 72px; padding: .28rem .4rem; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg-input); color: var(--t1); font-size: .72rem;
+  }
+  .fne-upload-table tbody td.fne-upload-editable input:focus {
+    outline: none; border-color: var(--border-s); box-shadow: 0 0 0 2px var(--glow);
+  }
+  .fne-upload-table tbody td.fne-upload-new { background: rgba(22,163,74,.08); }
+  .fne-upload-table tbody td.fne-upload-changed { background: rgba(245,158,11,.18); }
+  .fne-upload-table tbody td.fne-upload-delete-col { white-space: nowrap; text-align: center; }
+  .fne-upload-legend { display: flex; flex-wrap: wrap; gap: .65rem 1rem; font-size: .72rem; color: var(--t3); margin: .5rem 0; }
+  .fne-upload-legend span { display: inline-flex; align-items: center; gap: .35rem; }
+  .fne-upload-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .fne-upload-legend .lg-new i { background: rgba(22,163,74,.35); }
+  .fne-upload-legend .lg-upd i { background: rgba(37,99,235,.25); }
+  .fne-upload-legend .lg-chg i { background: rgba(245,158,11,.45); }
+  .fne-upload-progress { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: .5rem; }
+  .fne-upload-progress-bar { height: 100%; background: var(--grad); width: 0; transition: width .2s; font-size: 0; }
+  .fne-upload-alert { padding: .65rem .85rem; border-radius: 10px; font-size: .8rem; margin-bottom: .75rem; }
+  .fne-upload-alert.success { background: rgba(22,163,74,.12); border: 1px solid rgba(22,163,74,.3); color: #16a34a; }
+  .fne-upload-alert.error { background: rgba(220,38,38,.1); border: 1px solid rgba(220,38,38,.28); color: #dc2626; }
+  .fne-upload-empty { font-size: .78rem; color: var(--t3); padding: .5rem 0; }
+
   /* Bulk edit modal (list view) */
   .fne-modal-overlay {
     position: fixed; inset: 0; z-index: 10050;
@@ -1742,6 +1818,78 @@ if (fneIsAdmin()) {
     </div>
   
   </div><!-- end fne-view-wrap -->
+  `;
+  }
+
+  function fneBulkUploadHTML() {
+    return `
+  <h2 class="section-title" style="margin-top:0!important;">
+    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Bulk Upload / Update
+  </h2>
+  <div id="fneUploadAlert"></div>
+
+  <div class="fne-upload-card">
+    <div class="fne-upload-card-title">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download Template
+    </div>
+    <p class="fne-upload-hint">Download the Excel template, fill in your data (keep the header row exactly as-is), then upload below.</p>
+    <button type="button" class="fne-btn fne-btn-primary" style="padding:.4rem .85rem;font-size:.78rem;" onclick="fneDownloadUploadTemplate()">
+      Download Excel Template
+    </button>
+  </div>
+
+  <div class="fne-upload-card">
+    <div class="fne-upload-card-title">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload Excel
+    </div>
+    <p class="fne-upload-hint">Upload a filled <strong>.xlsx</strong>, <strong>.xls</strong>, or <strong>.csv</strong> file. Rows with a matching <strong>ID</strong> will update existing records; rows without ID (or unknown ID) create new records.</p>
+    <input type="file" id="fneUploadFileInput" accept=".xlsx,.xls,.csv" onchange="fnePreviewUploadFile()" style="font-size:.8rem;color:var(--t2);">
+  </div>
+
+  <div id="fneUploadPreview" style="display:none;">
+    <div class="fne-upload-card">
+      <div class="fne-upload-card-title">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Step 2 — Review &amp; Edit
+      </div>
+      <p class="fne-upload-hint">Your file is split into <strong>New Records</strong> and <strong>Updated Records</strong>. Edit any cell before submitting. Yellow cells on updates show fields that differ from SharePoint.</p>
+      <div id="fneUploadSummary" style="font-size:.8rem;color:var(--t2);margin-bottom:.5rem;"></div>
+      <div class="fne-upload-legend">
+        <span class="lg-new"><i></i> New row</span>
+        <span class="lg-upd"><i></i> Update</span>
+        <span class="lg-chg"><i></i> Changed field</span>
+      </div>
+    </div>
+
+    <div class="fne-upload-card" id="fneUploadNewSection">
+      <div class="fne-upload-card-title">New Records (<span id="fneUploadNewCount">0</span>)</div>
+      <p class="fne-upload-hint">These rows will be <strong>inserted</strong> as new SharePoint items.</p>
+      <div class="fne-upload-table-wrap"><table id="fneUploadNewTable" class="fne-upload-table"></table></div>
+      <p id="fneUploadNewEmpty" class="fne-upload-empty" style="display:none;">No new records in this file.</p>
+    </div>
+
+    <div class="fne-upload-card" id="fneUploadUpdateSection">
+      <div class="fne-upload-card-title">Updated Records (<span id="fneUploadUpdateCount">0</span>)</div>
+      <p class="fne-upload-hint">These rows will <strong>update</strong> existing items matched by ID. Check <strong>Skip</strong> to exclude a row.</p>
+      <div class="fne-upload-table-wrap"><table id="fneUploadUpdateTable" class="fne-upload-table"></table></div>
+      <p id="fneUploadUpdateEmpty" class="fne-upload-empty" style="display:none;">No updates in this file — all rows are new records.</p>
+    </div>
+
+    <div class="fne-upload-card">
+      <div id="fneUploadRowCount" class="fne-upload-hint" style="margin:0;"></div>
+      <div style="display:flex;gap:.55rem;flex-wrap:wrap;margin-top:.75rem;">
+        <button type="button" class="fne-btn fne-btn-secondary" onclick="fneClearUpload()">Clear</button>
+        <button type="button" class="fne-btn fne-btn-primary" id="fneUploadSubmitBtn" onclick="fneExecuteBulkUpload()">Submit to SharePoint</button>
+      </div>
+      <div id="fneUploadProgress" style="display:none;margin-top:.75rem;">
+        <div class="fne-upload-progress"><div class="fne-upload-progress-bar" id="fneUploadProgressBar"></div></div>
+        <p id="fneUploadProgressText" class="fne-upload-hint" style="margin-top:.4rem;"></p>
+      </div>
+    </div>
+  </div>
   `;
   }
   
@@ -3697,6 +3845,494 @@ if (!fneIsAdmin()) {
     updateNext(0);
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  //  EXCEL BULK UPLOAD / UPDATE (Admin — Oracle-style preview)
+  // ══════════════════════════════════════════════════════════════════
+  let FNE_UPLOAD_ROWS = [];
+  let FNE_UPLOAD_HEADERS = [];
+  let FNE_XLSX_LOADING = false;
+  const FNE_XLSX_CDN = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+
+  const FNE_UPLOAD_LABELS = {
+    id: 'ID',
+    fneManager: 'FNE Manager',
+    amName: 'Account Manager',
+    customerName: 'Customer Name',
+    subRequest: 'Request Type',
+    implType: 'Implementation Type',
+    projectType: 'Connectivity Type',
+    vertical: 'Vertical',
+    accountDirector: 'Account Director',
+    requestStatus: 'Request Status',
+    projectHealth: 'Project Health',
+    buildingStatus: 'Building Status',
+    sla: 'SLA (days)',
+    mrc: 'MRC',
+    otc: 'OTC',
+    tcv: 'TCV',
+    contractDuration: 'Duration (mo)',
+    estimatedCost: 'Estimated Cost',
+    pmManDays: 'Project Duration',
+    startDate: 'Received Date',
+    expectedRFS: 'Expected RFS Date',
+    rfsBaseline: 'Actual RFS Date',
+    implStart: 'Implementation Start',
+    targetMigDate: 'Target Migration Date',
+    tempConnType: 'Temporary Connection Type',
+    blocker: 'Blocker',
+    criticalProjects: 'Critical Project',
+    sof: 'SOF',
+    ospRequired: 'OSP Civil',
+    ospCivilET: 'OSP Civil ET (days)',
+    gaid: 'GAID',
+    woNumber: 'WO Number',
+    bidRef: 'Bid Reference',
+    fesRef: 'FES / Shortfall Ref',
+    siteRef: 'Site Survey Reference',
+    accountCode: 'Account Code',
+    unitNo: 'Unit Number',
+    customerAddress: 'Customer Address',
+    commentsNew: 'Comments',
+    year: 'Year',
+  };
+
+  const FNE_UPLOAD_DATE_KEYS = new Set([
+    'startDate', 'expectedRFS', 'rfsBaseline', 'implStart', 'targetMigDate',
+  ]);
+
+  const FNE_UPLOAD_READONLY_KEYS = new Set(['tcv', 'pmManDays', 'projectHealth', 'year']);
+
+  function fneEnsureXlsx(cb) {
+    if (typeof XLSX !== 'undefined') { cb(true); return; }
+    const existing = document.getElementById('fne-xlsx-loader');
+    if (existing) {
+      existing.addEventListener('load', function() { cb(typeof XLSX !== 'undefined'); }, { once: true });
+      existing.addEventListener('error', function() { cb(false); }, { once: true });
+      return;
+    }
+    if (FNE_XLSX_LOADING) {
+      setTimeout(function() { fneEnsureXlsx(cb); }, 120);
+      return;
+    }
+    FNE_XLSX_LOADING = true;
+    const s = document.createElement('script');
+    s.id = 'fne-xlsx-loader';
+    s.src = FNE_XLSX_CDN;
+    s.onload = function() { FNE_XLSX_LOADING = false; cb(true); };
+    s.onerror = function() { FNE_XLSX_LOADING = false; cb(false); };
+    document.head.appendChild(s);
+  }
+
+  function fneUploadNorm(val) {
+    if (val === null || val === undefined) return '';
+    if (val instanceof Date && !isNaN(val)) {
+      return val.getFullYear() + '-' + String(val.getMonth() + 1).padStart(2, '0') + '-' + String(val.getDate()).padStart(2, '0');
+    }
+    return String(val).trim().replace(/^"|"$/g, '');
+  }
+
+  function fneUploadHeaderToKey(h) {
+    const t = fneUploadNorm(h).toLowerCase().replace(/\s+/g, ' ');
+    for (const key in FNE_UPLOAD_LABELS) {
+      if (key.toLowerCase() === t) return key;
+      if (FNE_UPLOAD_LABELS[key].toLowerCase() === t) return key;
+    }
+    if (t === 'received date' || t === 'recived date') return 'startDate';
+    if (t === 'connectivity type' || t === 'project type') return 'projectType';
+    if (t === 'osp civil required') return 'ospRequired';
+    if (t === 'unit no' || t === 'unit number') return 'unitNo';
+    if (t === 'site survey ref' || t === 'site survey reference') return 'siteRef';
+    if (t === 'fes ref' || t === 'fes / shortfall ref') return 'fesRef';
+    if (t === 'bid number' || t === 'bid reference') return 'bidRef';
+    if (t === 'duration (months)' || t === 'contract duration') return 'contractDuration';
+    if (t === 'sal' || t === 'sla') return 'sla';
+    return t.replace(/[^a-z0-9]/gi, '');
+  }
+
+  function fneUploadColLabel(key) {
+    return FNE_UPLOAD_LABELS[key] || key;
+  }
+
+  function fneUploadVisibleHeaders() {
+    return FNE_UPLOAD_HEADERS.filter(function(h) {
+      return FNE_UPLOAD_READONLY_KEYS.has(h) === false || h === 'id';
+    });
+  }
+
+  function fneUploadNormCompare(key, val) {
+    const v = fneUploadNorm(val);
+    if (!v || v === '—') return '';
+    if (FNE_UPLOAD_DATE_KEYS.has(key)) {
+      const p = fneParseImportDate(v);
+      return p || v;
+    }
+    if (['mrc', 'otc', 'tcv', 'sla', 'contractDuration', 'estimatedCost', 'ospCivilET', 'unitNo', 'accountCode'].includes(key)) {
+      const n = parseFloat(String(v).replace(/,/g, ''));
+      return isNaN(n) ? v : String(n);
+    }
+    return v.toLowerCase();
+  }
+
+  function fneUploadExistingVal(existing, key) {
+    if (!existing) return '';
+    if (key === 'id') return String(existing.id || '');
+    if (FNE_UPLOAD_DATE_KEYS.has(key)) return fneBulkPlainDate(existing[key]);
+    if (existing[key] === '—' || existing[key] === null || existing[key] === undefined) return '';
+    return String(existing[key]);
+  }
+
+  function fneUploadCellChanged(row, key) {
+    if (row._bulkAction !== 'update' || !row._existing) return false;
+    if (key === 'id') return false;
+    return fneUploadNormCompare(key, row[key]) !== fneUploadNormCompare(key, fneUploadExistingVal(row._existing, key));
+  }
+
+  function fneResolveAmEmailFromUpload(amVal) {
+    const s = fneUploadNorm(amVal);
+    if (!s) return '';
+    if (s.indexOf('@') >= 0) return s;
+    const hit = FNE_LIST_DATA.find(function(i) {
+      return fneUploadNorm(i.amName).toLowerCase() === s.toLowerCase();
+    });
+    return hit && hit.amEmail ? hit.amEmail : '';
+  }
+
+  function fneUploadAlert(type, html) {
+    const el = document.getElementById('fneUploadAlert');
+    if (!el) return;
+    if (!html) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="fne-upload-alert ' + type + '">' + html + '</div>';
+  }
+
+  function fneDownloadUploadTemplate() {
+    const headers = Object.keys(FNE_UPLOAD_LABELS).map(function(k) { return FNE_UPLOAD_LABELS[k]; });
+    fneEnsureXlsx(function(ok) {
+      if (ok && typeof XLSX !== 'undefined') {
+        const ws = XLSX.utils.aoa_to_sheet([headers]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'FNE Upload');
+        XLSX.writeFile(wb, 'FNE_Bulk_Upload_Template.xlsx');
+        return;
+      }
+      const csv = headers.join('\t') + '\n';
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'FNE_Bulk_Upload_Template.csv';
+      a.click();
+    });
+  }
+
+  function fneParseUploadSheetRows(matrix) {
+    if (!matrix || matrix.length < 2) return null;
+    const rawHeaders = matrix[0].map(function(h) { return fneUploadNorm(h); });
+    FNE_UPLOAD_HEADERS = [];
+    rawHeaders.forEach(function(h) {
+      const key = fneUploadHeaderToKey(h);
+      if (key && FNE_UPLOAD_HEADERS.indexOf(key) === -1) FNE_UPLOAD_HEADERS.push(key);
+    });
+    FNE_UPLOAD_ROWS = [];
+    for (let i = 1; i < matrix.length; i++) {
+      const row = matrix[i];
+      if (!row || !row.some(function(c) { return fneUploadNorm(c); })) continue;
+      const obj = { _rowIdx: i, _markedSkip: false };
+      rawHeaders.forEach(function(rawH, idx) {
+        obj[fneUploadHeaderToKey(rawH)] = fneUploadNorm(row[idx]);
+      });
+      FNE_UPLOAD_ROWS.push(obj);
+    }
+    return FNE_UPLOAD_ROWS.length ? FNE_UPLOAD_ROWS : null;
+  }
+
+  function fnePrepareUploadReview() {
+    FNE_UPLOAD_ROWS.forEach(function(r) {
+      const idRaw = fneUploadNorm(r.id);
+      const idNum = parseInt(idRaw, 10);
+      const existing = !isNaN(idNum) && idNum > 0
+        ? FNE_LIST_DATA.find(function(x) { return x.id === idNum; })
+        : null;
+      if (existing) {
+        r._bulkAction = 'update';
+        r._existing = existing;
+        r._spItemId = existing.id;
+        r.id = String(existing.id);
+      } else {
+        r._bulkAction = 'create';
+        r._existing = null;
+        r._spItemId = null;
+        if (isNaN(idNum) || idNum <= 0) r.id = '';
+      }
+      r.amEmail = fneResolveAmEmailFromUpload(r.amName);
+    });
+    fneRenderUploadReview();
+  }
+
+  function fneEscapeHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+
+  function fneRenderUploadTableHtml(entries, isUpdateSection) {
+    const headers = fneUploadVisibleHeaders();
+    let html = '<thead><tr><th style="width:52px;">Skip</th>';
+    headers.forEach(function(h) {
+      html += '<th>' + fneEscapeHtml(fneUploadColLabel(h)) + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    entries.forEach(function(entry) {
+      const r = entry.row;
+      const rowIdx = entry.idx;
+      const rowCls = r._markedSkip ? 'fne-upload-row-deleted' : '';
+      html += '<tr class="' + rowCls + '">';
+      html += '<td class="fne-upload-delete-col"><label><input type="checkbox"' +
+        (r._markedSkip ? ' checked' : '') + ' onchange="fneToggleUploadSkip(' + rowIdx + ')"> Skip</label></td>';
+      headers.forEach(function(h) {
+        const val = fneUploadNorm(r[h]);
+        const changed = isUpdateSection && fneUploadCellChanged(r, h);
+        let cls = 'fne-upload-editable';
+        if (!isUpdateSection) cls += ' fne-upload-new';
+        if (changed) cls += ' fne-upload-changed';
+        const ro = FNE_UPLOAD_READONLY_KEYS.has(h);
+        html += '<td class="' + cls + '"><input type="text" value="' + fneEscapeHtml(val) + '"' +
+          (ro ? ' readonly tabindex="-1"' : '') +
+          ' onchange="fneUploadCellChange(' + rowIdx + ',\'' + h + '\',this.value)" onblur="fneUploadCellChange(' + rowIdx + ',\'' + h + '\',this.value)"></td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody>';
+    return html;
+  }
+
+  function fneRenderUploadReview() {
+    const newEntries = [];
+    const updateEntries = [];
+    FNE_UPLOAD_ROWS.forEach(function(r, idx) {
+      const entry = { row: r, idx: idx };
+      if (r._bulkAction === 'update') updateEntries.push(entry);
+      else newEntries.push(entry);
+    });
+    let changes = 0;
+    updateEntries.forEach(function(entry) {
+      FNE_UPLOAD_HEADERS.forEach(function(h) {
+        if (fneUploadCellChanged(entry.row, h)) changes++;
+      });
+    });
+    const skipped = FNE_UPLOAD_ROWS.filter(function(r) { return r._markedSkip; }).length;
+    const newTable = document.getElementById('fneUploadNewTable');
+    const updateTable = document.getElementById('fneUploadUpdateTable');
+    const newEmpty = document.getElementById('fneUploadNewEmpty');
+    const updateEmpty = document.getElementById('fneUploadUpdateEmpty');
+    if (newTable) {
+      newTable.innerHTML = newEntries.length ? fneRenderUploadTableHtml(newEntries, false) : '';
+      if (newEmpty) newEmpty.style.display = newEntries.length ? 'none' : 'block';
+    }
+    if (updateTable) {
+      updateTable.innerHTML = updateEntries.length ? fneRenderUploadTableHtml(updateEntries, true) : '';
+      if (updateEmpty) updateEmpty.style.display = updateEntries.length ? 'none' : 'block';
+    }
+    const nc = document.getElementById('fneUploadNewCount');
+    const uc = document.getElementById('fneUploadUpdateCount');
+    if (nc) nc.textContent = newEntries.length;
+    if (uc) uc.textContent = updateEntries.length;
+    const rc = document.getElementById('fneUploadRowCount');
+    if (rc) rc.textContent = FNE_UPLOAD_ROWS.length + ' rows in file';
+    const sum = document.getElementById('fneUploadSummary');
+    if (sum) {
+      sum.innerHTML = '<strong>' + newEntries.length + '</strong> new · <strong>' + updateEntries.length +
+        '</strong> updates · <strong>' + changes + '</strong> field changes · <strong>' + skipped + '</strong> skipped';
+    }
+  }
+
+  function fneToggleUploadSkip(rowIdx) {
+    if (!FNE_UPLOAD_ROWS[rowIdx]) return;
+    FNE_UPLOAD_ROWS[rowIdx]._markedSkip = !FNE_UPLOAD_ROWS[rowIdx]._markedSkip;
+    fneRenderUploadReview();
+  }
+
+  function fneUploadCellChange(rowIdx, colKey, val) {
+    if (!FNE_UPLOAD_ROWS[rowIdx]) return;
+    FNE_UPLOAD_ROWS[rowIdx][colKey] = val;
+    if (colKey === 'amName') FNE_UPLOAD_ROWS[rowIdx].amEmail = fneResolveAmEmailFromUpload(val);
+    if (colKey === 'id') fnePrepareUploadReview();
+    else fneRenderUploadReview();
+  }
+
+  function fneFinishUploadPreview(matrix) {
+    if (!fneParseUploadSheetRows(matrix)) {
+      fneUploadAlert('error', 'Need a header row plus at least one data row.');
+      return;
+    }
+    const preview = document.getElementById('fneUploadPreview');
+    if (preview) preview.style.display = 'block';
+    fnePrepareUploadReview();
+    fneToast('Loaded ' + FNE_UPLOAD_ROWS.length + ' rows — review and submit', 'success');
+  }
+
+  function fnePreviewUploadFile() {
+    if (!fneIsAdmin()) {
+      fneToast('Admin access required for bulk upload', 'error');
+      return;
+    }
+    const fileInput = document.getElementById('fneUploadFileInput');
+    const file = fileInput && fileInput.files[0];
+    if (!file) return;
+    fneUploadAlert('', '');
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      if (ext === 'csv') {
+        const text = e.target.result;
+        const matrix = text.trim().split(/\r?\n/).map(function(line) {
+          if (line.indexOf('\t') >= 0) return line.split('\t').map(function(v) { return v.trim(); });
+          return line.split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
+        });
+        fneFinishUploadPreview(matrix);
+        return;
+      }
+      if (typeof XLSX === 'undefined') {
+        fneUploadAlert('error', 'Excel library not ready — try again in a moment or upload CSV.');
+        return;
+      }
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      fneFinishUploadPreview(XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false }));
+    };
+    if (ext === 'csv') {
+      reader.readAsText(file);
+    } else {
+      fneEnsureXlsx(function(ok) {
+        if (!ok) {
+          fneUploadAlert('error', 'Could not load Excel library. Upload a CSV file or check network access to the CDN.');
+          return;
+        }
+        reader.readAsArrayBuffer(file);
+      });
+    }
+  }
+
+  function fneClearUpload(clearAlert) {
+    const fi = document.getElementById('fneUploadFileInput');
+    if (fi) fi.value = '';
+    const preview = document.getElementById('fneUploadPreview');
+    if (preview) preview.style.display = 'none';
+    const prog = document.getElementById('fneUploadProgress');
+    if (prog) prog.style.display = 'none';
+    if (clearAlert !== false) fneUploadAlert('', '');
+    FNE_UPLOAD_ROWS = [];
+    FNE_UPLOAD_HEADERS = [];
+    ['fneUploadNewTable', 'fneUploadUpdateTable'].forEach(function(id) {
+      const t = document.getElementById(id);
+      if (t) t.innerHTML = '';
+    });
+  }
+
+  function fneUploadRowToRec(row) {
+    const rec = { _errors: [], _id: row._spItemId || '', amEmail: row.amEmail || fneResolveAmEmailFromUpload(row.amName) };
+    const required = [
+      { key: 'customerName', label: 'Customer Name' },
+      { key: 'requestStatus', label: 'Request Status' },
+      { key: 'implType', label: 'Implementation Type' },
+      { key: 'buildingStatus', label: 'Building Status' },
+      { key: 'vertical', label: 'Vertical' },
+      { key: 'fneManager', label: 'FNE Manager' },
+    ];
+    required.forEach(function(r) {
+      rec[r.key] = fneUploadNorm(row[r.key]);
+      if (!rec[r.key]) rec._errors.push(r.label + ' required');
+    });
+    Object.keys(FNE_UPLOAD_LABELS).forEach(function(key) {
+      if (required.some(function(r) { return r.key === key; })) return;
+      if (key === 'id' || key === 'year' || FNE_UPLOAD_READONLY_KEYS.has(key)) return;
+      const val = fneUploadNorm(row[key]);
+      rec[key] = val;
+      if (FNE_UPLOAD_DATE_KEYS.has(key) && val) {
+        const parsed = fneParseImportDate(val);
+        if (!parsed) rec._errors.push(fneUploadColLabel(key) + ' invalid date');
+        else {
+          rec[key + '_iso'] = parsed;
+          if (key === 'rfsBaseline' && fneIsFutureDate(parsed)) rec._errors.push('Actual RFS Date cannot be future');
+        }
+      }
+    });
+    if (row._bulkAction === 'update' && !rec._id) rec._errors.push('Record ID missing');
+    return rec;
+  }
+
+  function fneExecuteBulkUpload() {
+    if (!fneIsAdmin()) return;
+    const work = [];
+    FNE_UPLOAD_ROWS.forEach(function(r, idx) {
+      if (r._markedSkip) return;
+      work.push({ type: r._bulkAction === 'update' ? 'update' : 'create', idx: idx, row: r });
+    });
+    if (!work.length) {
+      fneUploadAlert('error', 'Nothing to submit — all rows are skipped or the file is empty.');
+      return;
+    }
+    const invalid = work.filter(function(w) {
+      const rec = fneUploadRowToRec(w.row);
+      return rec._errors.length;
+    });
+    if (invalid.length) {
+      const first = fneUploadRowToRec(invalid[0].row);
+      fneUploadAlert('error', 'Fix validation errors before submit. Example: row ' + (invalid[0].idx + 2) + ' — ' + (first._errors[0] || 'invalid'));
+      return;
+    }
+    if (!confirm('Submit ' + work.length + ' record(s) to SharePoint?')) return;
+
+    const btn = document.getElementById('fneUploadSubmitBtn');
+    const prog = document.getElementById('fneUploadProgress');
+    const bar = document.getElementById('fneUploadProgressBar');
+    const ptxt = document.getElementById('fneUploadProgressText');
+    if (btn) btn.disabled = true;
+    if (prog) prog.style.display = 'block';
+    let done = 0, failed = 0, total = work.length;
+    const savedIds = [];
+    const url = FNE_SP + "/_api/web/lists/getbytitle('" + encodeURIComponent(FNE_LIST) + "')/items";
+
+    function updateProg() {
+      const pct = Math.round(((done + failed) / total) * 100);
+      if (bar) bar.style.width = pct + '%';
+      if (ptxt) ptxt.textContent = 'Processed: ' + (done + failed) + '/' + total + ' | Success: ' + done + ' | Errors: ' + failed;
+    }
+    updateProg();
+
+    function processJob(wIdx) {
+      if (wIdx >= total) {
+        if (btn) btn.disabled = false;
+        const msg = 'Done! ' + done + ' succeeded, ' + failed + ' failed.';
+        fneUploadAlert(failed ? 'error' : 'success', msg);
+        fneToast(msg, failed ? 'error' : 'success');
+        if (savedIds.length) fneFetchAndUpsertItems(savedIds);
+        if (failed === 0) fneClearUpload(false);
+        return;
+      }
+      const job = work[wIdx];
+      const rec = fneUploadRowToRec(job.row);
+      const body = fneBuildImportSpBody(rec);
+      fneEnsureUserId(rec.amEmail, function(amUserId) {
+        if (amUserId) body['Account_x0020_ManagerId'] = amUserId;
+        if (job.type === 'update') {
+          fneMergeSpItem(rec._id, body, function(err) {
+            if (err) failed++; else { done++; savedIds.push(parseInt(rec._id, 10)); }
+            updateProg();
+            processJob(wIdx + 1);
+          });
+        } else {
+          spPost(url, body, function(err, data) {
+            if (err) failed++;
+            else {
+              done++;
+              if (data && data.d && data.d.Id) savedIds.push(data.d.Id);
+            }
+            updateProg();
+            processJob(wIdx + 1);
+          });
+        }
+      });
+    }
+    processJob(0);
+  }
+
   // Shared import helpers (dates + SP body)
   function fneParseImportDate(val) {
     if (!val) return null;
@@ -4861,6 +5497,12 @@ if (!fneIsAdmin()) {
   window.fneBulkEditClose    = fneBulkEditClose;
   window.fneBulkEditSaveAll  = fneBulkEditSaveAll;
   window.fneBulkDeleteSelected = fneBulkDeleteSelected;
+  window.fneDownloadUploadTemplate = fneDownloadUploadTemplate;
+  window.fnePreviewUploadFile = fnePreviewUploadFile;
+  window.fneClearUpload = fneClearUpload;
+  window.fneExecuteBulkUpload = fneExecuteBulkUpload;
+  window.fneToggleUploadSkip = fneToggleUploadSkip;
+  window.fneUploadCellChange = fneUploadCellChange;
   window.showFneView        = showFneView;
   window.fneTcvCalc         = fneTcvCalc;
   window.fneInit            = fneInit;
