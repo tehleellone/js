@@ -421,6 +421,20 @@ body[data-theme="dark"] .status-dot,body[data-theme="duralux-dark"] .status-dot{
 .mq-leg-chip{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;font-weight:600;color:var(--t3)}
 .mq-leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
 #mqBarDetailHint{font-size:.64rem;color:var(--t3);margin-top:.4rem}
+#mqBarDetailPanel{max-height:min(62vh,520px)!important}
+.mq-detail-account{cursor:pointer;padding:.55rem .65rem;border:1px solid var(--border);border-radius:8px;margin-bottom:.45rem;background:var(--bg-card);transition:background .15s,border-color .15s}
+.mq-detail-account:hover{border-color:var(--acc);background:var(--nab)}
+.mq-detail-account.open{border-color:var(--acc);box-shadow:0 0 0 1px var(--nab2)}
+.mq-detail-account-hdr{display:flex;justify-content:space-between;gap:.5rem;align-items:flex-start;font-size:.72rem;font-weight:700;color:var(--t1)}
+.mq-detail-account-sub{font-size:.66rem;color:var(--t3);font-weight:600;margin-top:.25rem;line-height:1.5}
+.mq-calc-box{margin-top:.45rem;padding:.5rem .65rem;background:var(--bg-secondary);border:1px dashed var(--border);border-radius:8px;font-size:.66rem;line-height:1.65;color:var(--t2)}
+.mq-calc-box strong{color:var(--acc)}
+.mq-full-row{margin-top:.45rem;padding:.55rem .65rem;background:var(--bg-secondary);border-radius:8px;font-size:.64rem;line-height:1.55}
+.mq-full-row dt{float:left;clear:left;width:42%;color:var(--t3);font-weight:700;margin:0 0 .2rem}
+.mq-full-row dd{margin:0 0 .2rem 44%;color:var(--t1);font-weight:600}
+.mq-info-section{margin-bottom:.75rem;padding-bottom:.65rem;border-bottom:1px solid var(--border)}
+.mq-info-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.mq-info-section h4{margin:0 0 .35rem;font-size:.76rem;color:var(--acc)}
 
 /* ═══════ TABLE SECTION ═════════════════════════════════════════════════ */
 .table-section{
@@ -1106,7 +1120,7 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
                   </div>
                   <div class="ms-dropdown" id="mqmsd_reportLevel"></div>
                 </div>
-                <span class="mq-control-hint">Verticals from the uploaded GLK Excel. QTD Bridge only.</span>
+                <span class="mq-control-hint">Verticals from GLK Excel — filters pipeline on every bridge type (QTD, Quarter to Go, Year to Go).</span>
               </div>
             </div>
           </div>
@@ -1119,7 +1133,7 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
               <span style="display:flex;align-items:center;gap:.35rem;">
                 <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                 <span id="mqChartTitle">Mobile Net Adds — QTD Bridge</span>
-                <button type="button" id="mqBridgeInfoBtn" onclick="mqToggleBridgeInfo()" title="Applied rules &amp; filters" style="width:22px;height:22px;border-radius:50%;border:1px solid var(--border-s);background:var(--nab);color:var(--acc);font-weight:800;font-size:.72rem;cursor:pointer;line-height:1;padding:0;">i</button>
+                <button type="button" id="mqBridgeInfoBtn" onclick="mqToggleBridgeInfo()" title="Help: controls, formula, drill-down" style="width:22px;height:22px;border-radius:50%;border:1px solid var(--border-s);background:var(--nab);color:var(--acc);font-weight:800;font-size:.72rem;cursor:pointer;line-height:1;padding:0;">i</button>
               </span>
               <span id="mqBridgeSubtitle" style="font-size:.68rem;font-weight:600;color:var(--t3);">Actuals → Gross 100% → Top 5 → Others → | Churn Top 5 → Others → Net Forecast → Gap</span>
             </span>
@@ -1139,8 +1153,8 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
             </div>
           </div>
           <div id="mqBridgeLegend"></div>
-          <div id="mqBarDetailHint">Click any bar for account details · click again to close</div>
-          <div id="mqBarDetailPanel" style="display:none;margin-top:.55rem;padding:.75rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--t2);line-height:1.55;max-height:220px;overflow-y:auto;"></div>
+          <div id="mqBarDetailHint">Click a bar → account list &amp; calculation · click an account → full row · click bar again to close</div>
+          <div id="mqBarDetailPanel" style="display:none;margin-top:.55rem;padding:.75rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--t2);line-height:1.55;overflow-y:auto;"></div>
           <div id="mqBridgeInfoPanel" style="display:none;margin-top:.65rem;padding:.85rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--t2);line-height:1.65;max-height:280px;overflow-y:auto;"></div>
           <div id="mobileQtdControlsWrap"></div>
           <div id="mobileQtdSummaryWrap" style="font-size:.68rem;color:var(--t3);font-weight:600;line-height:1.6;margin-top:.45rem;"></div>
@@ -1239,6 +1253,7 @@ let mqProductFamily='mobile';
 let mqCase='worst';
 let mqReportLevels=[];
 let GLK_MQ_DETAIL_IDX=-1;
+let GLK_MQ_DETAIL_BID_IDX=-1;
 let mqPeriod='qtd';
 let mqDateRules=[];
 let mqRuleSeq=0;
@@ -4622,7 +4637,7 @@ function mqSyncBridgeControlsUi(){
   el('mqCaseWorst')?.classList.toggle('active',mqCase==='worst');
   el('mqCaseBest')?.classList.toggle('active',mqCase==='best');
   var rlBlock=el('mqReportLevelBlock');
-  if(rlBlock) rlBlock.style.display=(mqPeriod==='qtd'?'':'none');
+  if(rlBlock) rlBlock.style.display='';
 }
 function mqUpdatePeriodTabsUi(){ mqSyncBridgeControlsUi(); }
 function mqUpdateProductFamilyUi(){ mqSyncBridgeControlsUi(); }
@@ -5428,10 +5443,112 @@ function mqBidBridgeValue(bid){
 }
 function mqBidBridgeValueParts(bid){
   var calc=GLK_MQ_CALC_LAST;
-  if(!calc||!calc.isForward) return {mrc:mqBidMetric(bid),otc:0,total:mqBidMetric(bid)};
-  var total=mqBidBridgeValue(bid);
+  if(!calc||!calc.isForward){
+    var v=mqBidMetric(bid);
+    return {mrc:v,otc:0,total:v};
+  }
+  var act=mqParseBidDate(bid.expectedActivation);
+  var endDate=calc.bridgePeriod==='ytg'?mqYearEndDate(calc.year):mqQuarterEndDate(calc.year,calc.quarter);
+  var mrcPart=(act&&endDate)?mqAggregatedRevenueMrc(act,endDate,num(bid.mrc)):0;
   var otc=mqBidForwardOtc(bid);
-  return {mrc:Math.max(0,total-otc),otc:otc,total:total};
+  return {mrc:mrcPart,otc:otc,total:mrcPart+otc};
+}
+function mqWonBarLabel(calc){
+  calc=calc||GLK_MQ_CALC_LAST||{};
+  if(calc.isForward) return calc.bridgePeriod==='ytg'?'Year to Go — Won':'Quarter to Go — Won';
+  return 'Gross Adds (Won)';
+}
+function mqPeriodEndLabel(calc){
+  calc=calc||GLK_MQ_CALC_LAST||{};
+  if(!calc.isForward) return '';
+  if(calc.bridgePeriod==='ytg') return '31 Dec '+calc.year;
+  var d=mqQuarterEndDate(calc.year,calc.quarter);
+  return fmtDate(d);
+}
+function mqBidCalcBreakdown(bid,opts){
+  opts=opts||{};
+  var calc=GLK_MQ_CALC_LAST||{};
+  var isChurn=!!opts.churn;
+  if(!calc.isForward){
+    var v=mqBidMetric(bid);
+    if(isChurn) v=-Math.abs(v);
+    return {
+      mode:'qtd',label:isChurn?'QTD Churn':'QTD',total:v,
+      lines:[
+        'Metric: '+mqMetricUnit()+(isChurn?' (shown as negative churn)':''),
+        'Value: <strong>'+fmtLines(Math.abs(v))+'</strong> '+mqMetricShort()+(isChurn?' (churn)':'')
+      ]
+    };
+  }
+  var act=mqParseBidDate(bid.expectedActivation);
+  var endDate=calc.bridgePeriod==='ytg'?mqYearEndDate(calc.year):mqQuarterEndDate(calc.year,calc.quarter);
+  var days=act?mqInclusiveDaysBetween(act,endDate):0;
+  if(days<=0&&act) days=1;
+  var dim=act?mqDaysInMonth(act.getFullYear(),act.getMonth()):0;
+  var mrc=num(bid.mrc);
+  var mrcPart=act?mqAggregatedRevenueMrc(act,endDate,mrc):0;
+  var otc=isChurn?0:mqBidForwardOtc(bid);
+  var total=isChurn?-Math.abs(mrcPart):(mrcPart+otc);
+  var periodName=mqPeriodLongName(calc.bridgePeriod);
+  var lines=[
+    '<strong>'+periodName+(isChurn?' — Churn (MRC only, no OTC)':'')+'</strong> for this row',
+    'Activation: <strong>'+fmtDate(bid.expectedActivation)+'</strong> → Period end: <strong>'+mqPeriodEndLabel(calc)+'</strong>',
+    'Days (inclusive): <strong>'+days+'</strong> ÷ Days in activation month: <strong>'+dim+'</strong>',
+    'MRC part: ('+days+' ÷ '+dim+') × '+fmtLines(mrc)+' = <strong>'+fmtLines(mrcPart)+'</strong>'
+  ];
+  if(isChurn) lines.push('Churn total: <strong>−'+fmtLines(mrcPart)+'</strong> (MRC only)');
+  else{
+    lines.push('OTC (one-time): <strong>'+fmtLines(otc)+'</strong>');
+    lines.push('Total: '+fmtLines(mrcPart)+' + '+fmtLines(otc)+' = <strong>'+fmtLines(mrcPart+otc)+'</strong>');
+  }
+  return {mode:calc.bridgePeriod,label:periodName,total:total,days:days,daysInMonth:dim,mrcPart:mrcPart,otc:otc,lines:lines};
+}
+function mqBidRowDetailValue(bid,barType){
+  var calc=GLK_MQ_CALC_LAST||{};
+  if(!calc.isForward) return barType==='decrease'?-Math.abs(mqBidMetric(bid)):mqBidMetric(bid);
+  if(barType==='decrease'){
+    return calc.bridgePeriod==='ytg'?-Math.abs(mqBidYtgMrc(bid,calc.year)):-Math.abs(mqBidQtgMrc(bid,calc.year,calc.quarter));
+  }
+  return mqBidBridgeValue(bid);
+}
+var MQ_BID_DETAIL_FIELDS=[
+  {k:'customerName',l:'Customer'},
+  {k:'buildingName',l:'Building / MAPA'},
+  {k:'vertical',l:'Vertical'},
+  {k:'headDirector',l:'Head Director'},
+  {k:'accountDirector',l:'Account Director'},
+  {k:'amName',l:'Account Manager'},
+  {k:'productFamily',l:'Product Family'},
+  {k:'productCategory',l:'Product Category'},
+  {k:'services',l:'Services'},
+  {k:'typeOfContract',l:'Type of Contract'},
+  {k:'typeOfRequest',l:'Type of Request'},
+  {k:'status',l:'Status'},
+  {k:'closureProb',l:'Closure Prob.'},
+  {k:'mrc',l:'MRC',money:true},
+  {k:'otc',l:'OTC',money:true},
+  {k:'tcv',l:'TCV',money:true},
+  {k:'gaLines',l:'GA Lines',money:true},
+  {k:'expectedActivation',l:'Expected Activation',date:true},
+  {k:'contractSigned',l:'Contract Signed',date:true},
+  {k:'proposedDate',l:'Proposed Date',date:true},
+  {k:'bidManager',l:'Bid Manager'},
+  {k:'solutionManager',l:'Solution Manager'},
+  {k:'projectManager',l:'Project Manager'},
+  {k:'complexity',l:'Complexity'},
+  {k:'duration',l:'Duration'},
+  {k:'comments',l:'Comments'}
+];
+function mqFormatBidField(bid,fd){
+  var v=bid[fd.k];
+  if(v==null||v==='') return '—';
+  if(fd.date) return fmtDate(v);
+  if(fd.money) return fmtLines(v);
+  return String(v);
+}
+function mqBidRowSummaryLine(bid){
+  return (bid.customerName||'—')+' · '+(bid.buildingName&&bid.buildingName!=='—'?bid.buildingName+' · ':'')+
+    (bid.vertical||'—')+' · AM: '+(bid.amName||'—')+' · AD: '+(bid.accountDirector||'—');
 }
 function mqActivationYtgForward(bid,year){
   var act=mqParseBidDate(bid.expectedActivation);
@@ -5497,53 +5614,68 @@ function mqMatchVerticalName(bidVert,selVert){
 }
 function mqGetSelectedFilterLabels(){
   var out={};
-  if(mqPeriod==='qtd'){
-    var rl=mqGetReportLevelsChecked();
-    out['Report level']=rl.length?rl.join(', '):'GLK Overall';
-  }
+  var rl=mqGetReportLevelsChecked();
+  out['Report level']=rl.length?rl.join(', '):'GLK Overall (all verticals)';
   out['Product family']=mqProductFamily==='fixed'?'Fixed':'Mobile';
   out['Bridge type']=mqPeriodLongName(mqPeriod);
+  out['Scenario']=mqCase==='best'?'Best Case':'Worst Case';
   return out;
 }
 function mqBuildRulesHtml(calc){
   var f=mqGetSelectedFilterLabels();
-  var monthNames=MONTH_NAMES.slice(Math.max(0,(calc.quarter-1)*3),(calc.quarter)*3).join(', ');
-  var html='<strong style="color:var(--acc);">Bridge rules (backend)</strong><br><br>';
-  html+='<strong>Mode:</strong> '+mqPeriodLongName(calc.bridgePeriod)+(calc.isForward?' · Aggregated Revenue formula':'')+'<br>';
-  if(!calc.isForward){
-    html+='<strong>Report level:</strong> '+calc.vertical+' · Actuals QTD '+fmtLines(calc.actualsQtd)+' · Target '+fmtLines(calc.target);
-    if(calc.reportScopeMissing) html+=' <span style="color:#f59e0b;">(some verticals not found in report)</span>';
-    html+='<br>';
-  }
-  html+='<strong>Pipeline scope:</strong> '+(mqProductFamily==='fixed'?'Fixed only (MRC + OTC)':'Mobile only (GA Lines)')+'<br>';
-  html+='<strong>Scenario:</strong> '+(calc.isBest?'Best Case (Proposed + Opportunity in-flight)':'Worst Case (Proposed only in-flight)')+'<br>';
-  if(calc.bridgePeriod==='ytg'){
-    html+='<strong>Activation window:</strong> '+calc.year+' — today through 31 Dec<br><br>';
-  }else if(calc.bridgePeriod==='qtg'){
-    html+='<strong>Activation window:</strong> Q'+calc.quarter+' '+calc.year+' — current month through quarter-end ('+monthNames+')<br><br>';
-  }else{
-    html+='<strong>Activation window:</strong> Q'+calc.quarter+' '+calc.year+' — current month through quarter-end ('+monthNames+')<br><br>';
-  }
-  if(!calc.isForward){
-    html+='<strong>Gross Adds (Won):</strong> Status = Won · Closure Prob = 100% · Gross contract types<br>';
-  }else{
-    html+='<strong>Gross Adds (Won):</strong> Status = Won · Closure Prob = 100% · Aggregated Revenue MRC + OTC<br>';
-  }
-  html+='<strong>In-flight Gross:</strong> Same contracts · '+(calc.isBest?'Status Proposed or Opportunity':'Status Proposed only')+' · grouped by customer<br>';
-  html+='<strong>Churn:</strong> Contracts Churn, Downgrade · Same status rules · grouped by customer · MRC only (no OTC)<br>';
+  var html='';
+  html+='<div class="mq-info-section"><h4>What is this chart?</h4>';
   if(calc.isForward){
-    html+='<br><strong>Aggregated Revenue formula:</strong> ((period-end − activation date in days, inclusive) ÷ days in activation month) × MRC + OTC<br>';
-    if(calc.bridgePeriod==='qtg'){
-      html+='<strong>Quarter to Go example:</strong> activation 24 Aug, quarter-end 30 Sep, MRC 10,000, OTC 5,000 → (38 ÷ 31) × 10,000 + 5,000 ≈ 17,258<br>';
-    }else{
-      html+='<strong>Year to Go example:</strong> activation 24 Aug, year-end 31 Dec, MRC 10,000, OTC 5,000 → (130 ÷ 31) × 10,000 + 5,000 ≈ 46,935<br>';
-    }
+    html+='Fixed <strong>'+mqPeriodLongName(calc.bridgePeriod)+'</strong> — forward pipeline revenue from today to period end. No Excel actuals/target on this view.<br>';
+    html+='Bars: <strong>Quarter/Year to Go — Won</strong> → Top 5 in-flight customers → Others → Churn → Total.';
+  }else if(mqProductFamily==='fixed'){
+    html+='Fixed <strong>QTD Bridge</strong> — Excel actuals + target vs pipeline (Won, in-flight, churn).';
+  }else{
+    html+='Mobile <strong>QTD Bridge</strong> — Excel actuals + target vs pipeline (GA Lines).';
   }
-  html+='<br><strong>Filters:</strong><br>';
-  Object.keys(f).forEach(function(k){ html+='· '+k+': '+f[k]+'<br>'; });
+  html+='</div>';
+  html+='<div class="mq-info-section"><h4>Controls (top panel)</h4>';
+  html+='<strong>1 Product family</strong> — Mobile (QTD only) or Fixed (QTD + forward bridges)<br>';
+  html+='<strong>2 Bridge type</strong> — QTD Bridge · Quarter to Go · Year to Go<br>';
+  html+='<strong>3 Scenario</strong> — Worst = Proposed only · Best = Proposed + Opportunity<br>';
+  html+='<strong>4 Report level</strong> — Filter by GLK Excel vertical. Works on <em>all</em> bridge types including Quarter/Year to Go.';
+  html+='</div>';
+  html+='<div class="mq-info-section"><h4>Drill-down</h4>';
+  html+='① Click any bar → account list with AM, AD, building, calculation<br>';
+  html+='② Click an account row → full pipeline row (all fields)<br>';
+  html+='③ Click the same bar again → close';
+  html+='</div>';
+  if(calc.isForward){
+    html+='<div class="mq-info-section"><h4>Aggregated Revenue formula (Quarter / Year to Go)</h4>';
+    html+='Per pipeline row:<br>';
+    html+='<code>(days from activation → period end, inclusive) ÷ days in activation month × MRC + OTC</code><br><br>';
+    html+='<strong>Example — activation 24 Aug, MRC 10,000, OTC 5,000:</strong><br>';
+    if(calc.bridgePeriod==='qtg'){
+      html+='Quarter to Go → end 30 Sep · days = 38 · month days = 31<br>';
+      html+='MRC: (38÷31)×10,000 = 12,258 · + OTC 5,000 · <strong>Total = 17,258</strong>';
+    }else{
+      html+='Year to Go → end 31 Dec · days = 130 · month days = 31<br>';
+      html+='MRC: (130÷31)×10,000 = 41,935 · + OTC 5,000 · <strong>Total = 46,935</strong>';
+    }
+    html+='<br><em>Won bar uses this formula (not full monthly MRC). In-flight &amp; churn use the same for MRC; churn has no OTC.</em>';
+    html+='</div>';
+  }else{
+    html+='<div class="mq-info-section"><h4>QTD rules</h4>';
+    html+='<strong>Actuals / Target</strong> — from uploaded GLK Excel'+(calc.reportScopeMissing?' <span style="color:#f59e0b;">(some verticals missing)</span>':'')+'<br>';
+    html+='Actuals: '+fmtLines(calc.actualsQtd)+' · Target: '+fmtLines(calc.target)+'<br>';
+    html+='<strong>Gross Adds (Won)</strong> — Status Won + Closure Prob 100% + gross contract types<br>';
+    html+='In-flight / churn — grouped by customer name (Top 5 + Others)';
+    html+='</div>';
+  }
+  html+='<div class="mq-info-section"><h4>Current filters</h4>';
+  Object.keys(f).forEach(function(k){ html+='· <strong>'+k+':</strong> '+f[k]+'<br>'; });
+  html+='· <strong>Scope:</strong> '+calc.vertical+'<br>';
+  html+='· <strong>Pipeline:</strong> '+(mqProductFamily==='fixed'?'Fixed MRC + OTC':'Mobile GA Lines');
+  html+='</div>';
   if(calc.actualsByVertical&&calc.actualsByVertical.length){
-    html+='<br><strong>Actuals by vertical (report):</strong><br>';
+    html+='<div class="mq-info-section"><h4>Actuals by vertical (Excel)</h4>';
     calc.actualsByVertical.forEach(function(v){ html+='· '+v.name+': '+fmtLines(v.actualQtd)+'<br>'; });
+    html+='</div>';
   }
   return html;
 }
@@ -5657,7 +5789,7 @@ function glkMobileQtdCalc(){
   var isForward=mqIsForwardBridge();
   var year=report?report.year:new Date().getFullYear();
   var quarter=report?report.quarter:Math.floor(new Date().getMonth()/3)+1;
-  var activeLevels=(!isForward&&mqPeriod==='qtd')?mqGetActiveReportLevels():[];
+  var activeLevels=mqGetActiveReportLevels();
   var scope=mqResolveReportScope(report,activeLevels);
   var actualsQtd=isForward?0:scope.actualsQtd;
   var target=isForward?0:scope.target;
@@ -5695,7 +5827,7 @@ function glkMobileQtdCalc(){
     gross100:g100.total,gross100Bids:g100.bids,grossPool:grossPool,churnPool:churnPool,
     inflightGross:inflightGross,inflightChurn:inflightChurn,hasChurn:hasChurn,
     forecast:forecast,diff:diff,gap:isForward?0:(diff>0?diff:0),growth:isForward?0:(diff<0?Math.abs(diff):0),
-    vertical:isForward?'Fixed Pipeline':scope.label,
+    vertical:isForward?(activeLevels.length?scope.label:'All verticals (pipeline)'):scope.label,
     activeReportLevels:activeLevels.slice(),
     reportScopeMissing:scope.missing.length>0
   };
@@ -5795,7 +5927,7 @@ function mqRenderBridgeLegend(calc){
   if(!calc.isForward){
     chips.push({c:'#1d4ed8',l:'Actuals QTD'});
   }
-  chips.push({c:'#2563eb',l:'Gross Adds (Won)'});
+  chips.push({c:'#2563eb',l:mqWonBarLabel(calc)});
   chips.push({c:'#60a5fa',l:'In-flight Gross'});
   chips.push({c:'#ea580c',l:'Churn / Downgrade'});
   chips.push({c:MQ_CLR_NET,l:calc.isForward?('Total Aggregated Revenue'):'Net Forecast'});
@@ -5898,49 +6030,73 @@ function glkMobileQtdAxisPlugin(bars,bottomPad){
     ctx.restore();
   }};
 }
-function mqBuildBarDetailHtml(b,metaLabel){
+function mqBuildBarDetailHtml(b,metaLabel,barIdx){
   if(!b) return '';
+  var calc=GLK_MQ_CALC_LAST||{};
   var h='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem;margin-bottom:.45rem;">';
   h+='<strong style="color:var(--acc);font-size:.78rem;">'+(metaLabel||b.custName||b.groupLabel||'Bar')+'</strong>';
   h+='<button type="button" onclick="mqCloseBarDetail()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:.85rem;padding:0 .25rem;">✕</button></div>';
-  h+='<div style="margin-bottom:.35rem;">Value: <strong>'+fmtLines(Math.abs(b.value))+'</strong>';
+  h+='<div style="margin-bottom:.35rem;">Bar total: <strong>'+fmtLines(Math.abs(b.value))+'</strong>';
   if(b.type==='decrease') h+=' <span style="color:#ef4444;">(churn)</span>';
   h+='</div>';
-  if(b.groupLabel) h+='<div style="margin-bottom:.35rem;color:var(--t3);">Group: '+b.groupLabel+'</div>';
+  if(b.groupLabel) h+='<div style="margin-bottom:.35rem;color:var(--t3);">Group: '+mqEscHtml(b.groupLabel)+'</div>';
   if(b.vertBreakdown&&b.vertBreakdown.length){
     h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Vertical split</div><ul style="margin:0 0 .45rem 1rem;padding:0;">';
-    b.vertBreakdown.forEach(function(v){ h+='<li>'+v.name+': '+fmtLines(v.value)+'</li>'; });
+    b.vertBreakdown.forEach(function(v){ h+='<li>'+mqEscHtml(v.name)+': '+fmtLines(v.value)+'</li>'; });
     h+='</ul>';
   }
   if(b.bids&&b.bids.length){
-    var isForward=GLK_MQ_CALC_LAST&&GLK_MQ_CALC_LAST.isForward;
-    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Accounts ('+b.bids.length+')</div>';
-    h+='<div style="font-size:.68rem;line-height:1.6;">';
+    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Accounts ('+b.bids.length+') — click a row for full detail</div>';
     b.bids.forEach(function(bd,i){
-      var bridgeVal=isForward?mqBidBridgeValue(bd):mqBidMetric(bd);
-      h+='<div style="padding:.35rem 0;border-top:1px solid var(--border);">';
-      h+='<strong>'+(i+1)+'. '+(bd.customerName||'—')+'</strong> · '+fmtLines(bridgeVal);
-      if(isForward){
-        h+=' '+calcPeriodBridgeLabel()+' value';
-        var parts=mqBidBridgeValueParts(bd);
-        if(parts.otc>0) h+=' <span style="color:var(--t3);">(MRC '+fmtLines(parts.mrc)+' + OTC '+fmtLines(parts.otc)+', act. '+fmtDate(bd.expectedActivation)+')</span>';
-        else if(num(bd.mrc)>0) h+=' <span style="color:var(--t3);">(full MRC '+fmtLines(bd.mrc)+', act. '+fmtDate(bd.expectedActivation)+')</span>';
+      var open=GLK_MQ_DETAIL_BID_IDX===i;
+      var isChurn=b.type==='decrease';
+      var val=mqBidRowDetailValue(bd,isChurn?'decrease':'increase');
+      var bdBreak=mqBidCalcBreakdown(bd,{churn:isChurn});
+      h+='<div class="mq-detail-account'+(open?' open':'')+'" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+i+')">';
+      h+='<div class="mq-detail-account-hdr"><span>'+(i+1)+'. '+mqEscHtml(bd.customerName||'—')+'</span><span style="color:'+(isChurn?'#ef4444':'var(--acc)')+';">'+fmtLines(val)+'</span></div>';
+      h+='<div class="mq-detail-account-sub">'+mqEscHtml(mqBidRowSummaryLine(bd))+'</div>';
+      h+='<div class="mq-detail-account-sub">Product: '+mqEscHtml(bd.productFamily||'—')+' · '+mqEscHtml(bd.productCategory||'—')+' · Services: '+mqEscHtml(bd.services||'—')+'</div>';
+      h+='<div class="mq-calc-box">';
+      bdBreak.lines.forEach(function(line){ h+=line+'<br>'; });
+      h+='</div>';
+      if(open){
+        h+='<div class="mq-full-row"><dl style="margin:0;">';
+        MQ_BID_DETAIL_FIELDS.forEach(function(fd){
+          h+='<dt>'+fd.l+'</dt><dd>'+mqEscHtml(mqFormatBidField(bd,fd))+'</dd>';
+        });
+        h+='</dl></div>';
       }else{
-        h+=' '+mqMetricShort().toLowerCase();
+        h+='<div style="font-size:.62rem;color:var(--t3);margin-top:.35rem;">Click again for full pipeline row →</div>';
       }
-      h+='<br>';
-      h+='Vertical: '+(bd.vertical||'—')+' · AD: '+(bd.accountDirector||'—')+' · AM: '+(bd.amName||'—')+'<br>';
-      h+='Status: '+(bd.status||'—')+' · Prob: '+(bd.closureProb||'—')+' · Contract: '+(bd.typeOfContract||'—');
       h+='</div>';
     });
-    h+='</div>';
   }else if(!b.vertBreakdown||!b.vertBreakdown.length){
     h+='<div style="color:var(--t3);font-style:italic;">No account-level detail for this bar.</div>';
   }
   return h;
 }
+window.mqToggleBarDetailBid=function(barIdx,bidIdx){
+  if(GLK_MQ_DETAIL_IDX!==barIdx){
+    GLK_MQ_DETAIL_IDX=barIdx;
+    GLK_MQ_DETAIL_BID_IDX=bidIdx;
+  }else{
+    GLK_MQ_DETAIL_BID_IDX=(GLK_MQ_DETAIL_BID_IDX===bidIdx?-1:bidIdx);
+  }
+  mqRefreshBarDetailPanel();
+};
+function mqRefreshBarDetailPanel(){
+  var p=el('mqBarDetailPanel');
+  if(!p||GLK_MQ_DETAIL_IDX<0||!GLK_MQ_LAST_BARS) return;
+  var b=GLK_MQ_LAST_BARS[GLK_MQ_DETAIL_IDX];
+  var m=(GLK_MQ_LAST_BAR_META||[])[GLK_MQ_DETAIL_IDX];
+  p.style.display='block';
+  p.innerHTML=mqBuildBarDetailHtml(b,m?m.label:'',GLK_MQ_DETAIL_IDX);
+  mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS);
+  if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
+}
 window.mqCloseBarDetail=function(){
   GLK_MQ_DETAIL_IDX=-1;
+  GLK_MQ_DETAIL_BID_IDX=-1;
   var p=el('mqBarDetailPanel'); if(p) p.style.display='none';
   if(GLK_MQ_LAST_BARS) mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS);
   if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
@@ -5949,11 +6105,10 @@ function mqToggleBarDetail(idx,bars,barMeta){
   var p=el('mqBarDetailPanel'); if(!p) return;
   if(GLK_MQ_DETAIL_IDX===idx){ mqCloseBarDetail(); return; }
   GLK_MQ_DETAIL_IDX=idx;
-  var b=bars[idx], m=barMeta[idx];
-  p.style.display='block';
-  p.innerHTML=mqBuildBarDetailHtml(b,m?m.label:'');
-  mqSyncChartLabels(CHARTS.mobileQtd,bars);
-  if(CHARTS.mobileQtd) CHARTS.mobileQtd.update('none');
+  GLK_MQ_DETAIL_BID_IDX=-1;
+  GLK_MQ_LAST_BARS=bars;
+  GLK_MQ_LAST_BAR_META=barMeta;
+  mqRefreshBarDetailPanel();
   p.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function glkMobileQtdFloatBar(b){ return [b.displayStart,b.displayEnd]; }
@@ -6090,22 +6245,24 @@ function renderMobileQtdBridge(){
     if(calc.gross100!==0){
       trueCum+=calc.gross100;
       var g0s=dispTop,g0e=dispTop+dispH(calc.gross100); dispTop=g0e;
+      var wonLbl=mqWonBarLabel(calc);
       pushBar({
         value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:'#2563eb',type:'increase',
-        custName:'Gross Adds (Won)',section:'actuals',bids:calc.gross100Bids||[],
+        custName:wonLbl,section:'actuals',bids:calc.gross100Bids||[],
         vertBreakdown:(calc.activeReportLevels&&calc.activeReportLevels.length)?null:mqVerticalBreakdown(calc.gross100Bids||[],mqBidMetric)
-      },'Gross Adds Won · '+fmtLines(calc.gross100));
+      },wonLbl+' · '+fmtLines(calc.gross100));
     }
   }else{
     trueCum=0; dispTop=0;
     if(calc.gross100!==0){
       trueCum+=calc.gross100;
       var g0s=dispTop,g0e=dispTop+dispH(calc.gross100); dispTop=g0e;
+      var wonLblF=mqWonBarLabel(calc);
       pushBar({
         value:calc.gross100,trueCum:trueCum,displayStart:g0s,displayEnd:g0e,color:'#2563eb',type:'increase',
-        custName:'Gross Adds (Won)',section:'actuals',bids:calc.gross100Bids||[],
+        custName:wonLblF,section:'actuals',bids:calc.gross100Bids||[],
         vertBreakdown:null
-      },'Gross Adds Won · '+fmtLines(calc.gross100));
+      },wonLblF+' · '+fmtLines(calc.gross100));
     }
   }
   calc.grossPool.top.forEach(function(p,i){
@@ -6249,7 +6406,8 @@ function renderMobileQtdBridge(){
   var sum=el('mobileQtdSummaryWrap');
   if(sum){
     if(isForward){
-      sum.innerHTML='<strong>'+(calc.isBest?'Best':'Worst')+' Case · '+periodLong+'</strong> · Gross Won '+fmtLines(calc.gross100)+
+      var wonLblS=mqWonBarLabel(calc);
+      sum.innerHTML='<strong>'+(calc.isBest?'Best':'Worst')+' Case · '+periodLong+'</strong> · '+wonLblS+' '+fmtLines(calc.gross100)+
         ' · In-flight Gross '+fmtLines(calc.inflightGross)+
         ' · Churn '+fmtLines(calc.inflightChurn)+
         ' · Total '+fmtLines(calc.forecast)+' · (days÷month days)×MRC + OTC';
