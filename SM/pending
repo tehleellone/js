@@ -4666,18 +4666,23 @@ function glkMergeTargetsWithManual(baseT,manual){
   return t;
 }
 function mqYtdMissingSummaryForType(type,report){
-  if(type!=='mobile'||!report||!report.targetBlock) return [];
+  if(type!=='mobile'||!report) return [];
   var res=glkComputeYtdTargetForType('mobile',report,'GLK Overall',mqGetYtdCurrentMonth());
   if(!res.missing.length) return [];
   return ['Net Add Lines Overall: '+res.missing.map(function(m){return m.label;}).join(', ')];
+}
+function glkTargetFieldPresent(baseT,field){
+  if(!baseT) return false;
+  var v=baseT[field];
+  return v!=null&&v!=='';
 }
 function glkListYtdTargetMissing(baseT,manual,isFixed){
   if(isFixed&&baseT&&num(baseT.ytdTotal)) return [];
   var missing=[];
   MQ_YTD_TARGET_FIELDS.forEach(function(f){
-    var v=baseT?baseT[f.key]:null;
+    var fromExcel=glkTargetFieldPresent(baseT,f.key);
     var mv=manual[f.key];
-    if((v==null||v==='')&&(mv==null||mv==='')) missing.push(f);
+    if(!fromExcel&&(mv==null||mv==='')) missing.push(f);
   });
   return missing;
 }
@@ -4693,12 +4698,11 @@ function glkComputeYtdTargetForType(type,report,scopeName,currentMonth){
     var fEntry=(/overall|glk overall|total/i.test(scopeName)?(tb&&tb.overall):null)||(tb&&tb.byVert&&tb.byVert[fKey])||null;
     if(fEntry&&fEntry.targets){
       var ft=fEntry.targets;
-      var fVal=glkCalcFixedYtdTarget(ft,cm);
-      return {value:fVal,missing:[],merged:ft,complete:true};
+      return {value:glkCalcFixedYtdTarget(ft,cm),missing:[],merged:ft,complete:true};
     }
     var fScope=mqFindReportScope(report,scopeName)||report.overall;
-    var fFallback=fScope&&fScope.targetYtd!=null?num(fScope.targetYtd):num(fScope?fScope.target:0);
-    return {value:fFallback,missing:[],merged:null,complete:true};
+    if(fScope&&fScope.targetYtd!=null&&num(fScope.targetYtd)) return {value:num(fScope.targetYtd),missing:[],merged:null,complete:true};
+    return {value:num(fScope?fScope.target:0),missing:[],merged:null,complete:true};
   }
   var manual=GLK_YTD_MANUAL.mobile.overall||{};
   var baseT=tb&&tb.overall&&tb.overall.targets?Object.assign({},tb.overall.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
@@ -5234,12 +5238,27 @@ function glkParseMonthHeader(cell,defaultYear){
 function glkParseTargetPeriodHeader(cell){
   var s=String(cell||'').trim();
   if(!s) return null;
+  var bare=s.match(/^Q([1-4])$/i);
+  if(bare) return {kind:'quarter',quarter:parseInt(bare[1],10),year:null,label:s};
   var tq=glkParseTargetHeader(s);
   if(tq&&!tq.targetOnly) return {kind:'quarter',quarter:tq.quarter,year:tq.year,label:s};
   if(/^apr/i.test(s)) return {kind:'apr',month:3,label:s};
   if(/may\s*[&+]\s*june/i.test(s)) return {kind:'mayjune',label:s};
   if(/^total$/i.test(s)) return {kind:'total',label:s};
   return null;
+}
+function glkFindBestTargetBlock(sheetBlocks,type){
+  var key=type==='mobile'?'mobileTarget':'fixedTarget';
+  if(!sheetBlocks||!sheetBlocks.length) return null;
+  for(var i=0;i<sheetBlocks.length;i++){
+    if(sheetBlocks[i][key]) return sheetBlocks[i][key];
+  }
+  return null;
+}
+function glkAttachTargetBlocks(mobile,fixed,sheetBlocks){
+  if(mobile&&!mobile.targetBlock) mobile.targetBlock=glkFindBestTargetBlock(sheetBlocks,'mobile');
+  if(fixed&&!fixed.targetBlock) fixed.targetBlock=glkFindBestTargetBlock(sheetBlocks,'fixed');
+  return {mobile:mobile,fixed:fixed};
 }
 function glkSheetIsYtdReference(blocks){
   if(blocks.fixedTarget||blocks.mobileTarget) return true;
@@ -5252,12 +5271,13 @@ function glkSheetMonthCount(blocks){
 function glkPickRefAndLiveSheets(sheetBlocks){
   var withData=sheetBlocks.filter(function(s){return s.mobileQtd||s.fixedQtd||s.mobileAll||s.fixedAll;});
   if(!withData.length) return {ref:null,live:null};
-  if(withData.length===1) return {ref:withData[0].isYtdRef?withData[0]:null,live:withData[0].isYtdRef?null:withData[0]};
-  var ytdCands=withData.filter(function(s){return s.isYtdRef;});
-  var liveCands=withData.filter(function(s){return !s.isYtdRef;});
-  if(ytdCands.length&&liveCands.length) return {ref:ytdCands[0],live:liveCands[0]};
+  if(withData.length===1) return {ref:null,live:withData[0]};
   withData.sort(function(a,b){return glkSheetMonthCount(b)-glkSheetMonthCount(a);});
-  return {ref:withData[0],live:withData[1]||null};
+  return {ref:withData[0],live:withData[withData.length-1]};
+}
+function glkLatestMonthFromLiveSheet(live){
+  if(!live) return null;
+  return glkLatestMonthFromBlocks(live.mobileQtd,live.fixedQtd,live.mobileAll,live.fixedAll);
 }
 function glkLatestMonthFromBlocks(){
   var best=null;
@@ -5302,7 +5322,7 @@ function glkFindTargetBlockRows(rows,findSecFn,titleRe){
 function glkParseFixedTargetBlock(rows){
   var blocks=glkFindTargetBlockRows(rows,function(){return null;},/fixed\s*net\s*mrc/);
   for(var bi=0;bi<blocks.length;bi++){
-    var sec=blocks[bi], startCol=sec.col, blockEnd=startCol+8;
+    var sec=blocks[bi], startCol=sec.col, blockEnd=startCol+14;
     var headerRow=-1,periodCols=[];
     for(var hr=sec.headerRow;hr<Math.min(sec.headerRow+4,rows.length);hr++){
       var row=rows[hr]||[], cols=[];
@@ -5320,18 +5340,20 @@ function glkParseFixedTargetBlock(rows){
       if(glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,dataStart)) break;
       var name=glkRowVertName(drow,startCol,[]);
       if(!name||/actual|target|achiev/i.test(name)) continue;
-      var t={q1:0,q2:0,q3:0,apr:0,mayJune:0,ytd:0};
+      var t={q1:null,q2:null,q3:null,apr:null,mayJune:null,ytd:null,ytdTotal:null};
       periodCols.forEach(function(pc){
         var v=glkParseReportNum(drow[pc.col]);
         if(v==null) return;
         if(pc.ph.kind==='quarter'){
           if(pc.ph.quarter===1) t.q1=v;
+          else if(pc.ph.quarter===2) t.q2=v;
           else if(pc.ph.quarter===3) t.q3=v;
         }else if(pc.ph.kind==='apr') t.apr=v;
         else if(pc.ph.kind==='mayjune') t.mayJune=v;
         else if(pc.ph.kind==='total') t.ytd=v;
       });
-      t.q2=num(t.apr)+num(t.mayJune);
+      if(t.q2==null) t.q2=num(t.apr)+num(t.mayJune);
+      if(t.q2===0&&t.apr==null&&t.mayJune==null) t.q2=null;
       if(!t.ytd) t.ytd=num(t.q1)+num(t.q2)+num(t.q3);
       t.ytdTotal=t.ytd;
       var entry={name:name,targets:t,target:t.q3,targetYtd:t.ytd};
@@ -5364,7 +5386,7 @@ function glkParseMobileTargetBlock(rows){
       if(glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,headerRow+1)) break;
       var name=glkRowVertName(drow,startCol,[]);
       if(!name||!/overall|total/i.test(name)) continue;
-      var t={q1:null,q2:0,q3:0,apr:0,mayJune:0,ytd:0};
+      var t={q1:null,q2:0,q3:null,apr:null,mayJune:null,ytd:0};
       periodCols.forEach(function(pc){
         var v=glkParseReportNum(drow[pc.col]);
         if(v==null) return;
@@ -5427,34 +5449,17 @@ function glkLookupQtdTarget(targetBlock,name,type,quarter,liveEntry){
 }
 function glkMergeEntryActuals(refE,liveE,currentMonth,year,quarter){
   var monthValues={};
-  function setMonth(mi,v){
-    if(v==null||isNaN(v)) return;
-    monthValues[mi]=v;
-  }
   var curMi=currentMonth.month;
-  if(refE&&refE.monthValues){
-    Object.keys(refE.monthValues).forEach(function(k){
-      var mi=+k;
-      if(mi<curMi) setMonth(mi,refE.monthValues[k]);
-    });
-  }
-  if(liveE&&liveE.monthValues&&liveE.monthValues[curMi]!=null) setMonth(curMi,liveE.monthValues[curMi]);
-  else if(liveE&&liveE.monthValues){
-    Object.keys(liveE.monthValues).forEach(function(k){
-      var mi=+k;
-      if(mi===curMi) setMonth(mi,liveE.monthValues[k]);
-    });
-  }
   var qStart=(quarter-1)*3;
-  for(var m=qStart;m<=curMi;m++){
-    if(monthValues[m]!=null) continue;
-    if(liveE&&liveE.monthValues&&liveE.monthValues[m]!=null) setMonth(m,liveE.monthValues[m]);
-    else if(refE&&refE.monthValues&&refE.monthValues[m]!=null) setMonth(m,refE.monthValues[m]);
+  // YTD actuals: Jan → prior month from reference/history sheet ONLY
+  if(refE&&refE.monthValues){
+    for(var mi=0;mi<curMi;mi++){
+      if(refE.monthValues[mi]!=null) monthValues[mi]=refE.monthValues[mi];
+    }
   }
-  for(var m2=0;m2<=curMi;m2++){
-    if(monthValues[m2]!=null) continue;
-    if(liveE&&liveE.monthValues&&liveE.monthValues[m2]!=null) setMonth(m2,liveE.monthValues[m2]);
-    else if(refE&&refE.monthValues&&refE.monthValues[m2]!=null) setMonth(m2,refE.monthValues[m2]);
+  // Current month from live daily sheet ONLY — never from reference sheet
+  if(liveE&&liveE.monthValues&&liveE.monthValues[curMi]!=null){
+    monthValues[curMi]=liveE.monthValues[curMi];
   }
   var actualQtd=0,actualYtd=0;
   for(var m3=0;m3<=curMi;m3++){
@@ -5462,15 +5467,20 @@ function glkMergeEntryActuals(refE,liveE,currentMonth,year,quarter){
     actualYtd+=monthValues[m3];
     if(m3>=qStart&&m3<=curMi) actualQtd+=monthValues[m3];
   }
-  return {monthValues:monthValues,actualQtd:actualQtd,actualYtd:actualYtd};
+  return {monthValues:monthValues,actualQtd:actualQtd,actualYtd:actualYtd,currentMonthFromLive:!!(liveE&&liveE.monthValues&&liveE.monthValues[curMi]!=null)};
 }
 function glkBuildYtdOverlay(type,refSheet,liveSheet,currentMonth){
   var refBlock=type==='mobile'?(refSheet&&refSheet.mobileAll):((refSheet&&refSheet.fixedAll));
-  var liveBlock=type==='mobile'?(liveSheet&&liveSheet.mobileQtd):((liveSheet&&liveSheet.fixedQtd));
+  var liveBlock=type==='mobile'
+    ?((liveSheet&&liveSheet.mobileAll)||(liveSheet&&liveSheet.mobileQtd))
+    :((liveSheet&&liveSheet.fixedAll)||(liveSheet&&liveSheet.fixedQtd));
   var targetBlock=type==='mobile'
     ?((refSheet&&refSheet.mobileTarget)||(liveSheet&&liveSheet.mobileTarget))
     :((refSheet&&refSheet.fixedTarget)||(liveSheet&&liveSheet.fixedTarget));
-  if(!refBlock&&!liveBlock) return null;
+  if(!refBlock&&!liveBlock&&!targetBlock) return null;
+  if(!refBlock&&!liveBlock){
+    return {overall:null,byKey:{},targetBlock:targetBlock,currentMonth:currentMonth};
+  }
   var year=currentMonth.year;
   var quarter=Math.floor(currentMonth.month/3)+1;
   var refMap=glkIndexReportEntries(refBlock);
@@ -5541,7 +5551,8 @@ function glkParseQtdWorkbook(wb){
   var picked=glkPickRefAndLiveSheets(sheetBlocks);
   var ref=picked.ref;
   var live=picked.live;
-  var currentMonth=live?glkLatestMonthFromBlocks(live.mobileQtd,live.fixedQtd):null;
+  var currentMonth=glkLatestMonthFromLiveSheet(live);
+  if(!currentMonth&&!live&&ref) currentMonth=glkLatestMonthFromBlocks(ref.mobileAll,ref.fixedAll,ref.mobileQtd,ref.fixedQtd);
   if(!currentMonth){
     var now=new Date();
     currentMonth={month:now.getMonth(),year:now.getFullYear(),label:MONTH_NAMES[now.getMonth()]};
@@ -5550,18 +5561,30 @@ function glkParseQtdWorkbook(wb){
   var fixedQtd=(live&&live.fixedQtd)||(ref&&ref.fixedQtd)||null;
   var mobile=glkOverlayYtdOnQtdReport(mobileQtd,glkBuildYtdOverlay('mobile',ref,live,currentMonth));
   var fixed=glkOverlayYtdOnQtdReport(fixedQtd,glkBuildYtdOverlay('fixed',ref,live,currentMonth));
+  var attached=glkAttachTargetBlocks(mobile,fixed,sheetBlocks);
+  mobile=attached.mobile;
+  fixed=attached.fixed;
   if(!mobile&&!fixed) return null;
   var warnings=[];
-  if(!live&&ref){
-    warnings.push({type:'no_live_sheet',message:'No live daily sheet found — prior months use the YTD reference sheet; current month ('+currentMonth.label+') requires the live daily sheet.'});
+  if(live&&!currentMonth){
+    warnings.push({type:'no_live_month',message:'Live sheet found but current month could not be detected — check month headers on the daily sheet.'});
   }
+  if(!live){
+    warnings.push({type:'no_live_sheet',message:'No live daily sheet found — YTD actuals need a live sheet for the current month. Prior months use the history sheet.'});
+  }else if(ref){
+    warnings.push({type:'ytd_sheet_info',message:'YTD actuals: Jan→prior month from "'+(ref.sheetName||'history')+'" · current month ('+(currentMonth?currentMonth.label:'?')+') from live "'+(live.sheetName||'daily')+'"'});
+  }else if(live){
+    warnings.push({type:'ytd_sheet_info',message:'YTD actuals from live sheet "'+(live.sheetName||'daily')+'" · current month: '+(currentMonth?currentMonth.label:'—')});
+  }
+  var parsedForRefresh={mobile:mobile,fixed:fixed,ytdMeta:{currentMonth:currentMonth,hasRef:!!ref,hasLive:!!live,warnings:[]}};
   mqLoadYtdManual();
+  mqRefreshAllYtdTargetsAfterParse(parsedForRefresh);
   if(mobile){
     mqYtdMissingSummaryForType('mobile',mobile).forEach(function(line){
       warnings.push({type:'ytd_target_missing',product:'mobile',message:'YTD target incomplete — '+line+'. Enter the missing value in the panel below (saved in this browser).'});
     });
   }
-  GLK_YTD_META={currentMonth:currentMonth,hasRef:!!ref,hasLive:!!live,warnings:warnings};
+  GLK_YTD_META={currentMonth:currentMonth,hasRef:!!ref,hasLive:!!live,refSheet:ref?ref.sheetName:null,liveSheet:live?live.sheetName:null,warnings:warnings};
   return {mobile:mobile,fixed:fixed,ytdMeta:GLK_YTD_META};
 }
 function glkSecHasQtdMonthHeaders(rows,sec){
@@ -6074,12 +6097,14 @@ function mqShowYtdWarnings(calc){
   var parts=[];
   var meta=GLK_YTD_META||{};
   if(meta.currentMonth){
-    parts.push('Current month from live sheet: <strong>'+meta.currentMonth.label+' '+meta.currentMonth.year+'</strong>');
+    parts.push('Live month: <strong>'+meta.currentMonth.label+' '+meta.currentMonth.year+'</strong>');
   }
-  if(meta.hasRef) parts.push('YTD reference sheet loaded');
+  if(meta.refSheet) parts.push('History: <strong>'+meta.refSheet+'</strong>');
+  if(meta.liveSheet) parts.push('Live: <strong>'+meta.liveSheet+'</strong>');
   (meta.warnings||[]).forEach(function(w){
     if((w.type==='ytd_target_missing'||w.type==='mobile_q1_missing')&&mqIsYtdBridge()) parts.push('<span style="color:#f59e0b;">⚠ '+w.message+'</span>');
-    else if(w.type==='no_live_sheet') parts.push('<span style="color:#f59e0b;">⚠ '+w.message+'</span>');
+    else if(w.type==='no_live_sheet'||w.type==='no_live_month') parts.push('<span style="color:#f59e0b;">⚠ '+w.message+'</span>');
+    else if(w.type==='ytd_sheet_info'&&mqIsYtdBridge()) parts.push('<span style="color:#64748b;">'+w.message+'</span>');
   });
   if(calc&&calc.isForward) wrap.innerHTML='';
   else if(parts.length) wrap.innerHTML=parts.join(' · ');
@@ -6273,15 +6298,15 @@ function mqBuildRulesHtml(calc){
     html+='<strong>Example (Q3, August live month):</strong> Actuals = Jul + Aug from Excel · Target = Q3 column · Won = Won deals activating Aug–Sep.';
   }else if(calc.bridgePeriod==='ytd'){
     html+='<strong>YTD Bridge</strong> (Year to Date) compares <em>year-to-date</em> Excel actuals against target, with <strong>Quarter to Go</strong> pipeline for the rest of the current quarter.<br>';
-    html+='<strong>Actuals YTD</strong> — Jan through prior month from YTD reference sheet + <strong>current month from live sheet only</strong>.<br>';
+    html+='<strong>Actuals YTD</strong> — <strong>Jan through prior month</strong> summed from the history/reference sheet + <strong>current month only</strong> from the live daily sheet (never mixed).<br>';
     if(isFixed){
-      html+='<strong>Target</strong> — per vertical from Target block: <strong>Q1 + Apr + May&amp;June + Q3</strong> (Total column). Loaded fully from Excel — no manual entry needed.<br>';
+      html+='<strong>Target</strong> — per vertical from Target block: <strong>Q1 + Q2 + Q3</strong> (Total column, e.g. Overall 14,982,111). Loaded from Excel.<br>';
       html+='<strong>Pipeline</strong> — Quarter to Go: activation current month → quarter-end; Fixed uses aggregated revenue formula on Won/in-flight/churn.';
     }else{
       html+='<strong>Target</strong> — <strong>Overall row only</strong>: Q1 + Apr + May&amp;June + Q3 from reference sheet. Per-vertical targets are <em>not</em> used. If Q1\'2026 is blank, enter Overall Q1 in the panel below the controls.<br>';
       html+='<strong>Pipeline</strong> — Quarter to Go window (current month → quarter-end). Full GA Lines on Won/in-flight/churn.';
     }
-    html+='<strong>Example (August):</strong> Actuals YTD = Jan–Jul (reference) + Aug (live) · Target = Overall Q1+Apr+May&amp;Jun+Q3 (Mobile) or per-vertical Q1+Q2+Q3 (Fixed) · Pipeline = QTG only (not full year).';
+    html+='<strong>Example (August):</strong> Actuals YTD = Jan–Jul (history sheet) + Aug (live sheet) · Fixed target = Q1+Q2+Q3 Total (e.g. Overall 14,982,111) · Mobile target = Overall Q1+Apr+May&amp;Jun+Q3 · Pipeline = QTG only.';
   }else if(calc.bridgePeriod==='qtg'){
     html+='<strong>Quarter to Go (QTG)</strong> — forward-looking <em>Fixed only</em>. No Excel actuals or target bars.<br>';
     html+='Shows aggregated revenue still to come from pipeline activations between <strong>today (or current month) → quarter-end</strong>.<br>';
