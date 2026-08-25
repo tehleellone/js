@@ -1,0 +1,19 @@
+Phase 1 — SharePoint setup (do this first)
+Create these columns on the MSR_QSR_Reviews list with exact internal names:
+
+Internal name	Type
+outbound_call_validation
+Single line of text
+tm_attempt_to_reach_customer
+Single line of text
+spoc_details_request_email_to_am
+Single line of text
+last_qsr_date
+Date only
+final_comments
+Multiple lines of text
+tl_validation_updated_by
+Single line of text
+tl_validation_updated_date
+Date only
+Important: Create these before deploying the JS. If they are missing, Customer Service will fail to load reviews.
