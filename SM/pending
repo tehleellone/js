@@ -1107,12 +1107,12 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
                 <span class="mq-control-hint" id="mqPeriodHint">Select Fixed to unlock Quarter to Go and Year to Go.</span>
                 <div id="mqYtdManualPanel" style="display:none;margin-top:.55rem;padding:.55rem .65rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35);border-radius:8px;font-size:.72rem;line-height:1.45;">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem;">
-                    <div style="font-weight:700;color:#b45309;">YTD target — missing values</div>
+                    <div style="font-weight:700;color:#b45309;">Net Add Lines YTD — missing target only</div>
                     <button type="button" class="export-btn" onclick="mqApplyYtdManualTargets()" style="font-size:.68rem;padding:.25rem .55rem;">Save &amp; apply</button>
                   </div>
                   <div id="mqYtdManualBody" style="margin-top:.25rem;"></div>
                   <div id="mqYtdVertWarnRow" style="display:none;color:#92400e;margin-top:.35rem;">
-                    Mobile targets are on <strong>Overall only</strong> — not per vertical. Actuals follow your report level; target stays GLK Overall.
+                    Target is <strong>Overall only</strong> — not per vertical. Actuals follow your report level selection.
                   </div>
                 </div>
               </div>
@@ -4612,7 +4612,7 @@ window.glkSetMqProductFamily=function(pf){
 window.glkSetMqPeriod=function(p){
   if(mqProductFamily!=='fixed'&&(p==='qtg'||p==='ytg')) return;
   mqPeriod=p==='ytd'?'ytd':(p==='qtg'?'qtg':(p==='ytg'?'ytg':'qtd'));
-  if(mqPeriod==='ytd') mqPromptYtdMobileSetup();
+  if(mqPeriod==='ytd'&&mqProductFamily==='mobile') mqPromptYtdMobileSetup();
   mqSyncBridgeControlsUi();
   GLK_MQ_DETAIL_IDX=-1;
   renderMobileQtdBridge();
@@ -4646,22 +4646,14 @@ function glkYtdManualStoreKey(type,scopeName){
   if(type==='mobile') return 'overall';
   return mqNormVertKey(scopeName||'GLK Overall');
 }
-function glkGetYtdManualOverrides(type,scopeName){
+function glkGetYtdManualOverrides(){
   mqLoadYtdManual();
-  if(type==='mobile') return GLK_YTD_MANUAL.mobile.overall||{};
-  var k=glkYtdManualStoreKey('fixed',scopeName);
-  return GLK_YTD_MANUAL.fixed.byVert[k]||{};
+  return GLK_YTD_MANUAL.mobile.overall||{};
 }
-function mqSetYtdManualValue(type,scopeName,field,value){
+function mqSetYtdManualValue(field,value){
   mqLoadYtdManual();
-  if(type==='mobile'){
-    if(!GLK_YTD_MANUAL.mobile.overall) GLK_YTD_MANUAL.mobile.overall={};
-    GLK_YTD_MANUAL.mobile.overall[field]=value;
-    return;
-  }
-  var k=glkYtdManualStoreKey('fixed',scopeName);
-  if(!GLK_YTD_MANUAL.fixed.byVert[k]) GLK_YTD_MANUAL.fixed.byVert[k]={};
-  GLK_YTD_MANUAL.fixed.byVert[k][field]=value;
+  if(!GLK_YTD_MANUAL.mobile.overall) GLK_YTD_MANUAL.mobile.overall={};
+  GLK_YTD_MANUAL.mobile.overall[field]=value;
 }
 function glkMergeTargetsWithManual(baseT,manual){
   var t=Object.assign({q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0,ytdTotal:0},baseT||{});
@@ -4674,26 +4666,13 @@ function glkMergeTargetsWithManual(baseT,manual){
   return t;
 }
 function mqYtdMissingSummaryForType(type,report){
-  report=report||null;
-  if(!report||!report.targetBlock) return [];
-  var cm=mqGetYtdCurrentMonth();
-  var lines=[];
-  if(type==='mobile'){
-    var res=glkComputeYtdTargetForType('mobile',report,'GLK Overall',cm);
-    if(res.missing.length) lines.push('Net Add Lines Overall: '+res.missing.map(function(m){return m.label;}).join(', '));
-    return lines;
-  }
-  if(report.overall){
-    var oRes=glkComputeYtdTargetForType('fixed',report,'GLK Overall',cm);
-    if(oRes.missing.length) lines.push('Fixed Overall: '+oRes.missing.map(function(m){return m.label;}).join(', '));
-  }
-  (report.verticals||[]).forEach(function(v){
-    var vRes=glkComputeYtdTargetForType('fixed',report,v.name,cm);
-    if(vRes.missing.length) lines.push(v.name+': '+vRes.missing.map(function(m){return m.label;}).join(', '));
-  });
-  return lines;
+  if(type!=='mobile'||!report||!report.targetBlock) return [];
+  var res=glkComputeYtdTargetForType('mobile',report,'GLK Overall',mqGetYtdCurrentMonth());
+  if(!res.missing.length) return [];
+  return ['Net Add Lines Overall: '+res.missing.map(function(m){return m.label;}).join(', ')];
 }
-function glkListYtdTargetMissing(baseT,manual){
+function glkListYtdTargetMissing(baseT,manual,isFixed){
+  if(isFixed&&baseT&&num(baseT.ytdTotal)) return [];
   var missing=[];
   MQ_YTD_TARGET_FIELDS.forEach(function(f){
     var v=baseT?baseT[f.key]:null;
@@ -4707,32 +4686,35 @@ function mqGetYtdCurrentMonth(){
 }
 function glkComputeYtdTargetForType(type,report,scopeName,currentMonth){
   mqLoadYtdManual();
-  var manual=type==='mobile'?GLK_YTD_MANUAL.mobile.overall||{}:((GLK_YTD_MANUAL.fixed.byVert||{})[glkYtdManualStoreKey('fixed',scopeName)]||{});
   var tb=report&&report.targetBlock;
-  var baseT;
-  if(type==='mobile'){
-    baseT=tb&&tb.overall&&tb.overall.targets?Object.assign({},tb.overall.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
-  }else{
-    var key=mqNormVertKey(scopeName);
-    var entry=(/overall|glk overall|total/i.test(scopeName)?(tb&&tb.overall):null)||(tb&&tb.byVert&&tb.byVert[key])||null;
-    baseT=entry&&entry.targets?Object.assign({},entry.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
+  var cm=currentMonth||mqGetYtdCurrentMonth();
+  if(type==='fixed'){
+    var fKey=mqNormVertKey(scopeName);
+    var fEntry=(/overall|glk overall|total/i.test(scopeName)?(tb&&tb.overall):null)||(tb&&tb.byVert&&tb.byVert[fKey])||null;
+    if(fEntry&&fEntry.targets){
+      var ft=fEntry.targets;
+      var fVal=glkCalcFixedYtdTarget(ft,cm);
+      return {value:fVal,missing:[],merged:ft,complete:true};
+    }
+    var fScope=mqFindReportScope(report,scopeName)||report.overall;
+    var fFallback=fScope&&fScope.targetYtd!=null?num(fScope.targetYtd):num(fScope?fScope.target:0);
+    return {value:fFallback,missing:[],merged:null,complete:true};
   }
+  var manual=GLK_YTD_MANUAL.mobile.overall||{};
+  var baseT=tb&&tb.overall&&tb.overall.targets?Object.assign({},tb.overall.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
   var merged=glkMergeTargetsWithManual(baseT,manual);
-  var value=type==='mobile'?glkCalcMobileYtdTarget(merged):glkCalcFixedYtdTarget(merged,currentMonth||mqGetYtdCurrentMonth());
-  return {value:value,missing:glkListYtdTargetMissing(baseT,manual),merged:merged,complete:!glkListYtdTargetMissing(baseT,manual).length};
+  var missing=glkListYtdTargetMissing(baseT,manual,false);
+  return {value:glkCalcMobileYtdTarget(merged),missing:missing,merged:merged,complete:!missing.length};
 }
 function mqGetYtdScopeTarget(report,scopeName){
   report=report||mqGetActiveReport();
-  var res=glkComputeYtdTargetForType(mqProductFamily,report,scopeName,mqGetYtdCurrentMonth());
-  return Object.assign({scopeName:scopeName},res);
-}
-function mqGetYtdTargetScopeList(report){
-  if(mqProductFamily==='mobile'){
-    return [{name:'GLK Overall',label:'Net Add Lines — Overall'}];
+  if(mqProductFamily==='fixed'){
+    return Object.assign({scopeName:scopeName},glkComputeYtdTargetForType('fixed',report,scopeName,mqGetYtdCurrentMonth()));
   }
-  var levels=mqGetActiveReportLevels();
-  if(!levels.length) return [{name:'GLK Overall',label:'Fixed Net MRC — Overall'}];
-  return levels.map(function(n){return {name:n,label:'Fixed Net MRC — '+n};});
+  return Object.assign({scopeName:'GLK Overall'},glkComputeYtdTargetForType('mobile',report,'GLK Overall',mqGetYtdCurrentMonth()));
+}
+function mqGetYtdTargetScopeList(){
+  return [{name:'GLK Overall',label:'Net Add Lines — Overall'}];
 }
 function mqGetMobileYtdOverallTarget(report){
   return mqGetYtdScopeTarget(report,'GLK Overall').value;
@@ -4760,36 +4742,12 @@ function mqRefreshAllYtdTargetsAfterParse(parsed){
   }
 }
 function mqRefreshYtdTargetsOnReport(report){
-  if(!report) return;
-  var scopes=mqGetYtdTargetScopeList(report);
-  scopes.forEach(function(sc){
-    var res=mqGetYtdScopeTarget(report,sc.name);
-    var key=mqNormVertKey(sc.name);
-    if(/overall|glk overall|total/i.test(sc.name)){
-      if(report.overall) report.overall.targetYtd=res.value;
-    }else{
-      (report.verticals||[]).forEach(function(v){
-        if(mqNormVertKey(v.name)===key) v.targetYtd=res.value;
-      });
-    }
-  });
-  if(mqProductFamily==='fixed'&&!mqGetActiveReportLevels().length&&report.overall){
-    report.overall.targetYtd=mqGetYtdScopeTarget(report,'GLK Overall').value;
-  }
-  if(mqProductFamily==='mobile'&&report.overall){
-    report.overall.targetYtd=mqGetYtdScopeTarget(report,'GLK Overall').value;
-  }
+  if(!report||mqProductFamily!=='mobile') return;
+  if(report.overall) report.overall.targetYtd=mqGetYtdScopeTarget(report,'GLK Overall').value;
 }
 function mqYtdMissingSummary(report){
-  report=report||mqGetActiveReport();
-  var scopes=mqGetYtdTargetScopeList(report);
-  var lines=[];
-  scopes.forEach(function(sc){
-    var res=mqGetYtdScopeTarget(report,sc.name);
-    if(!res.missing.length) return;
-    lines.push(sc.label+': '+res.missing.map(function(m){return m.label;}).join(', '));
-  });
-  return lines;
+  if(mqProductFamily!=='mobile') return [];
+  return mqYtdMissingSummaryForType('mobile',report||mqGetActiveReport());
 }
 function mqMobileYtdQ1Missing(report){
   var res=glkComputeYtdTargetForType('mobile',report||mqGetActiveReport(),'GLK Overall',mqGetYtdCurrentMonth());
@@ -4797,32 +4755,27 @@ function mqMobileYtdQ1Missing(report){
 }
 function mqPromptYtdMobileSetup(){
   var lines=mqYtdMissingSummary();
-  var msgs=[];
-  if(lines.length) msgs.push('YTD target fields missing from Excel:\n\n'+lines.join('\n')+'\n\nEnter values in the panel below — saved in this browser.');
-  if(mqGetActiveReportLevels().length&&mqProductFamily==='mobile'){
-    msgs.push("Net Add Lines targets are on Overall level only — not per vertical.\n\nActuals will filter by your selected vertical(s), but the target bar always uses GLK Overall.");
-  }
-  if(msgs.length) alert(msgs.join('\n\n'));
+  if(!lines.length) return;
+  alert('Net Add Lines — missing YTD target from Excel:\n\n'+lines.join('\n')+'\n\nEnter only the missing value(s) in the panel below (saved in this browser).');
 }
 window.mqApplyYtdManualTargets=function(){
+  if(mqProductFamily!=='mobile') return;
   var report=mqGetActiveReport();
   if(!report){ alert('Load the GLK report first.'); return; }
-  var scopes=mqGetYtdTargetScopeList(report);
+  var res=mqGetYtdScopeTarget(report,'GLK Overall');
+  if(!res.missing.length){ alert('No missing Mobile YTD targets — nothing to save.'); return; }
   var saved=0;
-  for(var si=0;si<scopes.length;si++){
-    var sc=scopes[si];
-    for(var fi=0;fi<MQ_YTD_TARGET_FIELDS.length;fi++){
-      var f=MQ_YTD_TARGET_FIELDS[fi];
-      var inpId='mqYtd_'+glkYtdManualStoreKey(mqProductFamily,sc.name)+'_'+f.key;
-      var inp=el(inpId);
-      if(!inp||!String(inp.value||'').trim()) continue;
-      var v=glkParseReportNum(inp.value);
-      if(v==null){ alert('Invalid number for '+sc.label+' · '+f.label); return; }
-      mqSetYtdManualValue(mqProductFamily,sc.name,f.key,v);
-      saved++;
-    }
+  for(var fi=0;fi<res.missing.length;fi++){
+    var f=res.missing[fi];
+    var inpId='mqYtd_overall_'+f.key;
+    var inp=el(inpId);
+    if(!inp||!String(inp.value||'').trim()) continue;
+    var v=glkParseReportNum(inp.value);
+    if(v==null){ alert('Enter a valid number for '+f.label); return; }
+    mqSetYtdManualValue(f.key,v);
+    saved++;
   }
-  if(!saved){ alert('Enter at least one target value to save.'); return; }
+  if(!saved){ alert('Enter the missing target value(s) first.'); return; }
   mqSaveYtdManual();
   mqRefreshYtdTargetsOnReport(report);
   mqSyncYtdManualPanel();
@@ -4833,39 +4786,31 @@ function mqSyncYtdManualPanel(){
   var panel=el('mqYtdManualPanel');
   var body=el('mqYtdManualBody');
   var vertRow=el('mqYtdVertWarnRow');
-  var show=mqIsYtdBridge();
-  if(panel) panel.style.display=show?'block':'none';
-  if(!show||!body) return;
+  var show=mqIsYtdBridge()&&mqProductFamily==='mobile';
+  if(!show||!panel||!body){
+    if(panel) panel.style.display='none';
+    return;
+  }
   var report=mqGetActiveReport();
-  var scopes=mqGetYtdTargetScopeList(report);
-  var html='', anyMissing=false, anyScope=false;
-  scopes.forEach(function(sc){
-    var res=mqGetYtdScopeTarget(report,sc.name);
-    anyScope=true;
-    if(res.missing.length) anyMissing=true;
-    html+='<div style="margin-bottom:.55rem;padding-bottom:.45rem;border-bottom:1px dashed rgba(245,158,11,.35);">';
-    html+='<div style="font-weight:700;margin-bottom:.25rem;">'+sc.label+'</div>';
-    html+='<div style="margin-bottom:.3rem;">YTD target = <strong>'+fmtLines(res.value)+'</strong> (Q1 + Apr + May&amp;June + Q3)</div>';
-    if(res.missing.length){
-      html+='<div style="color:#b45309;margin-bottom:.35rem;">Missing from Excel: <strong>'+res.missing.map(function(m){return m.label;}).join(', ')+'</strong></div>';
-    }else{
-      html+='<div style="color:#16a34a;margin-bottom:.35rem;">All fields loaded from Excel — edit below to override.</div>';
-    }
-    MQ_YTD_TARGET_FIELDS.forEach(function(f){
-      var isMiss=res.missing.some(function(m){return m.key===f.key;});
-      var cur=res.merged[f.key];
-      var inpId='mqYtd_'+glkYtdManualStoreKey(mqProductFamily,sc.name)+'_'+f.key;
-      html+='<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.2rem;flex-wrap:wrap;">';
-      html+='<label for="'+inpId+'" style="min-width:5.5rem;font-weight:600;">'+f.label+(isMiss?' *':'')+'</label>';
-      html+='<input id="'+inpId+'" type="text" inputmode="decimal" value="'+(cur!=null&&cur!==''?cur:'')+'" placeholder="'+(isMiss?'Enter value':'Optional')+'" style="width:7.5rem;padding:.25rem .45rem;border:1px solid '+(isMiss?'#f59e0b':'var(--border-s)')+';border-radius:6px;font-size:.72rem;">';
-      html+='</div>';
-    });
+  var res=mqGetYtdScopeTarget(report,'GLK Overall');
+  if(!res.missing.length){
+    panel.style.display='none';
+    return;
+  }
+  panel.style.display='block';
+  var html='<div style="margin-bottom:.3rem;">YTD target = Q1 + Apr + May&amp;June + Q3 on <strong>Overall</strong> only · current total <strong>'+fmtLines(res.value)+'</strong></div>';
+  html+='<div style="color:#b45309;margin-bottom:.35rem;">Missing from Excel: <strong>'+res.missing.map(function(m){return m.label;}).join(', ')+'</strong></div>';
+  res.missing.forEach(function(f){
+    var inpId='mqYtd_overall_'+f.key;
+    var manual=glkGetYtdManualOverrides();
+    var cur=manual[f.key]!=null?manual[f.key]:'';
+    html+='<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem;flex-wrap:wrap;">';
+    html+='<label for="'+inpId+'" style="min-width:5.5rem;font-weight:600;">'+f.label+'</label>';
+    html+='<input id="'+inpId+'" type="text" inputmode="decimal" value="'+(cur!==''?cur:'')+'" placeholder="Enter '+f.label+'" style="width:7.5rem;padding:.25rem .45rem;border:1px solid #f59e0b;border-radius:6px;font-size:.72rem;">';
     html+='</div>';
   });
-  if(!anyScope) html='<div style="color:#f59e0b;">Load the GLK Excel report to see YTD targets.</div>';
-  else if(!anyMissing) html='<div style="color:#16a34a;margin-bottom:.35rem;">All YTD target fields loaded from Excel.</div>'+html;
   body.innerHTML=html;
-  if(vertRow) vertRow.style.display=(mqProductFamily==='mobile'&&mqGetActiveReportLevels().length)?'block':'none';
+  if(vertRow) vertRow.style.display=mqGetActiveReportLevels().length?'block':'none';
 }
 function mqSyncYtdMobileManualPanel(){ mqSyncYtdManualPanel(); }
 function mqPeriodLongName(p){
@@ -5028,7 +4973,7 @@ function mqResolveReportScope(report,levelNames){
   if(!levelNames||!levelNames.length){
     var ov=report.overall||null;
     var tgt=pickTarget(ov,'GLK Overall');
-    var ytdMiss=useYtd?mqGetYtdScopeTarget(report,'GLK Overall').missing:[];
+    var ytdMiss=useYtd&&mobileYtdOverall?mqGetYtdScopeTarget(report,'GLK Overall').missing.map(function(m){return m.label;}):[];
     return {
       actualsQtd:pickActuals(ov),actualsYtd:ov?num(ov.actualYtd):0,
       target:tgt,targetYtd:tgt,
@@ -5043,13 +4988,11 @@ function mqResolveReportScope(report,levelNames){
   });
   if(mobileYtdOverall){
     target=mqGetYtdScopeTarget(report,'GLK Overall').value;
-    ytdMissing=mqGetYtdScopeTarget(report,'GLK Overall').missing;
+    ytdMissing=mqGetYtdScopeTarget(report,'GLK Overall').missing.map(function(m){return m.label;});
   }else{
     levelNames.forEach(function(name){
       var sc=mqFindReportScope(report,name);
       if(sc) target+=pickTarget(sc,name);
-      var miss=mqGetYtdScopeTarget(report,name).missing;
-      if(miss.length) ytdMissing=ytdMissing.concat(miss.map(function(m){return name+': '+m.label;}));
     });
   }
   return {
@@ -5453,15 +5396,16 @@ function glkCalcMobileYtdTarget(t){
   return (t.q1!=null?num(t.q1):0)+num(t.apr)+num(t.mayJune)+num(t.q3);
 }
 function glkLookupYtdTarget(targetBlock,name,type,currentMonth){
+  if(type==='mobile'){
+    if(!targetBlock||!targetBlock.overall||!targetBlock.overall.targets) return null;
+    var res=glkComputeYtdTargetForType('mobile',{targetBlock:targetBlock},'GLK Overall',currentMonth);
+    return {value:res.value,missing:res.missing,q1Missing:res.missing.some(function(m){return m.key==='q1';}),overallOnly:true};
+  }
   if(!targetBlock) return null;
-  var scopeName=type==='mobile'?'GLK Overall':(name||'GLK Overall');
-  var res=glkComputeYtdTargetForType(type,{targetBlock:targetBlock},scopeName,currentMonth);
-  return {
-    value:res.value,
-    missing:res.missing,
-    q1Missing:res.missing.some(function(m){return m.key==='q1';}),
-    overallOnly:type==='mobile'
-  };
+  var key=mqNormVertKey(name);
+  var entry=(/overall|glk overall|total/i.test(name)?targetBlock.overall:null)||targetBlock.byVert[key]||null;
+  if(!entry||!entry.targets) return null;
+  return {value:glkCalcFixedYtdTarget(entry.targets,currentMonth),missing:[],overallOnly:false};
 }
 function glkLookupQtdTarget(targetBlock,name,type,quarter,liveEntry){
   if(liveEntry&&liveEntry.target!=null) return num(liveEntry.target);
@@ -5614,12 +5558,7 @@ function glkParseQtdWorkbook(wb){
   mqLoadYtdManual();
   if(mobile){
     mqYtdMissingSummaryForType('mobile',mobile).forEach(function(line){
-      warnings.push({type:'ytd_target_missing',product:'mobile',message:'YTD target incomplete — '+line+'. Enter missing values in the panel below (saved in this browser).'});
-    });
-  }
-  if(fixed){
-    mqYtdMissingSummaryForType('fixed',fixed).forEach(function(line){
-      warnings.push({type:'ytd_target_missing',product:'fixed',message:'YTD target incomplete — '+line+'. Enter missing values in the panel below (saved in this browser).'});
+      warnings.push({type:'ytd_target_missing',product:'mobile',message:'YTD target incomplete — '+line+'. Enter the missing value in the panel below (saved in this browser).'});
     });
   }
   GLK_YTD_META={currentMonth:currentMonth,hasRef:!!ref,hasLive:!!live,warnings:warnings};
@@ -6336,7 +6275,7 @@ function mqBuildRulesHtml(calc){
     html+='<strong>YTD Bridge</strong> (Year to Date) compares <em>year-to-date</em> Excel actuals against target, with <strong>Quarter to Go</strong> pipeline for the rest of the current quarter.<br>';
     html+='<strong>Actuals YTD</strong> — Jan through prior month from YTD reference sheet + <strong>current month from live sheet only</strong>.<br>';
     if(isFixed){
-      html+='<strong>Target</strong> — cumulative YTD from Target block per vertical: <strong>Q1 + Apr + May&amp;June + Q3</strong> (or Total column). Missing cells can be entered manually below.<br>';
+      html+='<strong>Target</strong> — per vertical from Target block: <strong>Q1 + Apr + May&amp;June + Q3</strong> (Total column). Loaded fully from Excel — no manual entry needed.<br>';
       html+='<strong>Pipeline</strong> — Quarter to Go: activation current month → quarter-end; Fixed uses aggregated revenue formula on Won/in-flight/churn.';
     }else{
       html+='<strong>Target</strong> — <strong>Overall row only</strong>: Q1 + Apr + May&amp;June + Q3 from reference sheet. Per-vertical targets are <em>not</em> used. If Q1\'2026 is blank, enter Overall Q1 in the panel below the controls.<br>';
@@ -7228,8 +7167,8 @@ function renderMobileQtdBridge(){
           ytdWarn+=' · <span style="color:#f59e0b;">⚠ '+w.message+'</span>';
         }
       });
-      if(mqIsYtdBridge()&&calc.ytdMissing&&calc.ytdMissing.length){
-        ytdWarn+=' · <span style="color:#f59e0b;">⚠ Missing targets: '+calc.ytdMissing.join('; ')+'</span>';
+      if(mqIsYtdBridge()&&mqProductFamily==='mobile'&&calc.ytdMissing&&calc.ytdMissing.length){
+        ytdWarn+=' · <span style="color:#f59e0b;">⚠ Missing: '+calc.ytdMissing.join(', ')+' — enter below</span>';
       }
       if(mqIsYtdBridge()&&mqProductFamily==='mobile'&&calc.activeReportLevels&&calc.activeReportLevels.length){
         ytdWarn+=' · <span style="color:#92400e;">Target = GLK Overall only (not per vertical)</span>';
