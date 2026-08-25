@@ -171,11 +171,11 @@ function csGetTLValidationMeta(review) {
         return { needed: false, complete: false, pending: false, status: 'N/A' };
     }
     const fields = [
-        review.outbound_call_validation,
-        review.tm_attempt_to_reach_customer,
-        review.spoc_details_request_email_to_am,
+        csStripHtml(review.outbound_call_validation),
+        csStripHtml(review.tm_attempt_to_reach_customer),
+        csStripHtml(review.spoc_details_request_email_to_am),
         review.last_qsr_date,
-        review.final_comments
+        csStripHtml(review.final_comments)
     ];
     const complete = fields.every(function (f) { return f != null && String(f).trim() !== ''; });
     return { needed: true, complete: complete, pending: !complete, status: complete ? 'Complete' : 'Pending' };
@@ -194,6 +194,69 @@ function csEscHtml(s) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function csStripHtml(s) {
+    if (s == null || s === '') return '';
+    return String(s)
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function csDisplayText(s) {
+    return csEscHtml(csStripHtml(s));
+}
+
+var _csSearchDebounce = null;
+var _csApplyFiltersBusy = false;
+
+function csSyncStatusFilterFromDropdown() {
+    var sf = document.getElementById('csStatusFilter');
+    CS_USER_CONTEXT.statusFilter = (sf && sf.value) ? sf.value : null;
+}
+
+function csUpdateKPITileHighlight() {
+    var host = document.getElementById('csKPISection');
+    if (!host) return;
+    var active = CS_USER_CONTEXT.statusFilter || '';
+    var map = {
+        '': 'total',
+        'Completed': 'Completed',
+        'In Progress': 'In Progress',
+        'Pending': 'Pending',
+        'OVERDUE': 'OVERDUE',
+        'Customer Declined': 'Customer Declined',
+        'No Show': 'No Show',
+        'Unreachable': 'Unreachable',
+        'Failed': 'Failed',
+        'Not Applicable': 'Not Applicable',
+        'TL_VALIDATION_PENDING': 'TL_VALIDATION_PENDING'
+    };
+    var activeKey = map[active] || active;
+    host.querySelectorAll('.stat-card[data-cs-filter]').forEach(function (card) {
+        var isActive = card.getAttribute('data-cs-filter') === activeKey;
+        card.style.outline = isActive ? '2px solid var(--acc)' : '';
+        card.style.boxShadow = isActive ? '0 0 0 3px var(--glow)' : '';
+        card.style.transform = isActive ? 'translateY(-1px)' : '';
+    });
+}
+
+function csSetStatusFilter(status) {
+    CS_USER_CONTEXT.statusFilter = status || null;
+    var sf = document.getElementById('csStatusFilter');
+    if (sf) {
+        var supported = ['', 'Completed', 'In Progress', 'Pending', 'Customer Declined', 'No Show', 'Unreachable', 'Failed', 'Not Applicable'];
+        sf.value = (status && supported.indexOf(status) >= 0) ? status : '';
+    }
+    csApplyFilters(true);
+    csUpdateKPITileHighlight();
 }
 // Disable datalabels plugin for all CS charts
 
@@ -223,6 +286,7 @@ window.showCustomerService = function () {
     } else {
         document.getElementById('csLoadingScreen').style.display = 'none';
         document.getElementById('csMainContent').style.display = 'block';
+        csBindCustomerServiceControls();
         csInitTabs();
         csRenderBreadcrumb();
         csRefreshMSRQSRDashboard();
@@ -513,6 +577,27 @@ if (typeof lucide !== 'undefined') lucide.createIcons();
 var CS_TIME_FILTER_INIT = { MSR:false, QSR:false, HC:false };
 var CS_SELECTED_STATUSES = []; // multi-select status filter
 
+function csBindCustomerServiceControls() {
+    var sf = document.getElementById('csStatusFilter');
+    if (sf && !sf._csBound) {
+        sf.onchange = function () { csStatusFilterChanged(); };
+        sf._csBound = true;
+    }
+    var rt = document.getElementById('csReviewTypeFilter');
+    if (rt && !rt._csBound) {
+        rt.onchange = function () { csReviewTypeChanged(); };
+        rt._csBound = true;
+    }
+    var sb = document.getElementById('csSearchBox');
+    if (sb && !sb._csSearchBound) {
+        sb.addEventListener('input', function () {
+            clearTimeout(_csSearchDebounce);
+            _csSearchDebounce = setTimeout(function () { csApplyFilters(true); }, 250);
+        });
+        sb._csSearchBound = true;
+    }
+}
+
 function csPopulateFilters() {
     // Existing dropdown (kept for backwards compatibility)
     csUpdatePeriodFilter();
@@ -521,6 +606,7 @@ function csPopulateFilters() {
     csPlaceTopFiltersAtTop();
     csUpdateTopTimeFiltersOptions();
     csInitDefaultTopTimeFiltersForTab();
+    csBindCustomerServiceControls();
 }
 
 function csPlaceTopFiltersAtTop() {
@@ -543,9 +629,9 @@ function csPlaceTopFiltersAtTop() {
     if (statusGroup) statusGroup.style.display = CS_ACTIVE_TAB === 'HC' ? 'none' : '';
 }
 
-function csRefreshActiveDashboard() {
+function csRefreshActiveDashboard(options) {
     if (CS_ACTIVE_TAB === 'HC') csRefreshHCDashboard();
-    else csRefreshMSRQSRDashboard();
+    else csRefreshMSRQSRDashboard(options || {});
 }
 
 function csEnsureTopTimeFilters() {
@@ -675,10 +761,11 @@ function csGetReviewTimeMeta(review, account) {
 
 function csGetDashboardReviewsFiltered(extra) {
     // Applies role + type + time + (optional) status + search
-    const typeF   = (extra && typeof extra.typeF !== 'undefined') ? extra.typeF : (document.getElementById('csReviewTypeFilter') ? document.getElementById('csReviewTypeFilter').value : '');
-    const statusF = (extra && typeof extra.statusF !== 'undefined') ? extra.statusF : (document.getElementById('csStatusFilter') ? document.getElementById('csStatusFilter').value : '');
-    // Search comes from the AG Grid search box (legacy UI).
-    const searchT = (extra && typeof extra.searchT !== 'undefined') ? extra.searchT : (
+    extra = extra || {};
+    const typeF   = (typeof extra.typeF !== 'undefined') ? extra.typeF : (document.getElementById('csReviewTypeFilter') ? document.getElementById('csReviewTypeFilter').value : '');
+    const statusF = (typeof extra.statusF !== 'undefined') ? extra.statusF : (document.getElementById('csStatusFilter') ? document.getElementById('csStatusFilter').value : '');
+    const ignoreTileFilter = !!extra.ignoreTileFilter;
+    const searchT = (typeof extra.searchT !== 'undefined') ? extra.searchT : (
         document.getElementById('csSearchBox') ? document.getElementById('csSearchBox').value.toLowerCase()
         : ''
     );
@@ -730,7 +817,7 @@ function csGetDashboardReviewsFiltered(extra) {
 
         if (statusF && review.status !== statusF) return false;
 
-        if (CS_USER_CONTEXT.statusFilter) {
+        if (!ignoreTileFilter && CS_USER_CONTEXT.statusFilter) {
             if (CS_USER_CONTEXT.statusFilter === 'OVERDUE') {
                 if (!review.dueDate) return false;
                 const due = new Date(review.dueDate), today = new Date(); today.setHours(0,0,0,0);
@@ -906,7 +993,7 @@ window.csToggleStatus = function(status, ev) {
     if (idx >= 0) CS_SELECTED_STATUSES.splice(idx, 1);
     else CS_SELECTED_STATUSES.push(status);
     csUpdateTopTimeFiltersOptions();
-    csRefreshActiveDashboard();
+    csRefreshActiveDashboard({ skipAnalytics: true });
 };
 
 function csUpdateStatusSelectedText() {
@@ -932,7 +1019,7 @@ function csUpdatePeriodFilter() {
     });
 }
 
-window.csReviewTypeChanged = function () { csUpdatePeriodFilter(); csApplyFilters(); };
+window.csReviewTypeChanged = function () { csUpdatePeriodFilter(); csApplyFilters(true); };
 
 // ─── ROLE FILTER ───────────────────────────────────────────────────────────────
 function csGetFilteredByRole() {
@@ -990,14 +1077,15 @@ function csReviewStatusCounts(reviews) {
 
 // ─── KPIs (v2 — includes Unreachable) ─────────────────────────────────────────
 function csRenderKPIs() {
-    const reviews = csGetDashboardReviewsFiltered({ searchT:'' });
+    const reviews = csGetDashboardReviewsFiltered({ searchT: '', ignoreTileFilter: true });
     const { total, completed, inProgress: inProg, pending, declined, noShow, unreachable, failed, notApplicable, overdue, rate } = csReviewStatusCounts(reviews);
     const tlPending = reviews.filter(function (r) { return csGetTLValidationMeta(r).pending; }).length;
     const showTLKpi = CS_USER_CONTEXT.role === 'SD' || CS_USER_CONTEXT.role === 'LM';
+    const tileStyle = 'cursor:pointer;';
 
     document.getElementById('csKPISection').innerHTML = `
     <div class="top-stats" style="margin-bottom:1rem;">
-        <div class="stat-card" onclick="csClearFilters()" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="total" onclick="csSetStatusFilter(null)" style="${tileStyle}">
             <div class="stat-label">Total reviews</div>
             <div class="stat-value">${total}</div>
             <div class="stat-subtitle">${rate}% completed</div>
@@ -1006,59 +1094,60 @@ function csRenderKPIs() {
                 <div class="breakdown-item"><div class="breakdown-label">Pending</div><div class="breakdown-value">${pending}</div></div>
             </div>
         </div>
-        <div class="stat-card" onclick="csFilterByStatus('Completed')" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="Completed" onclick="csSetStatusFilter('Completed')" style="${tileStyle}">
             <div class="stat-label">Completed</div>
             <div class="stat-value" style="color:#10b981">${completed}</div>
             <div class="stat-subtitle">${rate}% of total</div>
         </div>
-        <div class="stat-card" onclick="csFilterByStatus('In Progress')" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="In Progress" onclick="csSetStatusFilter('In Progress')" style="${tileStyle}">
             <div class="stat-label">In progress</div>
             <div class="stat-value" style="color:var(--warning)">${inProg}</div>
             <div class="stat-subtitle">Active reviews</div>
         </div>
-        <div class="stat-card" onclick="csFilterByStatus('Pending')" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="Pending" onclick="csSetStatusFilter('Pending')" style="${tileStyle}">
             <div class="stat-label">Pending</div>
             <div class="stat-value">${pending}</div>
             <div class="stat-subtitle">Not started</div>
         </div>
-        <div class="stat-card" onclick="csFilterOverdue()" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="OVERDUE" onclick="csSetStatusFilter('OVERDUE')" style="${tileStyle}">
             <div class="stat-label">Overdue</div>
             <div class="stat-value" style="color:var(--danger)">${overdue}</div>
             <div class="stat-subtitle">Action needed</div>
         </div>
-        <div class="stat-card" onclick="csFilterByStatus('Customer Declined')" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="Customer Declined" onclick="csSetStatusFilter('Customer Declined')" style="${tileStyle}">
             <div class="stat-label">Declined</div>
             <div class="stat-value">${declined}</div>
             <div class="stat-subtitle">Customer declined</div>
         </div>
-        <div class="stat-card" onclick="csFilterByStatus('No Show')" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="No Show" onclick="csSetStatusFilter('No Show')" style="${tileStyle}">
             <div class="stat-label">No show</div>
             <div class="stat-value" style="color:#b45309">${noShow}</div>
             <div class="stat-subtitle">Agreed but didn't join</div>
         </div>
-        <div class="stat-card" onclick="csFilterByStatus('Unreachable')" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="Unreachable" onclick="csSetStatusFilter('Unreachable')" style="${tileStyle}">
             <div class="stat-label">Unreachable</div>
             <div class="stat-value" style="color:var(--danger)">${unreachable}</div>
             <div class="stat-subtitle">All 3 attempts failed</div>
         </div>
-       <div class="stat-card" onclick="csFilterByStatus('Failed')" style="cursor:pointer;">
+       <div class="stat-card" data-cs-filter="Failed" onclick="csSetStatusFilter('Failed')" style="${tileStyle}">
             <div class="stat-label">Failed</div>
             <div class="stat-value" style="color:var(--danger)">${failed}</div>
             <div class="stat-subtitle">Missed period deadline</div>
         </div>
-        <div class="stat-card" onclick="csFilterByStatus('Not Applicable')" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="Not Applicable" onclick="csSetStatusFilter('Not Applicable')" style="${tileStyle}">
             <div class="stat-label">Not applicable</div>
             <div class="stat-value" style="color:var(--t3)">${notApplicable}</div>
             <div class="stat-subtitle">Customer not eligible</div>
         </div>
         ${showTLKpi ? `
-        <div class="stat-card" onclick="csFilterTLValidationPending()" style="cursor:pointer;">
+        <div class="stat-card" data-cs-filter="TL_VALIDATION_PENDING" onclick="csSetStatusFilter('TL_VALIDATION_PENDING')" style="${tileStyle}">
             <div class="stat-label">TL validation pending</div>
             <div class="stat-value" style="color:#b45309">${tlPending}</div>
             <div class="stat-subtitle">Failed reviews awaiting LM</div>
         </div>` : ''}
     </div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    csUpdateKPITileHighlight();
 }
 
 // ─── ANALYTICS ─────────────────────────────────────────────────────────────────
@@ -1110,11 +1199,12 @@ function csRenderActiveTabCharts() {
     } catch (e) { console.warn('CS Charts error:', e); }
 }
 
-function csRefreshMSRQSRDashboard() {
+function csRefreshMSRQSRDashboard(options) {
+    options = options || {};
     csRenderKPIs();
     csRenderTiles();
-    csRenderAnalytics();
-    csApplyFilters();
+    if (options.skipAnalytics !== true) csRenderAnalytics();
+    csApplyFilters(true);
 }
 
 function csRenderAnalytics() {
@@ -1455,26 +1545,35 @@ window.csClearLMFilter= function()   { CS_USER_CONTEXT.selectedLM = null; CS_USE
 window.csSelectSM     = function(sm) { CS_USER_CONTEXT.selectedSM = sm; csRefreshAll(); };
 window.csClearSMFilter= function()   { CS_USER_CONTEXT.selectedSM = null; csRefreshAll(); };
 window.csClearFilters = function()   {
-    CS_USER_CONTEXT.selectedLM = null; CS_USER_CONTEXT.selectedSM = null; CS_USER_CONTEXT.statusFilter = null;
+    CS_USER_CONTEXT.selectedLM = null;
+    CS_USER_CONTEXT.selectedSM = null;
+    CS_USER_CONTEXT.statusFilter = null;
+    CS_SELECTED_STATUSES = [];
     if (document.getElementById('csStatusFilter')) document.getElementById('csStatusFilter').value = '';
     if (document.getElementById('csReviewTypeFilter')) document.getElementById('csReviewTypeFilter').value = '';
     if (document.getElementById('csPeriodFilter')) document.getElementById('csPeriodFilter').value = '';
     if (document.getElementById('csSearchBox')) document.getElementById('csSearchBox').value = '';
     if (document.getElementById('csHCSearchBox')) document.getElementById('csHCSearchBox').value = '';
+    if (typeof csUpdateStatusSelectedText === 'function') csUpdateStatusSelectedText();
     if (document.getElementById('csTopFiltersSection')) {
-        // Reset to current month defaults (not "all time") on clear
         CS_TIME_FILTER_INIT[CS_ACTIVE_TAB] = false;
         csUpdateTopTimeFiltersOptions();
         csInitDefaultTopTimeFiltersForTab();
     }
+    if (csGridApi) {
+        try { csGridApi.setGridOption('quickFilterText', ''); } catch (e) {}
+    }
     csRefreshAll();
 };
-window.csFilterByStatus = function(s) { CS_USER_CONTEXT.statusFilter = s; document.getElementById('csStatusFilter').value = s||''; csApplyFilters(); };
-window.csFilterOverdue  = function()  { CS_USER_CONTEXT.statusFilter = 'OVERDUE'; document.getElementById('csStatusFilter').value = ''; csApplyFilters(); };
-window.csFilterTLValidationPending = function() {
-    CS_USER_CONTEXT.statusFilter = 'TL_VALIDATION_PENDING';
-    if (document.getElementById('csStatusFilter')) document.getElementById('csStatusFilter').value = '';
-    csApplyFilters();
+window.csSetStatusFilter = csSetStatusFilter;
+window.csFilterByStatus = function(s) { csSetStatusFilter(s); };
+window.csFilterOverdue  = function()  { csSetStatusFilter('OVERDUE'); };
+window.csFilterTLValidationPending = function() { csSetStatusFilter('TL_VALIDATION_PENDING'); };
+window.csStatusFilterChanged = function() {
+    var sf = document.getElementById('csStatusFilter');
+    CS_USER_CONTEXT.statusFilter = (sf && sf.value) ? sf.value : null;
+    csApplyFilters(true);
+    csUpdateKPITileHighlight();
 };
 window.csToggleHCCharts = function() {
     var section = document.getElementById('csHCChartsSection');
@@ -1652,13 +1751,15 @@ window.csToggleCharts = function() {
 };
 
 // ─── APPLY FILTERS ─────────────────────────────────────────────────────────────
-window.csApplyFilters = function () {
+window.csApplyFilters = function (skipCharts) {
+    if (_csApplyFiltersBusy) return;
+    _csApplyFiltersBusy = true;
     try {
         const typeF   = document.getElementById('csReviewTypeFilter').value;
         const statusF = document.getElementById('csStatusFilter').value;
         const searchT = document.getElementById('csSearchBox').value.toLowerCase();
 
-        const filtered = csGetDashboardReviewsFiltered({ typeF, statusF, searchT });
+        const filtered = csGetDashboardReviewsFiltered({ typeF: typeF, statusF: statusF, searchT: searchT });
 
         const rowData = filtered.map(review => {
             const account = CS_ACCOUNTS.find(a => a.code === review.accountCode);
@@ -1670,6 +1771,7 @@ window.csApplyFilters = function () {
                 const due=new Date(review.dueDate),today=new Date(); today.setHours(0,0,0,0);
                 isOverdue = due<today&&!['Completed','Not Applicable','Customer Declined','Failed','Unreachable','No Show'].includes(review.status);
             }
+            const plainComments = csStripHtml(review.final_comments);
             return {
                 type:reviewType, period:review.period, accountCode:account.code,
                 customer:account.customer, team:account.team, sm:account.sm, lm:account.lm,
@@ -1680,11 +1782,11 @@ window.csApplyFilters = function () {
                 tlValidationStatus: tlMeta.status,
                 tlValidationUpdatedBy: review.tl_validation_updated_by || '-',
                 tlValidationUpdatedDate: review.tl_validation_updated_date || '-',
-                outbound_call_validation: review.outbound_call_validation || '-',
-                tm_attempt_to_reach_customer: review.tm_attempt_to_reach_customer || '-',
-                spoc_details_request_email_to_am: review.spoc_details_request_email_to_am || '-',
+                outbound_call_validation: csStripHtml(review.outbound_call_validation) || '-',
+                tm_attempt_to_reach_customer: csStripHtml(review.tm_attempt_to_reach_customer) || '-',
+                spoc_details_request_email_to_am: csStripHtml(review.spoc_details_request_email_to_am) || '-',
                 last_qsr_date: review.last_qsr_date || '-',
-                final_comments: review.final_comments || '-',
+                final_comments: plainComments || '-',
                 // Attempt 1
                 attempt1Date:review.attempt1Date||'-', eventRef1:review.eventRef1||'-', reachable1:review.reachable1||'-',
                 // Attempt 2
@@ -1707,11 +1809,12 @@ window.csApplyFilters = function () {
 
         if (!csGridApi) { csInitGrid(rowData); }
         else { csGridApi.setGridOption('rowData', rowData); }
-        if (CS_CHARTS_VISIBLE && CS_ACTIVE_TAB !== 'HC') {
+        if (!skipCharts && CS_CHARTS_VISIBLE && CS_ACTIVE_TAB !== 'HC') {
             setTimeout(function() { csRenderActiveTabCharts(); }, 150);
         }
     } catch (err) { console.error('CS Filter error:', err); }
-};;
+    finally { _csApplyFiltersBusy = false; }
+};
 
 function csGetSurveyHistory(accountCode) {
     const r = CS_REVIEWS.filter(x=>x.accountCode===accountCode);
@@ -1895,7 +1998,7 @@ function csInitGrid(rowData) {
         { field:'tm_attempt_to_reach_customer', headerName:'TM attempt', width:140, cellRenderer: p=>dash(p.value) },
         { field:'spoc_details_request_email_to_am', headerName:'SPOC email to AM', width:160, cellRenderer: p=>dash(p.value) },
         { field:'last_qsr_date', headerName:'Last QSR date', width:120, cellRenderer: p=>p.value&&p.value!=='-'?`📅 ${p.value}`:dash(p.value) },
-        { field:'final_comments', headerName:'Final comments', width:180, cellRenderer: p=>p.value&&p.value!=='-'?`<span title="${csEscHtml(p.value)}">${csEscHtml(String(p.value).substring(0,40))}${String(p.value).length>40?'…':''}</span>`:dash(p.value) },
+        { field:'final_comments', headerName:'Final comments', width:180, cellRenderer: p=>p.value&&p.value!=='-'?`<span title="${csDisplayText(p.value)}">${csDisplayText(String(p.value).substring(0,40))}${String(p.value).length>40?'…':''}</span>`:dash(p.value) },
         { field:'tlValidationUpdatedBy', headerName:'TL updated by', width:140, cellRenderer: p=>dash(p.value) },
         { field:'tlValidationUpdatedDate', headerName:'TL updated on', width:120, cellRenderer: p=>dash(p.value) },
     ];
@@ -1918,19 +2021,7 @@ function csInitGrid(rowData) {
         suppressMenuHide:false,
         onGridReady: p => {
             csGridApi = p.api;
-            // Restore AG Grid search behavior (quick filter)
-            const sb = document.getElementById('csSearchBox');
-            if (sb) {
-                const apply = () => {
-                    try { csGridApi.setQuickFilter(sb.value || ''); } catch(e) {}
-                };
-                // avoid stacking listeners across re-inits
-                if (!sb._csQuickFilterBound) {
-                    sb.addEventListener('input', () => { apply(); csRenderKPIs(); csRenderTiles(); csRenderAnalytics(); csApplyFilters(); });
-                    sb._csQuickFilterBound = true;
-                }
-                apply();
-            }
+            csBindCustomerServiceControls();
         },
         getRowStyle: p => p.data.isOverdue ? {background:'rgba(239,68,68,0.06)',borderLeft:'3px solid var(--danger)'} : null,
         getRowId: p => `cs_${p.data.reviewId}`
@@ -1956,6 +2047,10 @@ window.csViewDetails = async function (period, accountCode, event) {
      (CS_USER_CONTEXT.role === 'SM' && account.sm === CS_USER_CONTEXT.userName));
     const canEditTL = csCanEditTLValidation(review, account);
     const showTLSection = tlMeta.needed;
+    const tlOutbound = csStripHtml(review.outbound_call_validation);
+    const tlTmAttempt = csStripHtml(review.tm_attempt_to_reach_customer);
+    const tlSpocEmail = csStripHtml(review.spoc_details_request_email_to_am);
+    const tlFinalComments = csStripHtml(review.final_comments);
 
     // Only unlock next attempt if previous one has a date AND reachable=No saved
     const show1 = true;
@@ -2287,22 +2382,22 @@ window.csViewDetails = async function (period, accountCode, event) {
                     <div>
                         <label style="${S.lbl}">Outbound call validation</label>
                         ${canEditTL
-                            ? `<input type="text" id="csTLOutboundCall" value="${csEscHtml(review.outbound_call_validation)}" style="${S.inp}" placeholder="Enter validation details">`
-                            : `<div style="${S.ro}">${csEscHtml(review.outbound_call_validation)||'—'}</div>`}
+                            ? `<input type="text" id="csTLOutboundCall" value="${csEscHtml(tlOutbound)}" style="${S.inp}" placeholder="Enter validation details">`
+                            : `<div style="${S.ro}">${csDisplayText(tlOutbound)||'—'}</div>`}
                     </div>
                     <div>
                         <label style="${S.lbl}">TM attempt to reach customer</label>
                         ${canEditTL
-                            ? `<input type="text" id="csTLTmAttempt" value="${csEscHtml(review.tm_attempt_to_reach_customer)}" style="${S.inp}" placeholder="Enter TM attempt details">`
-                            : `<div style="${S.ro}">${csEscHtml(review.tm_attempt_to_reach_customer)||'—'}</div>`}
+                            ? `<input type="text" id="csTLTmAttempt" value="${csEscHtml(tlTmAttempt)}" style="${S.inp}" placeholder="Enter TM attempt details">`
+                            : `<div style="${S.ro}">${csDisplayText(tlTmAttempt)||'—'}</div>`}
                     </div>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
                     <div>
                         <label style="${S.lbl}">SPOC details request email to AM</label>
                         ${canEditTL
-                            ? `<input type="text" id="csTLSpocEmail" value="${csEscHtml(review.spoc_details_request_email_to_am)}" style="${S.inp}" placeholder="Enter email / reference">`
-                            : `<div style="${S.ro}">${csEscHtml(review.spoc_details_request_email_to_am)||'—'}</div>`}
+                            ? `<input type="text" id="csTLSpocEmail" value="${csEscHtml(tlSpocEmail)}" style="${S.inp}" placeholder="Enter email / reference">`
+                            : `<div style="${S.ro}">${csDisplayText(tlSpocEmail)||'—'}</div>`}
                     </div>
                     <div>
                         <label style="${S.lbl}">Last QSR date</label>
@@ -2314,8 +2409,8 @@ window.csViewDetails = async function (period, accountCode, event) {
                 <div style="margin-bottom:12px;">
                     <label style="${S.lbl}">Final comments</label>
                     ${canEditTL
-                        ? `<textarea id="csTLFinalComments" rows="3" style="${S.inp}resize:vertical;" placeholder="Enter final comments">${csEscHtml(review.final_comments)}</textarea>`
-                        : `<div style="${S.ro}">${csEscHtml(review.final_comments)||'—'}</div>`}
+                        ? `<textarea id="csTLFinalComments" rows="3" style="${S.inp}resize:vertical;" placeholder="Enter final comments">${csEscHtml(tlFinalComments)}</textarea>`
+                        : `<div style="${S.ro}white-space:pre-wrap;">${csDisplayText(tlFinalComments)||'—'}</div>`}
                 </div>
                 ${canEditTL ? `
                 <div style="display:flex;justify-content:flex-end;">
