@@ -1295,6 +1295,7 @@ const MQ_YTD_TARGET_FIELDS=[
 ];
 const GLK_YTD_STORAGE_KEY='GLK_DASH_YTD_TARGETS_V2';
 let GLK_YTD_MANUAL={mobile:{overall:{},byVert:{}},fixed:{byVert:{}}};
+let GLK_FIXED_YTD_TARGETS={overall:null,byVert:{},sourceSheet:null,periodCols:[]};
 let GLK_MOBILE_REPORT=null;
 let GLK_MOBILE_REPORT_META=null;
 let mqProductFamily='mobile';
@@ -4754,15 +4755,27 @@ function glkComputeYtdTargetForType(type,report,scopeName,currentMonth){
   return {value:glkCalcMobileYtdTarget(pack.merged),missing:pack.missing,merged:pack.merged,complete:!pack.missing.length};
 }
 function mqGetFixedYtdTarget(report,scopeName){
+  var sn=scopeName||'GLK Overall';
+  var fKey=mqNormVertKey(sn);
+  if(/overall|glk overall|total/i.test(sn)){
+    if(GLK_FIXED_YTD_TARGETS.overall&&GLK_FIXED_YTD_TARGETS.overall.targets)
+      return num(GLK_FIXED_YTD_TARGETS.overall.targets.ytdTotal);
+  }else if(GLK_FIXED_YTD_TARGETS.byVert&&GLK_FIXED_YTD_TARGETS.byVert[fKey])
+    return num(GLK_FIXED_YTD_TARGETS.byVert[fKey].targets.ytdTotal);
   report=report||mqGetActiveReport();
   var tb=report&&report.targetBlock;
-  var fKey=mqNormVertKey(scopeName||'GLK Overall');
-  var fEnt=(/overall|glk overall|total/i.test(scopeName||'GLK Overall')?(tb&&tb.overall):null)||(tb&&tb.byVert&&tb.byVert[fKey])||null;
-  if(fEnt&&fEnt.targets){
-    var v=glkCalcFixedYtdTarget(fEnt.targets,mqGetYtdCurrentMonth());
-    if(v>0) return v;
-  }
+  var fEnt=(/overall|glk overall|total/i.test(sn)?(tb&&tb.overall):null)||(tb&&tb.byVert&&tb.byVert[fKey])||null;
+  if(fEnt&&fEnt.targets&&fEnt.targets.ytdTotal!=null) return num(fEnt.targets.ytdTotal);
   return 0;
+}
+function glkSetFixedYtdTargetsFromBlock(block,sheetName){
+  if(!block||!block.overall) return;
+  GLK_FIXED_YTD_TARGETS={
+    overall:block.overall,
+    byVert:block.byVert||{},
+    sourceSheet:sheetName||null,
+    periodCols:block.periodCols||[]
+  };
 }
 function mqGetYtdScopeTarget(report,scopeName){
   report=report||mqGetActiveReport();
@@ -4790,14 +4803,12 @@ function mqRefreshAllYtdTargetsAfterParse(parsed){
     });
   }
   if(parsed&&parsed.fixed){
-    var tbF=parsed.fixed.targetBlock;
-    if(parsed.fixed.overall){
-      var fOv=tbF&&tbF.overall&&tbF.overall.targets;
-      parsed.fixed.overall.targetYtd=(fOv&&fOv.ytdTotal!=null)?num(fOv.ytdTotal):glkComputeYtdTargetForType('fixed',parsed.fixed,'GLK Overall',cm).value;
+    if(GLK_FIXED_YTD_TARGETS.overall&&parsed.fixed.overall){
+      parsed.fixed.overall.targetYtd=num(GLK_FIXED_YTD_TARGETS.overall.targets.ytdTotal);
     }
     (parsed.fixed.verticals||[]).forEach(function(v){
-      var fEnt=tbF&&tbF.byVert&&tbF.byVert[mqNormVertKey(v.name)];
-      v.targetYtd=(fEnt&&fEnt.targets&&fEnt.targets.ytdTotal!=null)?num(fEnt.targets.ytdTotal):glkComputeYtdTargetForType('fixed',parsed.fixed,v.name,cm).value;
+      var fEnt=GLK_FIXED_YTD_TARGETS.byVert&&GLK_FIXED_YTD_TARGETS.byVert[mqNormVertKey(v.name)];
+      v.targetYtd=fEnt?num(fEnt.targets.ytdTotal):0;
     });
   }
 }
@@ -4810,14 +4821,11 @@ function mqRefreshYtdTargetsOnReport(report){
     return;
   }
   if(mqProductFamily==='fixed'){
-    var tb=report.targetBlock;
-    if(report.overall){
-      var fOv=tb&&tb.overall&&tb.overall.targets;
-      report.overall.targetYtd=(fOv&&fOv.ytdTotal!=null)?num(fOv.ytdTotal):glkComputeYtdTargetForType('fixed',report,'GLK Overall',cm).value;
-    }
+    if(report.overall&&GLK_FIXED_YTD_TARGETS.overall)
+      report.overall.targetYtd=num(GLK_FIXED_YTD_TARGETS.overall.targets.ytdTotal);
     (report.verticals||[]).forEach(function(v){
-      var fEnt=tb&&tb.byVert&&tb.byVert[mqNormVertKey(v.name)];
-      v.targetYtd=(fEnt&&fEnt.targets&&fEnt.targets.ytdTotal!=null)?num(fEnt.targets.ytdTotal):glkComputeYtdTargetForType('fixed',report,v.name,cm).value;
+      var fEnt=GLK_FIXED_YTD_TARGETS.byVert&&GLK_FIXED_YTD_TARGETS.byVert[mqNormVertKey(v.name)];
+      v.targetYtd=fEnt?num(fEnt.targets.ytdTotal):0;
     });
   }
 }
@@ -5063,9 +5071,13 @@ function mqResolveReportScope(report,levelNames){
     if(mqProductFamily==='fixed') return mqGetFixedYtdTarget(report,scopeName||(entry&&entry.name)||'GLK Overall');
     return mqGetYtdScopeTarget(report,scopeName||(entry&&entry.name)||'GLK Overall').value;
   }
+  function pickTargetYtd(scopeName){
+    if(mqProductFamily==='fixed') return mqGetFixedYtdTarget(report,scopeName||'GLK Overall');
+    return mqGetYtdScopeTarget(report,'GLK Overall').value;
+  }
   if(!levelNames||!levelNames.length){
     var ov=report.overall||null;
-    var tgt=pickTarget(ov,'GLK Overall');
+    var tgt=useYtd&&mqProductFamily==='fixed'?pickTargetYtd('GLK Overall'):pickTarget(ov,'GLK Overall');
     var ytdMiss=useYtd&&mobileYtdOverall?mqGetYtdScopeTarget(report,'GLK Overall').missing.map(function(m){return m.label;}):[];
     return {
       actualsQtd:pickActuals(ov),actualsYtd:ov?num(ov.actualYtd):0,
@@ -5085,7 +5097,7 @@ function mqResolveReportScope(report,levelNames){
   }else{
     levelNames.forEach(function(name){
       var sc=mqFindReportScope(report,name);
-      if(sc) target+=pickTarget(sc,name);
+      if(sc) target+=useYtd&&mqProductFamily==='fixed'?pickTargetYtd(name):pickTarget(sc,name);
     });
   }
   return {
@@ -5450,57 +5462,72 @@ function glkFindTargetBlockRows(rows,findSecFn,titleRe){
   }
   return out;
 }
+function glkRowHasTargetLabel(rows,r,c){
+  var row=rows[r]||[];
+  for(var tc=c;tc<Math.min(c+8,row.length);tc++){
+    if(/^target$/i.test(String(row[tc]||'').trim())) return true;
+  }
+  for(var tr=r;tr<Math.min(r+3,rows.length);tr++){
+    var rr=rows[tr]||[];
+    for(var tc2=0;tc2<rr.length;tc2++){
+      if(/^target$/i.test(String(rr[tc2]||'').trim())) return true;
+    }
+  }
+  return false;
+}
 function glkParseFixedTargetBlock(rows){
-  var blocks=glkFindTargetBlockRows(rows,function(){return null;},/fixed\s*net\s*mrc/);
   var best=null,bestScore=-999999;
-  for(var bi=0;bi<blocks.length;bi++){
-    var sec=blocks[bi], startCol=sec.col, blockEnd=startCol+14;
-    var headerRow=-1,periodCols=[];
-    for(var hr=sec.headerRow;hr<Math.min(sec.headerRow+4,rows.length);hr++){
-      var row=rows[hr]||[], cols=[];
-      for(var c=startCol;c<=blockEnd;c++){
-        var ph=glkParseTargetPeriodHeader(String(row[c]||'').trim());
-        if(ph) cols.push({col:c,ph:ph});
+  for(var r=0;r<rows.length;r++){
+    var row=rows[r]||[];
+    for(var c=0;c<row.length;c++){
+      var raw=String(row[c]||'').trim();
+      if(!raw||!/fixed\s*net\s*mrc/i.test(glkNormCellTxt(raw))) continue;
+      if(!glkRowHasTargetLabel(rows,r,c)) continue;
+      var headerRow=-1,periodCols=[],nameCol=c;
+      for(var hr=r;hr<Math.min(r+6,rows.length);hr++){
+        var hrow=rows[hr]||[], cols=[];
+        for(var pc=0;pc<hrow.length;pc++){
+          var ph=glkParseTargetPeriodHeader(String(hrow[pc]||'').trim());
+          if(ph) cols.push({col:pc,ph:ph});
+        }
+        if(cols.length>=3&&cols.some(function(x){return x.ph.kind==='total';})){
+          headerRow=hr;
+          periodCols=cols;
+          nameCol=Math.min(nameCol,cols[0].col);
+          break;
+        }
       }
-      if(cols.length>=2){ headerRow=hr; periodCols=cols; break; }
+      if(headerRow<0||!periodCols.length) continue;
+      var blockEnd=Math.max.apply(null,periodCols.map(function(p){return p.col;}))+2;
+      var entries={},overall=null;
+      for(var dr=headerRow+1;dr<rows.length;dr++){
+        var drow=rows[dr]||[];
+        var joined=glkQtdBlockJoined(drow,nameCol,blockEnd);
+        if(!joined&&!drow.some(function(x){return glkParseReportNum(x)!=null;})) break;
+        if(glkQtdShouldBreakDataRow(drow,nameCol,blockEnd,dr,headerRow+1)) break;
+        var name=glkRowVertName(drow,nameCol,[]);
+        if(!name||/actual|target|achiev/i.test(name)) continue;
+        var t={q1:null,q2:null,q3:null,apr:null,mayJune:null,ytd:null,ytdTotal:null};
+        periodCols.forEach(function(pc){
+          var v=glkParseReportNum(drow[pc.col]);
+          if(v==null) return;
+          if(pc.ph.kind==='quarter'){
+            if(pc.ph.quarter===1) t.q1=v;
+            else if(pc.ph.quarter===2) t.q2=v;
+            else if(pc.ph.quarter===3) t.q3=v;
+          }else if(pc.ph.kind==='total'){ t.ytd=v; t.ytdTotal=v; }
+        });
+        if(t.ytdTotal==null&&t.q1!=null&&t.q2!=null&&t.q3!=null) t.ytdTotal=num(t.q1)+num(t.q2)+num(t.q3);
+        if(t.ytd==null) t.ytd=t.ytdTotal;
+        var entry={name:name,targets:t,target:t.q3,targetYtd:t.ytdTotal||0};
+        if(/overall|total/i.test(name)){ entry.isOverall=true; overall=entry; }
+        else entries[mqNormVertKey(name)]=entry;
+      }
+      if(!overall||overall.targets.ytdTotal==null||num(overall.targets.ytdTotal)<500000) continue;
+      var candidate={overall:overall,byVert:entries,periodCols:periodCols};
+      var score=num(overall.targets.ytdTotal)+Object.keys(entries).length*100;
+      if(score>bestScore){ bestScore=score; best=candidate; }
     }
-    if(headerRow<0||!periodCols.length) continue;
-    if(!periodCols.some(function(pc){return pc.ph.kind==='total';})) continue;
-    var dataStart=headerRow+1;
-    var entries={},overall=null;
-    for(var dr=dataStart;dr<rows.length;dr++){
-      var drow=rows[dr]||[];
-      if(glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,dataStart)) break;
-      var name=glkRowVertName(drow,startCol,[]);
-      if(!name||/actual|target|achiev/i.test(name)) continue;
-      var t={q1:null,q2:null,q3:null,apr:null,mayJune:null,ytd:null,ytdTotal:null};
-      periodCols.forEach(function(pc){
-        var v=glkParseReportNum(drow[pc.col]);
-        if(v==null) return;
-        if(pc.ph.kind==='quarter'){
-          if(pc.ph.quarter===1) t.q1=v;
-          else if(pc.ph.quarter===2) t.q2=v;
-          else if(pc.ph.quarter===3) t.q3=v;
-        }else if(pc.ph.kind==='apr') t.apr=v;
-        else if(pc.ph.kind==='mayjune') t.mayJune=v;
-        else if(pc.ph.kind==='total'){ t.ytd=v; t.ytdTotal=v; }
-      });
-      if(t.q2==null) t.q2=num(t.apr)+num(t.mayJune);
-      if(t.q2===0&&t.apr==null&&t.mayJune==null) t.q2=null;
-      if(t.ytdTotal==null) t.ytdTotal=t.ytd!=null?t.ytd:(num(t.q1)+num(t.q2)+num(t.q3));
-      if(t.ytd==null) t.ytd=t.ytdTotal;
-      var entry={name:name,targets:t,target:t.q3,targetYtd:t.ytdTotal||t.ytd};
-      if(/overall|total/i.test(name)){ entry.isOverall=true; overall=entry; }
-      else entries[mqNormVertKey(name)]=entry;
-    }
-    if(!overall&&!Object.keys(entries).length) continue;
-    var candidate={overall:overall,byVert:entries,periodCols:periodCols};
-    var score=glkScoreTargetBlock(candidate,'fixed');
-    if(overall&&overall.targets){
-      var ytd=num(overall.targets.ytdTotal);
-      if(ytd>0&&ytd<500000) score-=10000;
-    }
-    if(score>bestScore){ bestScore=score; best=candidate; }
   }
   return best;
 }
@@ -5556,12 +5583,7 @@ function glkCalcFixedYtdTarget(t,currentMonth){
   if(!t) return 0;
   if(t.ytdTotal!=null&&t.ytdTotal!=='') return num(t.ytdTotal);
   if(t.ytd!=null&&t.ytd!=='') return num(t.ytd);
-  var curQ=Math.floor(currentMonth.month/3)+1;
-  var sum=0;
-  if(curQ>=1) sum+=num(t.q1);
-  if(curQ>=2) sum+=num(t.q2);
-  if(curQ>=3) sum+=num(t.q3);
-  return sum;
+  return 0;
 }
 function glkCalcMobileYtdTarget(t){
   if(!t) return 0;
@@ -5711,6 +5733,15 @@ function glkParseQtdWorkbook(wb){
   var fixedQtd=(live&&live.fixedQtd)||(ref&&ref.fixedQtd)||null;
   var bestMobileTarget=glkFindBestTargetBlock(sheetBlocks,'mobile');
   var bestFixedTarget=glkFindBestTargetBlock(sheetBlocks,'fixed');
+  if(bestFixedTarget){
+    var srcSheet=null;
+    for(var sbi=0;sbi<sheetBlocks.length;sbi++){
+      if(sheetBlocks[sbi].fixedTarget===bestFixedTarget){ srcSheet=sheetBlocks[sbi].sheetName; break; }
+    }
+    glkSetFixedYtdTargetsFromBlock(bestFixedTarget,srcSheet);
+  }else{
+    GLK_FIXED_YTD_TARGETS={overall:null,byVert:{},sourceSheet:null,periodCols:[]};
+  }
   var mobile=glkOverlayYtdOnQtdReport(mobileQtd,glkBuildYtdOverlay('mobile',ref,live,currentMonth,bestMobileTarget));
   var fixed=glkOverlayYtdOnQtdReport(fixedQtd,glkBuildYtdOverlay('fixed',ref,live,currentMonth,bestFixedTarget));
   if(mobile) mobile.targetBlock=bestMobileTarget||mobile.targetBlock||null;
