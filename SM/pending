@@ -4702,7 +4702,7 @@ function glkComputeYtdTargetForType(type,report,scopeName,currentMonth){
     }
     var fScope=mqFindReportScope(report,scopeName)||report.overall;
     if(fScope&&fScope.targetYtd!=null&&num(fScope.targetYtd)) return {value:num(fScope.targetYtd),missing:[],merged:null,complete:true};
-    return {value:num(fScope?fScope.target:0),missing:[],merged:null,complete:true};
+    return {value:0,missing:[],merged:null,complete:false};
   }
   var manual=GLK_YTD_MANUAL.mobile.overall||{};
   var baseT=tb&&tb.overall&&tb.overall.targets?Object.assign({},tb.overall.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
@@ -4796,6 +4796,10 @@ function mqSyncYtdManualPanel(){
     return;
   }
   var report=mqGetActiveReport();
+  if(!report){
+    panel.style.display='none';
+    return;
+  }
   var res=mqGetYtdScopeTarget(report,'GLK Overall');
   if(!res.missing.length){
     panel.style.display='none';
@@ -5128,9 +5132,13 @@ function mqNormVertKey(s){
   return String(s||'').trim().toLowerCase().replace(/[\s\-–—_]+/g,'');
 }
 function glkRowVertName(drow,startCol,monthCols){
-  var prefer=monthCols.length?monthCols[0].col-1:Math.max(0,startCol-1);
-  if(prefer>=0){
-    var n=String(drow[prefer]||'').trim();
+  var tryCols=[];
+  if(monthCols.length) tryCols.push(monthCols[0].col-1);
+  tryCols.push(startCol,startCol-1);
+  for(var i=0;i<tryCols.length;i++){
+    var c=tryCols[i];
+    if(c==null||c<0) continue;
+    var n=String(drow[c]||'').trim();
     if(glkIsVertNameCell(n)) return n;
   }
   for(var c=0;c<startCol;c++){
@@ -5250,14 +5258,23 @@ function glkParseTargetPeriodHeader(cell){
 function glkFindBestTargetBlock(sheetBlocks,type){
   var key=type==='mobile'?'mobileTarget':'fixedTarget';
   if(!sheetBlocks||!sheetBlocks.length) return null;
+  var best=null,bestScore=0;
   for(var i=0;i<sheetBlocks.length;i++){
-    if(sheetBlocks[i][key]) return sheetBlocks[i][key];
+    var tb=sheetBlocks[i][key];
+    if(!tb) continue;
+    var score=0;
+    if(tb.overall) score+=10;
+    if(tb.overall&&tb.overall.targets&&tb.overall.targets.ytdTotal) score+=50;
+    if(tb.byVert&&Object.keys(tb.byVert).length) score+=Object.keys(tb.byVert).length;
+    if(score>bestScore){ bestScore=score; best=tb; }
   }
-  return null;
+  return best;
 }
 function glkAttachTargetBlocks(mobile,fixed,sheetBlocks){
-  if(mobile&&!mobile.targetBlock) mobile.targetBlock=glkFindBestTargetBlock(sheetBlocks,'mobile');
-  if(fixed&&!fixed.targetBlock) fixed.targetBlock=glkFindBestTargetBlock(sheetBlocks,'fixed');
+  var bestM=glkFindBestTargetBlock(sheetBlocks,'mobile');
+  var bestF=glkFindBestTargetBlock(sheetBlocks,'fixed');
+  if(mobile&&bestM) mobile.targetBlock=bestM;
+  if(fixed&&bestF) fixed.targetBlock=bestF;
   return {mobile:mobile,fixed:fixed};
 }
 function glkSheetIsYtdReference(blocks){
@@ -5300,6 +5317,12 @@ function glkIndexReportEntries(block){
   });
   return map;
 }
+function glkTargetHeaderRowMatch(joined){
+  if(/target/i.test(joined)) return true;
+  if(/Q1['']?\s*\d{2,4}/i.test(joined)&&(/Q2|Q3|Total|Apr|May/i.test(joined))) return true;
+  if(/Apr/i.test(joined)&&/May/i.test(joined)&&/Q3/i.test(joined)) return true;
+  return false;
+}
 function glkFindTargetBlockRows(rows,findSecFn,titleRe){
   var out=[];
   for(var r=0;r<rows.length;r++){
@@ -5307,10 +5330,10 @@ function glkFindTargetBlockRows(rows,findSecFn,titleRe){
     for(var c=0;c<row.length;c++){
       var raw=String(row[c]||'').trim();
       if(!raw||!titleRe.test(glkNormCellTxt(raw))) continue;
-      for(var hr=r;hr<Math.min(r+6,rows.length);hr++){
+      for(var hr=r;hr<Math.min(r+8,rows.length);hr++){
         var sub=rows[hr]||[];
-        var joined=glkQtdBlockJoined(sub,c,c+8);
-        if(/target/.test(joined)){
+        var joined=glkQtdBlockJoined(sub,c,c+12);
+        if(glkTargetHeaderRowMatch(joined)){
           out.push({row:r,col:c,title:raw,headerRow:hr});
           break;
         }
@@ -5350,12 +5373,12 @@ function glkParseFixedTargetBlock(rows){
           else if(pc.ph.quarter===3) t.q3=v;
         }else if(pc.ph.kind==='apr') t.apr=v;
         else if(pc.ph.kind==='mayjune') t.mayJune=v;
-        else if(pc.ph.kind==='total') t.ytd=v;
+        else if(pc.ph.kind==='total'){ t.ytd=v; t.ytdTotal=v; }
       });
       if(t.q2==null) t.q2=num(t.apr)+num(t.mayJune);
       if(t.q2===0&&t.apr==null&&t.mayJune==null) t.q2=null;
-      if(!t.ytd) t.ytd=num(t.q1)+num(t.q2)+num(t.q3);
-      t.ytdTotal=t.ytd;
+      if(t.ytdTotal==null) t.ytdTotal=t.ytd!=null?t.ytd:(num(t.q1)+num(t.q2)+num(t.q3));
+      if(t.ytd==null) t.ytd=t.ytdTotal;
       var entry={name:name,targets:t,target:t.q3,targetYtd:t.ytd};
       if(/overall|total/i.test(name)){ entry.isOverall=true; overall=entry; }
       else entries[mqNormVertKey(name)]=entry;
@@ -5365,47 +5388,48 @@ function glkParseFixedTargetBlock(rows){
   return null;
 }
 function glkParseMobileTargetBlock(rows){
-  var sec=glkFindMobileNetAddsSection(rows);
-  if(!sec) return null;
-  var startCol=sec.col, blockEnd=glkFindMobileBlockEnd(rows,sec);
-  for(var hr=sec.row;hr<Math.min(sec.row+12,rows.length);hr++){
-    var row=rows[hr]||[];
-    if(!/target/i.test(glkQtdBlockJoined(row,startCol,blockEnd))) continue;
+  var blocks=glkFindTargetBlockRows(rows,function(){return null;},/net add lines/);
+  for(var bi=0;bi<blocks.length;bi++){
+    var sec=blocks[bi], startCol=sec.col, blockEnd=startCol+14;
     var headerRow=-1,periodCols=[];
-    for(var hr2=hr;hr2<Math.min(hr+4,rows.length);hr2++){
-      var row2=rows[hr2]||[], cols=[];
+    for(var hr=sec.headerRow;hr<Math.min(sec.headerRow+4,rows.length);hr++){
+      var row=rows[hr]||[], cols=[];
       for(var c=startCol;c<=blockEnd;c++){
-        var ph=glkParseTargetPeriodHeader(String(row2[c]||'').trim());
-        if(ph&&ph.kind!=='total') cols.push({col:c,ph:ph});
+        var ph=glkParseTargetPeriodHeader(String(row[c]||'').trim());
+        if(ph) cols.push({col:c,ph:ph});
       }
-      if(cols.length>=2){ headerRow=hr2; periodCols=cols; break; }
+      if(cols.length>=2){ headerRow=hr; periodCols=cols; break; }
     }
-    if(headerRow<0) continue;
+    if(headerRow<0||!periodCols.length) continue;
     for(var dr=headerRow+1;dr<rows.length;dr++){
       var drow=rows[dr]||[];
       if(glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,headerRow+1)) break;
       var name=glkRowVertName(drow,startCol,[]);
       if(!name||!/overall|total/i.test(name)) continue;
-      var t={q1:null,q2:0,q3:null,apr:null,mayJune:null,ytd:0};
+      var t={q1:null,q2:null,q3:null,apr:null,mayJune:null,ytd:null,ytdTotal:null};
       periodCols.forEach(function(pc){
         var v=glkParseReportNum(drow[pc.col]);
         if(v==null) return;
         if(pc.ph.kind==='quarter'){
           if(pc.ph.quarter===1) t.q1=v;
+          else if(pc.ph.quarter===2) t.q2=v;
           else if(pc.ph.quarter===3) t.q3=v;
         }else if(pc.ph.kind==='apr') t.apr=v;
         else if(pc.ph.kind==='mayjune') t.mayJune=v;
+        else if(pc.ph.kind==='total'){ t.ytd=v; t.ytdTotal=v; }
       });
-      t.q2=num(t.apr)+num(t.mayJune);
-      t.ytd=(t.q1!=null?num(t.q1):0)+num(t.q2)+num(t.q3);
-      return {overall:{name:name,targets:t,target:t.q3,targetYtd:t.ytd,q1Missing:t.q1==null},overallOnly:true};
+      if(t.q2==null) t.q2=num(t.apr)+num(t.mayJune);
+      if(!t.ytdTotal) t.ytdTotal=(t.q1!=null?num(t.q1):0)+num(t.q2)+num(t.apr)+num(t.mayJune)+num(t.q3);
+      if(!t.ytd) t.ytd=t.ytdTotal;
+      return {overall:{name:name,targets:t,target:t.q3,targetYtd:t.ytdTotal||t.ytd,q1Missing:t.q1==null},overallOnly:true};
     }
   }
   return null;
 }
 function glkCalcFixedYtdTarget(t,currentMonth){
   if(!t) return 0;
-  if(t.ytdTotal) return num(t.ytdTotal);
+  if(t.ytdTotal!=null&&t.ytdTotal!=='') return num(t.ytdTotal);
+  if(t.ytd!=null&&t.ytd!=='') return num(t.ytd);
   var curQ=Math.floor(currentMonth.month/3)+1;
   var sum=0;
   if(curQ>=1) sum+=num(t.q1);
