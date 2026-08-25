@@ -1107,12 +1107,12 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
                 <span class="mq-control-hint" id="mqPeriodHint">Select Fixed to unlock Quarter to Go and Year to Go.</span>
                 <div id="mqYtdManualPanel" style="display:none;margin-top:.55rem;padding:.55rem .65rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35);border-radius:8px;font-size:.72rem;line-height:1.45;">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem;">
-                    <div style="font-weight:700;color:#b45309;">Net Add Lines YTD — missing target only</div>
+                    <div style="font-weight:700;color:#b45309;">Net Add Lines YTD — enter missing targets (saved in this browser)</div>
                     <button type="button" class="export-btn" onclick="mqApplyYtdManualTargets()" style="font-size:.68rem;padding:.25rem .55rem;">Save &amp; apply</button>
                   </div>
                   <div id="mqYtdManualBody" style="margin-top:.25rem;"></div>
                   <div id="mqYtdVertWarnRow" style="display:none;color:#92400e;margin-top:.35rem;">
-                    Target is <strong>Overall only</strong> — not per vertical. Actuals follow your report level selection.
+                    YTD bridge <strong>target bar</strong> uses Overall only. Per-vertical rows below are saved for missing Q1 / Q2 (Apr, May&amp;June) from Excel.
                   </div>
                 </div>
               </div>
@@ -1293,7 +1293,8 @@ const MQ_YTD_TARGET_FIELDS=[
   {key:'mayJune',label:'May & June'},
   {key:'q3',label:'Q3'}
 ];
-let GLK_YTD_MANUAL={mobile:{overall:{}},fixed:{byVert:{}}};
+const GLK_YTD_STORAGE_KEY='GLK_DASH_YTD_TARGETS_V2';
+let GLK_YTD_MANUAL={mobile:{overall:{},byVert:{}},fixed:{byVert:{}}};
 let GLK_MOBILE_REPORT=null;
 let GLK_MOBILE_REPORT_META=null;
 let mqProductFamily='mobile';
@@ -4619,41 +4620,93 @@ window.glkSetMqPeriod=function(p){
 };
 function mqLoadYtdManual(){
   try{
-    var s=localStorage.getItem('GLK_YTD_MANUAL');
+    var s=localStorage.getItem(GLK_YTD_STORAGE_KEY);
     if(s){
-      GLK_YTD_MANUAL=JSON.parse(s)||{mobile:{overall:{}},fixed:{byVert:{}}};
-      return;
+      GLK_YTD_MANUAL=JSON.parse(s)||{mobile:{overall:{},byVert:{}},fixed:{byVert:{}}};
+    }else{
+      ['GLK_YTD_MANUAL','GLK_MOBILE_YTD_MANUAL'].forEach(function(oldKey){
+        var legacy=localStorage.getItem(oldKey);
+        if(!legacy) return;
+        try{
+          var old=JSON.parse(legacy)||{};
+          GLK_YTD_MANUAL={mobile:{overall:{},byVert:{}},fixed:{byVert:{}}};
+          if(old.q1Target!=null) GLK_YTD_MANUAL.mobile.overall.q1=old.q1Target;
+          if(old.mobile){
+            GLK_YTD_MANUAL.mobile.overall=Object.assign({},GLK_YTD_MANUAL.mobile.overall,old.mobile.overall||{});
+            GLK_YTD_MANUAL.mobile.byVert=Object.assign({},GLK_YTD_MANUAL.mobile.byVert,old.mobile.byVert||{});
+          }
+          mqSaveYtdManual();
+        }catch(e2){}
+      });
     }
-    var legacy=localStorage.getItem('GLK_MOBILE_YTD_MANUAL');
-    if(legacy){
-      var old=JSON.parse(legacy)||{};
-      GLK_YTD_MANUAL={mobile:{overall:{}},fixed:{byVert:{}}};
-      if(old.q1Target!=null) GLK_YTD_MANUAL.mobile.overall.q1=old.q1Target;
-      mqSaveYtdManual();
-    }
-  }catch(e){ GLK_YTD_MANUAL={mobile:{overall:{}},fixed:{byVert:{}}}; }
-  if(!GLK_YTD_MANUAL.mobile) GLK_YTD_MANUAL.mobile={overall:{}};
+  }catch(e){ GLK_YTD_MANUAL={mobile:{overall:{},byVert:{}},fixed:{byVert:{}}}; }
+  if(!GLK_YTD_MANUAL.mobile) GLK_YTD_MANUAL.mobile={overall:{},byVert:{}};
   if(!GLK_YTD_MANUAL.mobile.overall) GLK_YTD_MANUAL.mobile.overall={};
+  if(!GLK_YTD_MANUAL.mobile.byVert) GLK_YTD_MANUAL.mobile.byVert={};
   if(!GLK_YTD_MANUAL.fixed) GLK_YTD_MANUAL.fixed={byVert:{}};
   if(!GLK_YTD_MANUAL.fixed.byVert) GLK_YTD_MANUAL.fixed.byVert={};
 }
 function mqSaveYtdManual(){
-  try{ localStorage.setItem('GLK_YTD_MANUAL',JSON.stringify(GLK_YTD_MANUAL)); }catch(e){}
+  try{ localStorage.setItem(GLK_YTD_STORAGE_KEY,JSON.stringify(GLK_YTD_MANUAL)); }catch(e){}
 }
 function mqLoadMobileYtdManual(){ mqLoadYtdManual(); }
 function mqSaveMobileYtdManual(){ mqSaveYtdManual(); }
-function glkYtdManualStoreKey(type,scopeName){
-  if(type==='mobile') return 'overall';
-  return mqNormVertKey(scopeName||'GLK Overall');
+function glkYtdManualScopeKey(scopeName){
+  if(!scopeName||/overall|glk overall|total/i.test(scopeName)) return 'overall';
+  return mqNormVertKey(scopeName);
 }
-function glkGetYtdManualOverrides(){
+function glkGetYtdManualOverrides(scopeName){
   mqLoadYtdManual();
-  return GLK_YTD_MANUAL.mobile.overall||{};
+  var k=glkYtdManualScopeKey(scopeName);
+  if(k==='overall') return GLK_YTD_MANUAL.mobile.overall||{};
+  return (GLK_YTD_MANUAL.mobile.byVert&&GLK_YTD_MANUAL.mobile.byVert[k])||{};
 }
-function mqSetYtdManualValue(field,value){
+function mqSetYtdManualValue(field,value,scopeName){
   mqLoadYtdManual();
-  if(!GLK_YTD_MANUAL.mobile.overall) GLK_YTD_MANUAL.mobile.overall={};
-  GLK_YTD_MANUAL.mobile.overall[field]=value;
+  var k=glkYtdManualScopeKey(scopeName);
+  if(k==='overall'){
+    if(!GLK_YTD_MANUAL.mobile.overall) GLK_YTD_MANUAL.mobile.overall={};
+    GLK_YTD_MANUAL.mobile.overall[field]=value;
+  }else{
+    if(!GLK_YTD_MANUAL.mobile.byVert) GLK_YTD_MANUAL.mobile.byVert={};
+    if(!GLK_YTD_MANUAL.mobile.byVert[k]) GLK_YTD_MANUAL.mobile.byVert[k]={};
+    GLK_YTD_MANUAL.mobile.byVert[k][field]=value;
+  }
+}
+function glkMobileTargetEntryForScope(tb,scopeName){
+  if(!tb) return null;
+  if(!scopeName||/overall|glk overall|total/i.test(scopeName)) return tb.overall||null;
+  return (tb.byVert&&tb.byVert[mqNormVertKey(scopeName)])||null;
+}
+function glkListYtdTargetMissingForScope(tb,scopeName,manual){
+  var entry=glkMobileTargetEntryForScope(tb,scopeName);
+  var baseT=entry&&entry.targets?Object.assign({},entry.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
+  return {baseT:baseT,missing:glkListYtdTargetMissing(baseT,manual||{},false),merged:glkMergeTargetsWithManual(baseT,manual||{})};
+}
+function mqCollectMobileYtdMissingScopes(report){
+  report=report||mqGetActiveReport();
+  var tb=report&&report.targetBlock;
+  var scopes=[{name:'GLK Overall',label:'Overall'}];
+  if(tb&&tb.byVert){
+    Object.keys(tb.byVert).forEach(function(k){
+      var v=tb.byVert[k];
+      if(v&&v.name) scopes.push({name:v.name,label:v.name});
+    });
+  }
+  var out=[];
+  scopes.forEach(function(sc){
+    var manual=glkGetYtdManualOverrides(sc.name);
+    var pack=glkListYtdTargetMissingForScope(tb,sc.name,manual);
+    if(pack.missing.length){
+      out.push({
+        scopeName:sc.name,
+        label:sc.label,
+        missing:pack.missing,
+        value:glkCalcMobileYtdTarget(pack.merged)
+      });
+    }
+  });
+  return out;
 }
 function glkMergeTargetsWithManual(baseT,manual){
   var t=Object.assign({q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0,ytdTotal:0},baseT||{});
@@ -4667,9 +4720,9 @@ function glkMergeTargetsWithManual(baseT,manual){
 }
 function mqYtdMissingSummaryForType(type,report){
   if(type!=='mobile'||!report) return [];
-  var res=glkComputeYtdTargetForType('mobile',report,'GLK Overall',mqGetYtdCurrentMonth());
-  if(!res.missing.length) return [];
-  return ['Net Add Lines Overall: '+res.missing.map(function(m){return m.label;}).join(', ')];
+  return mqCollectMobileYtdMissingScopes(report).map(function(sc){
+    return sc.label+': '+sc.missing.map(function(m){return m.label;}).join(', ');
+  });
 }
 function glkTargetFieldPresent(baseT,field){
   if(!baseT) return false;
@@ -4704,11 +4757,9 @@ function glkComputeYtdTargetForType(type,report,scopeName,currentMonth){
     if(fScope&&fScope.targetYtd!=null&&num(fScope.targetYtd)) return {value:num(fScope.targetYtd),missing:[],merged:null,complete:true};
     return {value:0,missing:[],merged:null,complete:false};
   }
-  var manual=GLK_YTD_MANUAL.mobile.overall||{};
-  var baseT=tb&&tb.overall&&tb.overall.targets?Object.assign({},tb.overall.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
-  var merged=glkMergeTargetsWithManual(baseT,manual);
-  var missing=glkListYtdTargetMissing(baseT,manual,false);
-  return {value:glkCalcMobileYtdTarget(merged),missing:missing,merged:merged,complete:!missing.length};
+  var manual=glkGetYtdManualOverrides('GLK Overall');
+  var pack=glkListYtdTargetMissingForScope(tb,'GLK Overall',manual);
+  return {value:glkCalcMobileYtdTarget(pack.merged),missing:pack.missing,merged:pack.merged,complete:!pack.missing.length};
 }
 function mqGetYtdScopeTarget(report,scopeName){
   report=report||mqGetActiveReport();
@@ -4760,24 +4811,28 @@ function mqMobileYtdQ1Missing(report){
 function mqPromptYtdMobileSetup(){
   var lines=mqYtdMissingSummary();
   if(!lines.length) return;
-  alert('Net Add Lines — missing YTD target from Excel:\n\n'+lines.join('\n')+'\n\nEnter only the missing value(s) in the panel below (saved in this browser).');
+  alert('Net Add Lines — missing YTD targets from Excel:\n\n'+lines.join('\n')+'\n\nEnter values in the orange panel below (saved in this browser as '+GLK_YTD_STORAGE_KEY+').');
 }
 window.mqApplyYtdManualTargets=function(){
   if(mqProductFamily!=='mobile') return;
   var report=mqGetActiveReport();
   if(!report){ alert('Load the GLK report first.'); return; }
-  var res=mqGetYtdScopeTarget(report,'GLK Overall');
-  if(!res.missing.length){ alert('No missing Mobile YTD targets — nothing to save.'); return; }
+  var scopes=mqCollectMobileYtdMissingScopes(report);
+  if(!scopes.length){ alert('No missing Mobile YTD targets — nothing to save.'); return; }
   var saved=0;
-  for(var fi=0;fi<res.missing.length;fi++){
-    var f=res.missing[fi];
-    var inpId='mqYtd_overall_'+f.key;
-    var inp=el(inpId);
-    if(!inp||!String(inp.value||'').trim()) continue;
-    var v=glkParseReportNum(inp.value);
-    if(v==null){ alert('Enter a valid number for '+f.label); return; }
-    mqSetYtdManualValue(f.key,v);
-    saved++;
+  for(var si=0;si<scopes.length;si++){
+    var sc=scopes[si];
+    var scopeKey=glkYtdManualScopeKey(sc.scopeName);
+    for(var fi=0;fi<sc.missing.length;fi++){
+      var f=sc.missing[fi];
+      var inpId='mqYtd_'+scopeKey+'_'+f.key;
+      var inp=el(inpId);
+      if(!inp||!String(inp.value||'').trim()) continue;
+      var v=glkParseReportNum(inp.value);
+      if(v==null){ alert('Enter a valid number for '+sc.label+' · '+f.label); return; }
+      mqSetYtdManualValue(f.key,v,sc.scopeName);
+      saved++;
+    }
   }
   if(!saved){ alert('Enter the missing target value(s) first.'); return; }
   mqSaveYtdManual();
@@ -4800,25 +4855,31 @@ function mqSyncYtdManualPanel(){
     panel.style.display='none';
     return;
   }
-  var res=mqGetYtdScopeTarget(report,'GLK Overall');
-  if(!res.missing.length){
+  var scopes=mqCollectMobileYtdMissingScopes(report);
+  if(!scopes.length){
     panel.style.display='none';
     return;
   }
   panel.style.display='block';
-  var html='<div style="margin-bottom:.3rem;">YTD target = Q1 + Apr + May&amp;June + Q3 on <strong>Overall</strong> only · current total <strong>'+fmtLines(res.value)+'</strong></div>';
-  html+='<div style="color:#b45309;margin-bottom:.35rem;">Missing from Excel: <strong>'+res.missing.map(function(m){return m.label;}).join(', ')+'</strong></div>';
-  res.missing.forEach(function(f){
-    var inpId='mqYtd_overall_'+f.key;
-    var manual=glkGetYtdManualOverrides();
-    var cur=manual[f.key]!=null?manual[f.key]:'';
-    html+='<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem;flex-wrap:wrap;">';
-    html+='<label for="'+inpId+'" style="min-width:5.5rem;font-weight:600;">'+f.label+'</label>';
-    html+='<input id="'+inpId+'" type="text" inputmode="decimal" value="'+(cur!==''?cur:'')+'" placeholder="Enter '+f.label+'" style="width:7.5rem;padding:.25rem .45rem;border:1px solid #f59e0b;border-radius:6px;font-size:.72rem;">';
+  var html='';
+  scopes.forEach(function(sc){
+    var scopeKey=glkYtdManualScopeKey(sc.scopeName);
+    html+='<div style="margin:.45rem 0 .25rem;padding-top:.35rem;border-top:1px solid rgba(245,158,11,.25);">';
+    html+='<div style="font-weight:700;margin-bottom:.2rem;">'+sc.label+(sc.scopeName==='GLK Overall'?' · YTD bridge target bar':'')+' · partial <strong>'+fmtLines(sc.value)+'</strong></div>';
+    html+='<div style="color:#b45309;margin-bottom:.25rem;">Missing: <strong>'+sc.missing.map(function(m){return m.label;}).join(', ')+'</strong></div>';
+    sc.missing.forEach(function(f){
+      var inpId='mqYtd_'+scopeKey+'_'+f.key;
+      var manual=glkGetYtdManualOverrides(sc.scopeName);
+      var cur=manual[f.key]!=null?manual[f.key]:'';
+      html+='<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem;flex-wrap:wrap;">';
+      html+='<label for="'+inpId+'" style="min-width:6.5rem;font-weight:600;">'+f.label+'</label>';
+      html+='<input id="'+inpId+'" type="text" inputmode="decimal" value="'+(cur!==''?cur:'')+'" placeholder="Enter '+f.label+'" style="width:7.5rem;padding:.25rem .45rem;border:1px solid #f59e0b;border-radius:6px;font-size:.72rem;">';
+      html+='</div>';
+    });
     html+='</div>';
   });
   body.innerHTML=html;
-  if(vertRow) vertRow.style.display=mqGetActiveReportLevels().length?'block':'none';
+  if(vertRow) vertRow.style.display=scopes.some(function(s){return s.scopeName!=='GLK Overall';})?'block':'none';
 }
 function mqSyncYtdMobileManualPanel(){ mqSyncYtdManualPanel(); }
 function mqPeriodLongName(p){
@@ -5255,17 +5316,33 @@ function glkParseTargetPeriodHeader(cell){
   if(/^total$/i.test(s)) return {kind:'total',label:s};
   return null;
 }
+function glkScoreTargetBlock(tb,type){
+  if(!tb) return 0;
+  var score=0;
+  var pc=tb.periodCols||[];
+  score+=pc.length*20;
+  if(pc.some(function(p){return p.ph.kind==='total';})) score+=2000;
+  if(pc.some(function(p){return p.ph.kind==='apr'||p.ph.kind==='mayjune';})) score+=800;
+  var t=tb.overall&&tb.overall.targets;
+  if(t){
+    if(t.ytdTotal!=null&&num(t.ytdTotal)>1000000) score+=3000;
+    else if(t.ytdTotal!=null&&num(t.ytdTotal)>0) score+=400;
+    if(t.q1!=null&&t.q2!=null&&t.q3!=null) score+=200;
+    if(t.apr!=null&&t.mayJune!=null&&t.q3!=null) score+=200;
+  }
+  if(tb.byVert) score+=Object.keys(tb.byVert).length*5;
+  if(pc.length<=1) score-=5000;
+  return score;
+}
 function glkFindBestTargetBlock(sheetBlocks,type){
   var key=type==='mobile'?'mobileTarget':'fixedTarget';
   if(!sheetBlocks||!sheetBlocks.length) return null;
-  var best=null,bestScore=0;
+  var best=null,bestScore=-999999;
   for(var i=0;i<sheetBlocks.length;i++){
     var tb=sheetBlocks[i][key];
     if(!tb) continue;
-    var score=0;
-    if(tb.overall) score+=10;
-    if(tb.overall&&tb.overall.targets&&tb.overall.targets.ytdTotal) score+=50;
-    if(tb.byVert&&Object.keys(tb.byVert).length) score+=Object.keys(tb.byVert).length;
+    var score=glkScoreTargetBlock(tb,type);
+    if(sheetBlocks[i].isYtdRef) score+=500;
     if(score>bestScore){ bestScore=score; best=tb; }
   }
   return best;
@@ -5318,10 +5395,15 @@ function glkIndexReportEntries(block){
   return map;
 }
 function glkTargetHeaderRowMatch(joined){
-  if(/target/i.test(joined)) return true;
   if(/Q1['']?\s*\d{2,4}/i.test(joined)&&(/Q2|Q3|Total|Apr|May/i.test(joined))) return true;
   if(/Apr/i.test(joined)&&/May/i.test(joined)&&/Q3/i.test(joined)) return true;
+  if(/Q2['']?\s*\d{2,4}/i.test(joined)&&/Total/i.test(joined)) return true;
   return false;
+}
+function glkTitleReMatch(titleRe,raw){
+  var n=glkNormCellTxt(raw);
+  if(typeof titleRe==='function') return titleRe(raw,n);
+  return titleRe.test(n);
 }
 function glkFindTargetBlockRows(rows,findSecFn,titleRe){
   var out=[];
@@ -5329,8 +5411,8 @@ function glkFindTargetBlockRows(rows,findSecFn,titleRe){
     var row=rows[r]||[];
     for(var c=0;c<row.length;c++){
       var raw=String(row[c]||'').trim();
-      if(!raw||!titleRe.test(glkNormCellTxt(raw))) continue;
-      for(var hr=r;hr<Math.min(r+8,rows.length);hr++){
+      if(!raw||!glkTitleReMatch(titleRe,raw)) continue;
+      for(var hr=r+1;hr<Math.min(r+8,rows.length);hr++){
         var sub=rows[hr]||[];
         var joined=glkQtdBlockJoined(sub,c,c+12);
         if(glkTargetHeaderRowMatch(joined)){
@@ -5344,6 +5426,7 @@ function glkFindTargetBlockRows(rows,findSecFn,titleRe){
 }
 function glkParseFixedTargetBlock(rows){
   var blocks=glkFindTargetBlockRows(rows,function(){return null;},/fixed\s*net\s*mrc/);
+  var best=null,bestScore=-999999;
   for(var bi=0;bi<blocks.length;bi++){
     var sec=blocks[bi], startCol=sec.col, blockEnd=startCol+14;
     var headerRow=-1,periodCols=[];
@@ -5356,6 +5439,7 @@ function glkParseFixedTargetBlock(rows){
       if(cols.length>=2){ headerRow=hr; periodCols=cols; break; }
     }
     if(headerRow<0||!periodCols.length) continue;
+    if(!periodCols.some(function(pc){return pc.ph.kind==='total';})) continue;
     var dataStart=headerRow+1;
     var entries={},overall=null;
     for(var dr=dataStart;dr<rows.length;dr++){
@@ -5379,16 +5463,20 @@ function glkParseFixedTargetBlock(rows){
       if(t.q2===0&&t.apr==null&&t.mayJune==null) t.q2=null;
       if(t.ytdTotal==null) t.ytdTotal=t.ytd!=null?t.ytd:(num(t.q1)+num(t.q2)+num(t.q3));
       if(t.ytd==null) t.ytd=t.ytdTotal;
-      var entry={name:name,targets:t,target:t.q3,targetYtd:t.ytd};
+      var entry={name:name,targets:t,target:t.q3,targetYtd:t.ytdTotal||t.ytd};
       if(/overall|total/i.test(name)){ entry.isOverall=true; overall=entry; }
       else entries[mqNormVertKey(name)]=entry;
     }
-    if(overall||Object.keys(entries).length) return {overall:overall,byVert:entries,periodCols:periodCols};
+    if(!overall&&!Object.keys(entries).length) continue;
+    var candidate={overall:overall,byVert:entries,periodCols:periodCols};
+    var score=glkScoreTargetBlock(candidate,'fixed');
+    if(score>bestScore){ bestScore=score; best=candidate; }
   }
-  return null;
+  return best;
 }
 function glkParseMobileTargetBlock(rows){
-  var blocks=glkFindTargetBlockRows(rows,function(){return null;},/net add lines/);
+  var blocks=glkFindTargetBlockRows(rows,function(){return null;},function(raw,n){return n==='net add lines';});
+  var best=null,bestScore=-999999;
   for(var bi=0;bi<blocks.length;bi++){
     var sec=blocks[bi], startCol=sec.col, blockEnd=startCol+14;
     var headerRow=-1,periodCols=[];
@@ -5401,11 +5489,13 @@ function glkParseMobileTargetBlock(rows){
       if(cols.length>=2){ headerRow=hr; periodCols=cols; break; }
     }
     if(headerRow<0||!periodCols.length) continue;
+    if(!periodCols.some(function(pc){return pc.ph.kind==='apr'||pc.ph.kind==='mayjune';})) continue;
+    var entries={},overall=null;
     for(var dr=headerRow+1;dr<rows.length;dr++){
       var drow=rows[dr]||[];
       if(glkQtdShouldBreakDataRow(drow,startCol,blockEnd,dr,headerRow+1)) break;
       var name=glkRowVertName(drow,startCol,[]);
-      if(!name||!/overall|total/i.test(name)) continue;
+      if(!name||/actual|target|achiev/i.test(name)) continue;
       var t={q1:null,q2:null,q3:null,apr:null,mayJune:null,ytd:null,ytdTotal:null};
       periodCols.forEach(function(pc){
         var v=glkParseReportNum(drow[pc.col]);
@@ -5419,12 +5509,18 @@ function glkParseMobileTargetBlock(rows){
         else if(pc.ph.kind==='total'){ t.ytd=v; t.ytdTotal=v; }
       });
       if(t.q2==null) t.q2=num(t.apr)+num(t.mayJune);
-      if(!t.ytdTotal) t.ytdTotal=(t.q1!=null?num(t.q1):0)+num(t.q2)+num(t.apr)+num(t.mayJune)+num(t.q3);
-      if(!t.ytd) t.ytd=t.ytdTotal;
-      return {overall:{name:name,targets:t,target:t.q3,targetYtd:t.ytdTotal||t.ytd,q1Missing:t.q1==null},overallOnly:true};
+      if(t.ytdTotal==null) t.ytdTotal=(t.q1!=null?num(t.q1):0)+num(t.apr)+num(t.mayJune)+num(t.q3);
+      if(t.ytd==null) t.ytd=t.ytdTotal;
+      var entry={name:name,targets:t,target:t.q3,targetYtd:t.ytdTotal||t.ytd,q1Missing:t.q1==null};
+      if(/overall|total/i.test(name)){ entry.isOverall=true; overall=entry; }
+      else entries[mqNormVertKey(name)]=entry;
     }
+    if(!overall&&!Object.keys(entries).length) continue;
+    var candidate={overall:overall,byVert:entries,periodCols:periodCols,overallOnly:false};
+    var score=glkScoreTargetBlock(candidate,'mobile');
+    if(score>bestScore){ bestScore=score; best=candidate; }
   }
-  return null;
+  return best;
 }
 function glkCalcFixedYtdTarget(t,currentMonth){
   if(!t) return 0;
@@ -6977,6 +7073,7 @@ function glkMobileQtdSepPlugin(churnSepIdx,c){
 function renderMobileQtdBridge(){
   destroyChart('mobileQtd');
   mqCloseBarDetail();
+  mqSyncYtdManualPanel();
   var c=getChartColors();
   var calc=glkMobileQtdCalc();
   var isForward=calc.isForward;
