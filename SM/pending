@@ -1105,18 +1105,14 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
                   <button type="button" id="mqPeriodYtg" class="pf-tab" onclick="glkSetMqPeriod('ytg')" style="display:none;">Year to Go</button>
                 </div>
                 <span class="mq-control-hint" id="mqPeriodHint">Select Fixed to unlock Quarter to Go and Year to Go.</span>
-                <div id="mqYtdMobileManualPanel" style="display:none;margin-top:.55rem;padding:.55rem .65rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35);border-radius:8px;font-size:.72rem;line-height:1.45;">
-                  <div style="font-weight:700;color:#b45309;margin-bottom:.35rem;">Net Add Lines YTD — manual target</div>
-                  <div id="mqYtdQ1MissingRow" style="display:none;margin-bottom:.4rem;">
-                    <span>Q1'2026 target is missing on the <strong>Overall</strong> row. Enter it here or add it in the YTD reference sheet and re-upload:</span>
-                    <div style="display:flex;align-items:center;gap:.4rem;margin-top:.35rem;flex-wrap:wrap;">
-                      <label for="mqYtdQ1Input" style="font-weight:600;">Overall Q1'2026</label>
-                      <input id="mqYtdQ1Input" type="text" inputmode="decimal" placeholder="e.g. 12000" style="width:7rem;padding:.25rem .45rem;border:1px solid var(--border-s);border-radius:6px;font-size:.72rem;">
-                      <button type="button" class="export-btn" onclick="mqApplyMobileYtdQ1()" style="font-size:.68rem;padding:.25rem .55rem;">Apply</button>
-                    </div>
+                <div id="mqYtdManualPanel" style="display:none;margin-top:.55rem;padding:.55rem .65rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35);border-radius:8px;font-size:.72rem;line-height:1.45;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem;">
+                    <div style="font-weight:700;color:#b45309;">YTD target — missing values</div>
+                    <button type="button" class="export-btn" onclick="mqApplyYtdManualTargets()" style="font-size:.68rem;padding:.25rem .55rem;">Save &amp; apply</button>
                   </div>
-                  <div id="mqYtdVertWarnRow" style="display:none;color:#92400e;">
-                    Targets are on <strong>Overall only</strong> — not per vertical. The target bar always uses GLK Overall; actuals follow your report level selection.
+                  <div id="mqYtdManualBody" style="margin-top:.25rem;"></div>
+                  <div id="mqYtdVertWarnRow" style="display:none;color:#92400e;margin-top:.35rem;">
+                    Mobile targets are on <strong>Overall only</strong> — not per vertical. Actuals follow your report level; target stays GLK Overall.
                   </div>
                 </div>
               </div>
@@ -1291,7 +1287,13 @@ let bridgeDrillVal='';
 // QTD Bridge state (Mobile + Fixed)
 let GLK_QTD_REPORT={mobile:null,fixed:null};
 let GLK_YTD_META={currentMonth:null,hasRef:false,warnings:[]};
-let GLK_MOBILE_YTD_MANUAL={q1Target:null};
+const MQ_YTD_TARGET_FIELDS=[
+  {key:'q1',label:"Q1'2026"},
+  {key:'apr',label:'Apr'},
+  {key:'mayJune',label:'May & June'},
+  {key:'q3',label:'Q3'}
+];
+let GLK_YTD_MANUAL={mobile:{overall:{}},fixed:{byVert:{}}};
 let GLK_MOBILE_REPORT=null;
 let GLK_MOBILE_REPORT_META=null;
 let mqProductFamily='mobile';
@@ -4610,75 +4612,262 @@ window.glkSetMqProductFamily=function(pf){
 window.glkSetMqPeriod=function(p){
   if(mqProductFamily!=='fixed'&&(p==='qtg'||p==='ytg')) return;
   mqPeriod=p==='ytd'?'ytd':(p==='qtg'?'qtg':(p==='ytg'?'ytg':'qtd'));
-  if(mqPeriod==='ytd'&&mqProductFamily==='mobile') mqPromptYtdMobileSetup();
+  if(mqPeriod==='ytd') mqPromptYtdMobileSetup();
   mqSyncBridgeControlsUi();
   GLK_MQ_DETAIL_IDX=-1;
   renderMobileQtdBridge();
 };
-function mqLoadMobileYtdManual(){
+function mqLoadYtdManual(){
   try{
-    var s=localStorage.getItem('GLK_MOBILE_YTD_MANUAL');
-    if(s) GLK_MOBILE_YTD_MANUAL=JSON.parse(s)||{q1Target:null};
-  }catch(e){ GLK_MOBILE_YTD_MANUAL={q1Target:null}; }
+    var s=localStorage.getItem('GLK_YTD_MANUAL');
+    if(s){
+      GLK_YTD_MANUAL=JSON.parse(s)||{mobile:{overall:{}},fixed:{byVert:{}}};
+      return;
+    }
+    var legacy=localStorage.getItem('GLK_MOBILE_YTD_MANUAL');
+    if(legacy){
+      var old=JSON.parse(legacy)||{};
+      GLK_YTD_MANUAL={mobile:{overall:{}},fixed:{byVert:{}}};
+      if(old.q1Target!=null) GLK_YTD_MANUAL.mobile.overall.q1=old.q1Target;
+      mqSaveYtdManual();
+    }
+  }catch(e){ GLK_YTD_MANUAL={mobile:{overall:{}},fixed:{byVert:{}}}; }
+  if(!GLK_YTD_MANUAL.mobile) GLK_YTD_MANUAL.mobile={overall:{}};
+  if(!GLK_YTD_MANUAL.mobile.overall) GLK_YTD_MANUAL.mobile.overall={};
+  if(!GLK_YTD_MANUAL.fixed) GLK_YTD_MANUAL.fixed={byVert:{}};
+  if(!GLK_YTD_MANUAL.fixed.byVert) GLK_YTD_MANUAL.fixed.byVert={};
 }
-function mqSaveMobileYtdManual(){
-  try{ localStorage.setItem('GLK_MOBILE_YTD_MANUAL',JSON.stringify(GLK_MOBILE_YTD_MANUAL)); }catch(e){}
+function mqSaveYtdManual(){
+  try{ localStorage.setItem('GLK_YTD_MANUAL',JSON.stringify(GLK_YTD_MANUAL)); }catch(e){}
 }
-function mqMobileYtdQ1Missing(report){
-  report=report||mqGetActiveReport();
+function mqLoadMobileYtdManual(){ mqLoadYtdManual(); }
+function mqSaveMobileYtdManual(){ mqSaveYtdManual(); }
+function glkYtdManualStoreKey(type,scopeName){
+  if(type==='mobile') return 'overall';
+  return mqNormVertKey(scopeName||'GLK Overall');
+}
+function glkGetYtdManualOverrides(type,scopeName){
+  mqLoadYtdManual();
+  if(type==='mobile') return GLK_YTD_MANUAL.mobile.overall||{};
+  var k=glkYtdManualStoreKey('fixed',scopeName);
+  return GLK_YTD_MANUAL.fixed.byVert[k]||{};
+}
+function mqSetYtdManualValue(type,scopeName,field,value){
+  mqLoadYtdManual();
+  if(type==='mobile'){
+    if(!GLK_YTD_MANUAL.mobile.overall) GLK_YTD_MANUAL.mobile.overall={};
+    GLK_YTD_MANUAL.mobile.overall[field]=value;
+    return;
+  }
+  var k=glkYtdManualStoreKey('fixed',scopeName);
+  if(!GLK_YTD_MANUAL.fixed.byVert[k]) GLK_YTD_MANUAL.fixed.byVert[k]={};
+  GLK_YTD_MANUAL.fixed.byVert[k][field]=value;
+}
+function glkMergeTargetsWithManual(baseT,manual){
+  var t=Object.assign({q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0,ytdTotal:0},baseT||{});
+  MQ_YTD_TARGET_FIELDS.forEach(function(f){
+    if(manual[f.key]!=null&&manual[f.key]!=='') t[f.key]=num(manual[f.key]);
+  });
+  t.q2=num(t.apr)+num(t.mayJune);
+  t.ytd=(t.q1!=null?num(t.q1):0)+num(t.q2)+num(t.q3);
+  if(!t.ytdTotal) t.ytdTotal=t.ytd;
+  return t;
+}
+function mqYtdMissingSummaryForType(type,report){
+  report=report||null;
+  if(!report||!report.targetBlock) return [];
+  var cm=mqGetYtdCurrentMonth();
+  var lines=[];
+  if(type==='mobile'){
+    var res=glkComputeYtdTargetForType('mobile',report,'GLK Overall',cm);
+    if(res.missing.length) lines.push('Net Add Lines Overall: '+res.missing.map(function(m){return m.label;}).join(', '));
+    return lines;
+  }
+  if(report.overall){
+    var oRes=glkComputeYtdTargetForType('fixed',report,'GLK Overall',cm);
+    if(oRes.missing.length) lines.push('Fixed Overall: '+oRes.missing.map(function(m){return m.label;}).join(', '));
+  }
+  (report.verticals||[]).forEach(function(v){
+    var vRes=glkComputeYtdTargetForType('fixed',report,v.name,cm);
+    if(vRes.missing.length) lines.push(v.name+': '+vRes.missing.map(function(m){return m.label;}).join(', '));
+  });
+  return lines;
+}
+function glkListYtdTargetMissing(baseT,manual){
+  var missing=[];
+  MQ_YTD_TARGET_FIELDS.forEach(function(f){
+    var v=baseT?baseT[f.key]:null;
+    var mv=manual[f.key];
+    if((v==null||v==='')&&(mv==null||mv==='')) missing.push(f);
+  });
+  return missing;
+}
+function mqGetYtdCurrentMonth(){
+  return (GLK_YTD_META&&GLK_YTD_META.currentMonth)||{month:new Date().getMonth(),year:new Date().getFullYear()};
+}
+function glkComputeYtdTargetForType(type,report,scopeName,currentMonth){
+  mqLoadYtdManual();
+  var manual=type==='mobile'?GLK_YTD_MANUAL.mobile.overall||{}:((GLK_YTD_MANUAL.fixed.byVert||{})[glkYtdManualStoreKey('fixed',scopeName)]||{});
   var tb=report&&report.targetBlock;
-  return !!(tb&&tb.overall&&tb.overall.q1Missing);
+  var baseT;
+  if(type==='mobile'){
+    baseT=tb&&tb.overall&&tb.overall.targets?Object.assign({},tb.overall.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
+  }else{
+    var key=mqNormVertKey(scopeName);
+    var entry=(/overall|glk overall|total/i.test(scopeName)?(tb&&tb.overall):null)||(tb&&tb.byVert&&tb.byVert[key])||null;
+    baseT=entry&&entry.targets?Object.assign({},entry.targets):{q1:null,q2:0,q3:null,apr:null,mayJune:0,ytd:0};
+  }
+  var merged=glkMergeTargetsWithManual(baseT,manual);
+  var value=type==='mobile'?glkCalcMobileYtdTarget(merged):glkCalcFixedYtdTarget(merged,currentMonth||mqGetYtdCurrentMonth());
+  return {value:value,missing:glkListYtdTargetMissing(baseT,manual),merged:merged,complete:!glkListYtdTargetMissing(baseT,manual).length};
+}
+function mqGetYtdScopeTarget(report,scopeName){
+  report=report||mqGetActiveReport();
+  var res=glkComputeYtdTargetForType(mqProductFamily,report,scopeName,mqGetYtdCurrentMonth());
+  return Object.assign({scopeName:scopeName},res);
+}
+function mqGetYtdTargetScopeList(report){
+  if(mqProductFamily==='mobile'){
+    return [{name:'GLK Overall',label:'Net Add Lines — Overall'}];
+  }
+  var levels=mqGetActiveReportLevels();
+  if(!levels.length) return [{name:'GLK Overall',label:'Fixed Net MRC — Overall'}];
+  return levels.map(function(n){return {name:n,label:'Fixed Net MRC — '+n};});
 }
 function mqGetMobileYtdOverallTarget(report){
-  if(!report) return 0;
-  var tb=report.targetBlock;
-  if(!tb||!tb.overall||!tb.overall.targets){
-    if(GLK_MOBILE_YTD_MANUAL.q1Target!=null) return num(GLK_MOBILE_YTD_MANUAL.q1Target);
-    return num(report.overall?report.overall.target:0);
+  return mqGetYtdScopeTarget(report,'GLK Overall').value;
+}
+function mqRefreshAllYtdTargetsAfterParse(parsed){
+  mqLoadYtdManual();
+  var cm=(parsed&&parsed.ytdMeta&&parsed.ytdMeta.currentMonth)||mqGetYtdCurrentMonth();
+  if(parsed&&parsed.mobile){
+    var tbM=parsed.mobile.targetBlock;
+    if(parsed.mobile.overall){
+      parsed.mobile.overall.targetYtd=glkComputeYtdTargetForType('mobile',{targetBlock:tbM},'GLK Overall',cm).value;
+    }
+    (parsed.mobile.verticals||[]).forEach(function(v){
+      if(parsed.mobile.overall) v.targetYtd=parsed.mobile.overall.targetYtd;
+    });
   }
-  var t=Object.assign({},tb.overall.targets);
-  if(t.q1==null&&GLK_MOBILE_YTD_MANUAL.q1Target!=null) t.q1=num(GLK_MOBILE_YTD_MANUAL.q1Target);
-  return glkCalcMobileYtdTarget(t);
+  if(parsed&&parsed.fixed){
+    var tbF=parsed.fixed.targetBlock;
+    if(parsed.fixed.overall){
+      parsed.fixed.overall.targetYtd=glkComputeYtdTargetForType('fixed',{targetBlock:tbF},'GLK Overall',cm).value;
+    }
+    (parsed.fixed.verticals||[]).forEach(function(v){
+      v.targetYtd=glkComputeYtdTargetForType('fixed',{targetBlock:tbF},v.name,cm).value;
+    });
+  }
+}
+function mqRefreshYtdTargetsOnReport(report){
+  if(!report) return;
+  var scopes=mqGetYtdTargetScopeList(report);
+  scopes.forEach(function(sc){
+    var res=mqGetYtdScopeTarget(report,sc.name);
+    var key=mqNormVertKey(sc.name);
+    if(/overall|glk overall|total/i.test(sc.name)){
+      if(report.overall) report.overall.targetYtd=res.value;
+    }else{
+      (report.verticals||[]).forEach(function(v){
+        if(mqNormVertKey(v.name)===key) v.targetYtd=res.value;
+      });
+    }
+  });
+  if(mqProductFamily==='fixed'&&!mqGetActiveReportLevels().length&&report.overall){
+    report.overall.targetYtd=mqGetYtdScopeTarget(report,'GLK Overall').value;
+  }
+  if(mqProductFamily==='mobile'&&report.overall){
+    report.overall.targetYtd=mqGetYtdScopeTarget(report,'GLK Overall').value;
+  }
+}
+function mqYtdMissingSummary(report){
+  report=report||mqGetActiveReport();
+  var scopes=mqGetYtdTargetScopeList(report);
+  var lines=[];
+  scopes.forEach(function(sc){
+    var res=mqGetYtdScopeTarget(report,sc.name);
+    if(!res.missing.length) return;
+    lines.push(sc.label+': '+res.missing.map(function(m){return m.label;}).join(', '));
+  });
+  return lines;
+}
+function mqMobileYtdQ1Missing(report){
+  var res=glkComputeYtdTargetForType('mobile',report||mqGetActiveReport(),'GLK Overall',mqGetYtdCurrentMonth());
+  return res.missing.some(function(m){return m.key==='q1';});
 }
 function mqPromptYtdMobileSetup(){
-  var report=mqGetActiveReport();
+  var lines=mqYtdMissingSummary();
   var msgs=[];
-  if(mqMobileYtdQ1Missing(report)&&GLK_MOBILE_YTD_MANUAL.q1Target==null){
-    msgs.push("Net Add Lines — Q1'2026 target is missing on the Overall row.\n\nEnter it in the panel below the bridge controls, or add it to your YTD reference sheet and re-upload.");
-  }
-  if(mqGetActiveReportLevels().length){
+  if(lines.length) msgs.push('YTD target fields missing from Excel:\n\n'+lines.join('\n')+'\n\nEnter values in the panel below — saved in this browser.');
+  if(mqGetActiveReportLevels().length&&mqProductFamily==='mobile'){
     msgs.push("Net Add Lines targets are on Overall level only — not per vertical.\n\nActuals will filter by your selected vertical(s), but the target bar always uses GLK Overall.");
   }
   if(msgs.length) alert(msgs.join('\n\n'));
 }
-window.mqApplyMobileYtdQ1=function(){
-  var inp=el('mqYtdQ1Input');
-  if(!inp) return;
-  var v=glkParseReportNum(inp.value);
-  if(v==null){ alert('Enter a valid number for Overall Q1\'2026 target.'); return; }
-  GLK_MOBILE_YTD_MANUAL.q1Target=v;
-  mqSaveMobileYtdManual();
-  mqSyncYtdMobileManualPanel();
+window.mqApplyYtdManualTargets=function(){
+  var report=mqGetActiveReport();
+  if(!report){ alert('Load the GLK report first.'); return; }
+  var scopes=mqGetYtdTargetScopeList(report);
+  var saved=0;
+  for(var si=0;si<scopes.length;si++){
+    var sc=scopes[si];
+    for(var fi=0;fi<MQ_YTD_TARGET_FIELDS.length;fi++){
+      var f=MQ_YTD_TARGET_FIELDS[fi];
+      var inpId='mqYtd_'+glkYtdManualStoreKey(mqProductFamily,sc.name)+'_'+f.key;
+      var inp=el(inpId);
+      if(!inp||!String(inp.value||'').trim()) continue;
+      var v=glkParseReportNum(inp.value);
+      if(v==null){ alert('Invalid number for '+sc.label+' · '+f.label); return; }
+      mqSetYtdManualValue(mqProductFamily,sc.name,f.key,v);
+      saved++;
+    }
+  }
+  if(!saved){ alert('Enter at least one target value to save.'); return; }
+  mqSaveYtdManual();
+  mqRefreshYtdTargetsOnReport(report);
+  mqSyncYtdManualPanel();
   renderMobileQtdBridge();
 };
-function mqSyncYtdMobileManualPanel(){
-  var panel=el('mqYtdMobileManualPanel');
-  var q1Row=el('mqYtdQ1MissingRow');
+window.mqApplyMobileYtdQ1=window.mqApplyYtdManualTargets;
+function mqSyncYtdManualPanel(){
+  var panel=el('mqYtdManualPanel');
+  var body=el('mqYtdManualBody');
   var vertRow=el('mqYtdVertWarnRow');
-  var inp=el('mqYtdQ1Input');
-  var show=mqProductFamily==='mobile'&&mqIsYtdBridge();
+  var show=mqIsYtdBridge();
   if(panel) panel.style.display=show?'block':'none';
-  if(!show) return;
+  if(!show||!body) return;
   var report=mqGetActiveReport();
-  var q1Missing=mqMobileYtdQ1Missing(report);
-  var needQ1Input=q1Missing&&GLK_MOBILE_YTD_MANUAL.q1Target==null;
-  if(q1Row) q1Row.style.display=needQ1Input?'block':'none';
-  if(inp){
-    if(GLK_MOBILE_YTD_MANUAL.q1Target!=null&&!needQ1Input) inp.value=String(GLK_MOBILE_YTD_MANUAL.q1Target);
-    else if(!inp.value&&GLK_MOBILE_YTD_MANUAL.q1Target!=null) inp.value=String(GLK_MOBILE_YTD_MANUAL.q1Target);
-  }
-  if(vertRow) vertRow.style.display=mqGetActiveReportLevels().length?'block':'none';
+  var scopes=mqGetYtdTargetScopeList(report);
+  var html='', anyMissing=false, anyScope=false;
+  scopes.forEach(function(sc){
+    var res=mqGetYtdScopeTarget(report,sc.name);
+    anyScope=true;
+    if(res.missing.length) anyMissing=true;
+    html+='<div style="margin-bottom:.55rem;padding-bottom:.45rem;border-bottom:1px dashed rgba(245,158,11,.35);">';
+    html+='<div style="font-weight:700;margin-bottom:.25rem;">'+sc.label+'</div>';
+    html+='<div style="margin-bottom:.3rem;">YTD target = <strong>'+fmtLines(res.value)+'</strong> (Q1 + Apr + May&amp;June + Q3)</div>';
+    if(res.missing.length){
+      html+='<div style="color:#b45309;margin-bottom:.35rem;">Missing from Excel: <strong>'+res.missing.map(function(m){return m.label;}).join(', ')+'</strong></div>';
+    }else{
+      html+='<div style="color:#16a34a;margin-bottom:.35rem;">All fields loaded from Excel — edit below to override.</div>';
+    }
+    MQ_YTD_TARGET_FIELDS.forEach(function(f){
+      var isMiss=res.missing.some(function(m){return m.key===f.key;});
+      var cur=res.merged[f.key];
+      var inpId='mqYtd_'+glkYtdManualStoreKey(mqProductFamily,sc.name)+'_'+f.key;
+      html+='<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.2rem;flex-wrap:wrap;">';
+      html+='<label for="'+inpId+'" style="min-width:5.5rem;font-weight:600;">'+f.label+(isMiss?' *':'')+'</label>';
+      html+='<input id="'+inpId+'" type="text" inputmode="decimal" value="'+(cur!=null&&cur!==''?cur:'')+'" placeholder="'+(isMiss?'Enter value':'Optional')+'" style="width:7.5rem;padding:.25rem .45rem;border:1px solid '+(isMiss?'#f59e0b':'var(--border-s)')+';border-radius:6px;font-size:.72rem;">';
+      html+='</div>';
+    });
+    html+='</div>';
+  });
+  if(!anyScope) html='<div style="color:#f59e0b;">Load the GLK Excel report to see YTD targets.</div>';
+  else if(!anyMissing) html='<div style="color:#16a34a;margin-bottom:.35rem;">All YTD target fields loaded from Excel.</div>'+html;
+  body.innerHTML=html;
+  if(vertRow) vertRow.style.display=(mqProductFamily==='mobile'&&mqGetActiveReportLevels().length)?'block':'none';
 }
+function mqSyncYtdMobileManualPanel(){ mqSyncYtdManualPanel(); }
 function mqPeriodLongName(p){
   p=p||mqPeriod;
   if(p==='ytd') return 'YTD Bridge';
@@ -4736,7 +4925,7 @@ function mqSyncBridgeControlsUi(){
       ?'YTD = Jan through current month (history sheet + live current month) · Quarter/Year to Go = forward pipeline.'
       :'YTD uses history sheet for prior months; current month always from the live sheet.';
   }
-  mqSyncYtdMobileManualPanel();
+  mqSyncYtdManualPanel();
   el('mqCaseWorst')?.classList.toggle('active',mqCase==='worst');
   el('mqCaseBest')?.classList.toggle('active',mqCase==='best');
   var rlBlock=el('mqReportLevelBlock');
@@ -4802,7 +4991,7 @@ window.mqOnReportLevelChange=function(){
   if(mqIsYtdBridge()&&mqProductFamily==='mobile'&&mqGetActiveReportLevels().length){
     alert("Net Add Lines targets are on Overall level only — not per vertical.\n\nActuals will filter by your selection; the target bar stays GLK Overall.");
   }
-  mqSyncYtdMobileManualPanel();
+  mqSyncYtdManualPanel();
   GLK_MQ_DETAIL_IDX=-1;
   renderMobileQtdBridge();
 };
@@ -4824,43 +5013,49 @@ function mqGetActiveReportLevels(){
   return mqGetReportLevelsChecked();
 }
 function mqResolveReportScope(report,levelNames){
-  if(!report) return {actualsQtd:0,actualsYtd:0,target:0,targetYtd:0,label:'GLK Overall',scopes:[],missing:[]};
+  if(!report) return {actualsQtd:0,actualsYtd:0,target:0,targetYtd:0,label:'GLK Overall',scopes:[],missing:[],ytdMissing:[]};
   var useYtd=mqIsYtdBridge();
+  var mobileYtdOverall=useYtd&&mqProductFamily==='mobile';
   function pickActuals(entry){
     if(!entry) return 0;
     return useYtd?num(entry.actualYtd!=null?entry.actualYtd:entry.actualQtd):num(entry.actualQtd);
   }
-  function pickTarget(entry){
-    if(!entry) return 0;
-    return num(entry.target);
+  function pickTarget(entry,scopeName){
+    if(!useYtd) return num(entry?entry.target:0);
+    if(mobileYtdOverall) return mqGetYtdScopeTarget(report,'GLK Overall').value;
+    return mqGetYtdScopeTarget(report,scopeName||(entry&&entry.name)||'GLK Overall').value;
   }
   if(!levelNames||!levelNames.length){
     var ov=report.overall||null;
-    var tgt=useYtd&&mqProductFamily==='mobile'?mqGetMobileYtdOverallTarget(report):pickTarget(ov);
+    var tgt=pickTarget(ov,'GLK Overall');
+    var ytdMiss=useYtd?mqGetYtdScopeTarget(report,'GLK Overall').missing:[];
     return {
       actualsQtd:pickActuals(ov),actualsYtd:ov?num(ov.actualYtd):0,
       target:tgt,targetYtd:tgt,
-      label:'GLK Overall',scopes:ov?[ov]:[],missing:[]
+      label:'GLK Overall',scopes:ov?[ov]:[],missing:[],ytdMissing:ytdMiss
     };
   }
-  var scopes=[],missing=[],actuals=0,target=0;
+  var scopes=[],missing=[],actuals=0,target=0,ytdMissing=[];
   levelNames.forEach(function(name){
     var sc=mqFindReportScope(report,name);
     if(sc){ scopes.push(sc); actuals+=pickActuals(sc); }
     else missing.push(name);
   });
-  if(useYtd&&mqProductFamily==='mobile'){
-    target=mqGetMobileYtdOverallTarget(report);
+  if(mobileYtdOverall){
+    target=mqGetYtdScopeTarget(report,'GLK Overall').value;
+    ytdMissing=mqGetYtdScopeTarget(report,'GLK Overall').missing;
   }else{
     levelNames.forEach(function(name){
       var sc=mqFindReportScope(report,name);
-      if(sc) target+=pickTarget(sc);
+      if(sc) target+=pickTarget(sc,name);
+      var miss=mqGetYtdScopeTarget(report,name).missing;
+      if(miss.length) ytdMissing=ytdMissing.concat(miss.map(function(m){return name+': '+m.label;}));
     });
   }
   return {
     actualsQtd:actuals,actualsYtd:actuals,target:target,targetYtd:target,
     label:levelNames.length===1?levelNames[0]:levelNames.length+' verticals',
-    scopes:scopes,missing:missing
+    scopes:scopes,missing:missing,ytdMissing:ytdMissing
   };
 }
 function mqBidMatchesReportLevels(bid,levelNames){
@@ -5259,15 +5454,14 @@ function glkCalcMobileYtdTarget(t){
 }
 function glkLookupYtdTarget(targetBlock,name,type,currentMonth){
   if(!targetBlock) return null;
-  if(type==='mobile'){
-    var ov=targetBlock.overall;
-    if(!ov||!ov.targets) return null;
-    return {value:glkCalcMobileYtdTarget(ov.targets),q1Missing:ov.q1Missing,overallOnly:true};
-  }
-  var key=mqNormVertKey(name);
-  var entry=(/overall|glk overall|total/i.test(name)?targetBlock.overall:null)||targetBlock.byVert[key]||null;
-  if(!entry||!entry.targets) return null;
-  return {value:glkCalcFixedYtdTarget(entry.targets,currentMonth),overallOnly:false};
+  var scopeName=type==='mobile'?'GLK Overall':(name||'GLK Overall');
+  var res=glkComputeYtdTargetForType(type,{targetBlock:targetBlock},scopeName,currentMonth);
+  return {
+    value:res.value,
+    missing:res.missing,
+    q1Missing:res.missing.some(function(m){return m.key==='q1';}),
+    overallOnly:type==='mobile'
+  };
 }
 function glkLookupQtdTarget(targetBlock,name,type,quarter,liveEntry){
   if(liveEntry&&liveEntry.target!=null) return num(liveEntry.target);
@@ -5329,7 +5523,9 @@ function glkMergeEntryActuals(refE,liveE,currentMonth,year,quarter){
 function glkBuildYtdOverlay(type,refSheet,liveSheet,currentMonth){
   var refBlock=type==='mobile'?(refSheet&&refSheet.mobileAll):((refSheet&&refSheet.fixedAll));
   var liveBlock=type==='mobile'?(liveSheet&&liveSheet.mobileQtd):((liveSheet&&liveSheet.fixedQtd));
-  var targetBlock=type==='mobile'?(refSheet&&refSheet.mobileTarget):((refSheet&&refSheet.fixedTarget));
+  var targetBlock=type==='mobile'
+    ?((refSheet&&refSheet.mobileTarget)||(liveSheet&&liveSheet.mobileTarget))
+    :((refSheet&&refSheet.fixedTarget)||(liveSheet&&liveSheet.fixedTarget));
   if(!refBlock&&!liveBlock) return null;
   var year=currentMonth.year;
   var quarter=Math.floor(currentMonth.month/3)+1;
@@ -5415,8 +5611,16 @@ function glkParseQtdWorkbook(wb){
   if(!live&&ref){
     warnings.push({type:'no_live_sheet',message:'No live daily sheet found — prior months use the YTD reference sheet; current month ('+currentMonth.label+') requires the live daily sheet.'});
   }
-  if(mobile&&mobile.targetBlock&&mobile.targetBlock.overall&&mobile.targetBlock.overall.q1Missing){
-    warnings.push({type:'mobile_q1_missing',message:"Net Add Lines YTD target is incomplete: Q1'2026 target is missing on the Overall row in the YTD reference sheet. Add Q1 to use YTD Bridge targets."});
+  mqLoadYtdManual();
+  if(mobile){
+    mqYtdMissingSummaryForType('mobile',mobile).forEach(function(line){
+      warnings.push({type:'ytd_target_missing',product:'mobile',message:'YTD target incomplete — '+line+'. Enter missing values in the panel below (saved in this browser).'});
+    });
+  }
+  if(fixed){
+    mqYtdMissingSummaryForType('fixed',fixed).forEach(function(line){
+      warnings.push({type:'ytd_target_missing',product:'fixed',message:'YTD target incomplete — '+line+'. Enter missing values in the panel below (saved in this browser).'});
+    });
   }
   GLK_YTD_META={currentMonth:currentMonth,hasRef:!!ref,hasLive:!!live,warnings:warnings};
   return {mobile:mobile,fixed:fixed,ytdMeta:GLK_YTD_META};
@@ -5586,6 +5790,7 @@ function glkParseAndSetMobileReport(arrayBuffer,cb){
       return cb(new Error('Could not find Mobile Net Adds or Fixed Net MRC sections. Use the daily GLK Excel template (.xlsx/.xlsm).'));
     GLK_QTD_REPORT={mobile:parsed.mobile||null,fixed:parsed.fixed||null};
     GLK_YTD_META=parsed.ytdMeta||GLK_YTD_META;
+    mqRefreshAllYtdTargetsAfterParse(parsed);
     mqSyncActiveReport();
     if(!GLK_QTD_REPORT.mobile) console.warn('[GLK] Mobile Net Adds – Lines section not found in report.');
     if(!GLK_QTD_REPORT.fixed) console.warn('[GLK] Fixed Net MRC section not found in report.');
@@ -5660,8 +5865,8 @@ function glkMobileQtdRefreshUI(){
     }
   }
   mqBuildReportLevelFilter();
+  mqSyncYtdManualPanel();
 }
-function mqRulePrefix(id){ return 'mqR_'+id; }
 function mqDefaultDateRule(field){
   return {id:'mq'+(mqRuleSeq++),dateField:field||'expectedActivation',dateMode:'any',from:'',to:'',specific:'',ytdYear:'',years:[],quarters:[],months:[],weeks:[]};
 }
@@ -5934,7 +6139,7 @@ function mqShowYtdWarnings(calc){
   }
   if(meta.hasRef) parts.push('YTD reference sheet loaded');
   (meta.warnings||[]).forEach(function(w){
-    if(w.type==='mobile_q1_missing'&&mqIsYtdBridge()) parts.push('<span style="color:#f59e0b;">⚠ '+w.message+'</span>');
+    if((w.type==='ytd_target_missing'||w.type==='mobile_q1_missing')&&mqIsYtdBridge()) parts.push('<span style="color:#f59e0b;">⚠ '+w.message+'</span>');
     else if(w.type==='no_live_sheet') parts.push('<span style="color:#f59e0b;">⚠ '+w.message+'</span>');
   });
   if(calc&&calc.isForward) wrap.innerHTML='';
@@ -6131,13 +6336,13 @@ function mqBuildRulesHtml(calc){
     html+='<strong>YTD Bridge</strong> (Year to Date) compares <em>year-to-date</em> Excel actuals against target, with <strong>Quarter to Go</strong> pipeline for the rest of the current quarter.<br>';
     html+='<strong>Actuals YTD</strong> — Jan through prior month from YTD reference sheet + <strong>current month from live sheet only</strong>.<br>';
     if(isFixed){
-      html+='<strong>Target</strong> — current-quarter target from live sheet (per vertical).<br>';
+      html+='<strong>Target</strong> — cumulative YTD from Target block per vertical: <strong>Q1 + Apr + May&amp;June + Q3</strong> (or Total column). Missing cells can be entered manually below.<br>';
       html+='<strong>Pipeline</strong> — Quarter to Go: activation current month → quarter-end; Fixed uses aggregated revenue formula on Won/in-flight/churn.';
     }else{
       html+='<strong>Target</strong> — <strong>Overall row only</strong>: Q1 + Apr + May&amp;June + Q3 from reference sheet. Per-vertical targets are <em>not</em> used. If Q1\'2026 is blank, enter Overall Q1 in the panel below the controls.<br>';
       html+='<strong>Pipeline</strong> — Quarter to Go window (current month → quarter-end). Full GA Lines on Won/in-flight/churn.';
     }
-    html+='<strong>Example (August):</strong> Actuals YTD = Jan–Jul (reference) + Aug (live) · Target = Overall Q1+Apr+May&amp;Jun+Q3 (Mobile) or Q3 vertical target (Fixed) · Pipeline = QTG only (not full year).';
+    html+='<strong>Example (August):</strong> Actuals YTD = Jan–Jul (reference) + Aug (live) · Target = Overall Q1+Apr+May&amp;Jun+Q3 (Mobile) or per-vertical Q1+Q2+Q3 (Fixed) · Pipeline = QTG only (not full year).';
   }else if(calc.bridgePeriod==='qtg'){
     html+='<strong>Quarter to Go (QTG)</strong> — forward-looking <em>Fixed only</em>. No Excel actuals or target bars.<br>';
     html+='Shows aggregated revenue still to come from pipeline activations between <strong>today (or current month) → quarter-end</strong>.<br>';
@@ -6373,7 +6578,9 @@ function glkMobileQtdCalc(){
       return {
         name:v.name,
         actualQtd:num(useYtd?(v.actualYtd!=null?v.actualYtd:v.actualQtd):v.actualQtd),
-        target:mqIsYtdBridge()?mqGetMobileYtdOverallTarget(report):num(v.target)
+        target:mqIsYtdBridge()
+          ?(mqProductFamily==='mobile'?mqGetMobileYtdOverallTarget(report):mqGetYtdScopeTarget(report,v.name).value)
+          :num(v.target)
       };
     });
   }
@@ -6423,7 +6630,8 @@ function glkMobileQtdCalc(){
     forecast:forecast,diff:diff,gap:isForward?0:(diff>0?diff:0),growth:isForward?0:(diff<0?Math.abs(diff):0),
     vertical:isForward?(activeLevels.length?scope.label:'All verticals (pipeline)'):scope.label,
     activeReportLevels:activeLevels.slice(),
-    reportScopeMissing:scope.missing.length>0
+    reportScopeMissing:scope.missing.length>0,
+    ytdMissing:scope.ytdMissing||[]
   };
   calc.rulesHtml=mqBuildRulesHtml(calc);
   GLK_MQ_CALC_LAST=calc;
@@ -7016,9 +7224,12 @@ function renderMobileQtdBridge(){
       var ytdWarn='';
       (GLK_YTD_META.warnings||[]).forEach(function(w){
         if(w.type==='no_live_sheet') ytdWarn+=' · <span style="color:#f59e0b;">⚠ '+w.message+'</span>';
+        if((w.type==='ytd_target_missing'||w.type==='mobile_q1_missing')&&(!w.product||w.product===mqProductFamily)){
+          ytdWarn+=' · <span style="color:#f59e0b;">⚠ '+w.message+'</span>';
+        }
       });
-      if(mqIsYtdBridge()&&mqProductFamily==='mobile'&&mqMobileYtdQ1Missing()&&GLK_MOBILE_YTD_MANUAL.q1Target==null){
-        ytdWarn+=' · <span style="color:#f59e0b;">⚠ Q1 target missing — enter Overall Q1 below or update reference sheet</span>';
+      if(mqIsYtdBridge()&&calc.ytdMissing&&calc.ytdMissing.length){
+        ytdWarn+=' · <span style="color:#f59e0b;">⚠ Missing targets: '+calc.ytdMissing.join('; ')+'</span>';
       }
       if(mqIsYtdBridge()&&mqProductFamily==='mobile'&&calc.activeReportLevels&&calc.activeReportLevels.length){
         ytdWarn+=' · <span style="color:#92400e;">Target = GLK Overall only (not per vertical)</span>';
