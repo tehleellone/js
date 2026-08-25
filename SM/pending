@@ -4758,8 +4758,11 @@ function mqGetFixedYtdTarget(report,scopeName){
   var tb=report&&report.targetBlock;
   var fKey=mqNormVertKey(scopeName||'GLK Overall');
   var fEnt=(/overall|glk overall|total/i.test(scopeName||'GLK Overall')?(tb&&tb.overall):null)||(tb&&tb.byVert&&tb.byVert[fKey])||null;
-  if(fEnt&&fEnt.targets&&fEnt.targets.ytdTotal!=null&&num(fEnt.targets.ytdTotal)>=500000) return num(fEnt.targets.ytdTotal);
-  return glkComputeYtdTargetForType('fixed',report,scopeName||'GLK Overall',mqGetYtdCurrentMonth()).value;
+  if(fEnt&&fEnt.targets){
+    var v=glkCalcFixedYtdTarget(fEnt.targets,mqGetYtdCurrentMonth());
+    if(v>0) return v;
+  }
+  return 0;
 }
 function mqGetYtdScopeTarget(report,scopeName){
   report=report||mqGetActiveReport();
@@ -5216,14 +5219,14 @@ function mqNormVertKey(s){
 function glkRowVertName(drow,startCol,monthCols){
   var tryCols=[];
   if(monthCols.length) tryCols.push(monthCols[0].col-1);
-  tryCols.push(startCol,startCol-1);
+  tryCols.push(startCol,startCol-1,startCol+1);
   for(var i=0;i<tryCols.length;i++){
     var c=tryCols[i];
     if(c==null||c<0) continue;
     var n=String(drow[c]||'').trim();
     if(glkIsVertNameCell(n)) return n;
   }
-  for(var c=0;c<startCol;c++){
+  for(var c=0;c<Math.min(drow.length,startCol+5);c++){
     var cand=String(drow[c]||'').trim();
     if(glkIsVertNameCell(cand)) return cand;
   }
@@ -5491,9 +5494,12 @@ function glkParseFixedTargetBlock(rows){
       else entries[mqNormVertKey(name)]=entry;
     }
     if(!overall&&!Object.keys(entries).length) continue;
-    if(overall&&overall.targets&&overall.targets.ytdTotal!=null&&num(overall.targets.ytdTotal)<500000) continue;
     var candidate={overall:overall,byVert:entries,periodCols:periodCols};
     var score=glkScoreTargetBlock(candidate,'fixed');
+    if(overall&&overall.targets){
+      var ytd=num(overall.targets.ytdTotal);
+      if(ytd>0&&ytd<500000) score-=10000;
+    }
     if(score>bestScore){ bestScore=score; best=candidate; }
   }
   return best;
@@ -5708,7 +5714,13 @@ function glkParseQtdWorkbook(wb){
   var mobile=glkOverlayYtdOnQtdReport(mobileQtd,glkBuildYtdOverlay('mobile',ref,live,currentMonth,bestMobileTarget));
   var fixed=glkOverlayYtdOnQtdReport(fixedQtd,glkBuildYtdOverlay('fixed',ref,live,currentMonth,bestFixedTarget));
   if(mobile) mobile.targetBlock=bestMobileTarget||mobile.targetBlock||null;
-  if(fixed) fixed.targetBlock=bestFixedTarget||fixed.targetBlock||null;
+  if(fixed){
+    fixed.targetBlock=bestFixedTarget||fixed.targetBlock||null;
+    if(bestFixedTarget&&bestFixedTarget.overall&&bestFixedTarget.overall.targets&&fixed.overall){
+      var ytdTot=bestFixedTarget.overall.targets.ytdTotal;
+      if(ytdTot!=null) fixed.overall.targetYtd=num(ytdTot);
+    }
+  }
   if(!mobile&&!fixed) return null;
   var warnings=[];
   if(live&&!currentMonth){
@@ -5724,6 +5736,11 @@ function glkParseQtdWorkbook(wb){
   var parsedForRefresh={mobile:mobile,fixed:fixed,ytdMeta:{currentMonth:currentMonth,hasRef:!!ref,hasLive:!!live,warnings:[]}};
   mqLoadYtdManual();
   mqRefreshAllYtdTargetsAfterParse(parsedForRefresh);
+  if(!bestFixedTarget){
+    warnings.push({type:'fixed_target_missing',product:'fixed',message:'Fixed Net MRC YTD target block not found — check history sheet has Q1/Q2/Q3/Total under Fixed Net MRC › Target.'});
+  }else if(bestFixedTarget.overall&&num(bestFixedTarget.overall.targets&&bestFixedTarget.overall.targets.ytdTotal)<500000){
+    warnings.push({type:'fixed_target_suspect',product:'fixed',message:'Fixed YTD target parsed as '+fmtLines(num(bestFixedTarget.overall.targets.ytdTotal))+' — expected millions (Total column). Use glk-fixed-target-debug.html to trace.'});
+  }
   if(mobile){
     mqYtdMissingSummaryForType('mobile',mobile).forEach(function(line){
       warnings.push({type:'ytd_target_missing',product:'mobile',message:'YTD target incomplete — '+line+'. Enter the missing value in the panel below (saved in this browser).'});
