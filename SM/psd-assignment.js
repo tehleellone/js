@@ -1,5 +1,5 @@
 // ============================================================
-// psd-assignment.js — PSD Assignment Module v2.3.2
+// psd-assignment.js — PSD Assignment Module v2.3.5
 // List: PSD_Assignments | Agents: Account Mapping (Team = PSD)
 // ============================================================
 
@@ -17,7 +17,7 @@ var psdCharts        = {};
 var psdGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var psdUploadRows    = [];
 var psdSelectedAgent = null;
-window.PSD_MODULE_VERSION = '2.3.2';
+window.PSD_MODULE_VERSION = '2.3.5';
 
 var psdDashFilters   = { status: [], category: [], agent: [], product: [], search: '' };
 var psdDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
@@ -676,7 +676,7 @@ async function psdFetchAgents() {
     if (PSD_DUMMY_MODE) { psdAllAgents = psdDummyAgents(); return; }
     var url = SP_URL + "/_api/web/lists/getbytitle('" + PSD_AGENT_LIST + "')/items?" +
         "$select=Service_Manager_Name,Email_ID,Team,User_ID&$filter=Team eq '" + psdOdata(PSD_TEAM) +
-        "'&$top=5000&$orderby=Service_Manager_Name asc";
+        "'&$top=50000&$orderby=Service_Manager_Name asc";
     var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
     if (!r.ok) { psdAllAgents = []; return; }
     var seen = {}, data = await r.json();
@@ -696,7 +696,7 @@ async function psdFetchItems() {
     var cols = PSD_COLS.map(function (c) { return c.key; }).join(',');
     var url = SP_URL + "/_api/web/lists/getbytitle('" + PSD_LIST + "')/items?" +
         "$select=ID," + cols + ",Category,PSDStatus,UploadDate,AssignmentDate,ReassignDate,CompletedDate," +
-        "AssignedTo/Title,AssignedTo/EMail&$expand=AssignedTo&$orderby=ID desc&$top=5000";
+        "AssignedTo/Title,AssignedTo/EMail&$expand=AssignedTo&$orderby=ID desc&$top=50000";
     var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
     if (!r.ok) throw new Error('Failed to load PSD assignments (' + r.status + ')');
     var data = await r.json();
@@ -1074,8 +1074,7 @@ function psdAgentTilesHTML(items) {
             var sel = (psdDashFilters.agent.indexOf(st.name) >= 0 || psdSelectedAgent === st.name) ? ' selected' : '';
             return '<div class="psd-agent-tile' + sel + '" onclick="psdSelectAgentTile(\'' + psdEsc(st.name).replace(/'/g, "\\'") + '\')">' +
                 '<div class="psd-agent-tile-head"><div class="psd-agent-avatar">' + psdEsc(psdInitials(st.name)) + '</div>' +
-                '<div><div style="font-weight:800;font-size:.88rem;color:var(--t1);">' + psdEsc(st.name) + '</div>' +
-                '<div style="font-size:.68rem;color:var(--t3);">' + psdEsc(st.email || '') + '</div></div></div>' +
+                '<div><div style="font-weight:800;font-size:.88rem;color:var(--t1);">' + psdEsc(st.name) + '</div></div></div>' +
                 '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem;font-size:.72rem;">' +
                     '<div><span style="color:var(--t3);">Assigned</span><div style="font-weight:800;color:var(--acc);">' + st.assigned + '</div></div>' +
                     '<div><span style="color:var(--t3);">In Progress</span><div style="font-weight:800;color:' + psdStatusColor(PSD_STATUS.INPROGRESS) + ';">' + st.inprogress + '</div></div>' +
