@@ -1,5 +1,5 @@
 // ============================================================
-// psd-assignment.js — PSD Assignment Module v2.3.1
+// psd-assignment.js — PSD Assignment Module v2.3.2
 // List: PSD_Assignments | Agents: Account Mapping (Team = PSD)
 // ============================================================
 
@@ -17,7 +17,7 @@ var psdCharts        = {};
 var psdGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var psdUploadRows    = [];
 var psdSelectedAgent = null;
-window.PSD_MODULE_VERSION = '2.3.1';
+window.PSD_MODULE_VERSION = '2.3.2';
 
 var psdDashFilters   = { status: [], category: [], agent: [], product: [], search: '' };
 var psdDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
@@ -569,6 +569,7 @@ function psdInjectStyles() {
         '.psd-grid-action .fb-select{font-size:.72rem;padding:4px 6px;flex:1;min-width:90px;max-width:140px}' +
         '.psd-grid-action .psd-action-btn{padding:4px 10px;font-size:.68rem;border:none;border-radius:6px;background:var(--grad);color:#fff;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}' +
         '.psd-grid-action .psd-complete-btn{padding:4px 10px;font-size:.68rem;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--t1);font-weight:700;cursor:pointer;white-space:nowrap}' +
+        '.psd-grid-action .psd-reopen-btn{padding:4px 10px;font-size:.68rem;border:1px solid rgba(245,158,11,.45);border-radius:6px;background:rgba(245,158,11,.12);color:#d97706;font-weight:700;cursor:pointer;white-space:nowrap}' +
         '.psd-agent-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:var(--cs)}' +
         '.psd-agent-tile:hover{transform:translateY(-2px);box-shadow:var(--ch)}' +
         '.psd-agent-tile.selected{border-color:var(--acc);box-shadow:0 0 0 2px var(--glow)}' +
@@ -1294,6 +1295,23 @@ function psdCompleteActionRenderer(params) {
     return btn;
 }
 
+function psdReopenActionRenderer(params) {
+    if (!params.data || params.data.psdStatus !== PSD_STATUS.COMPLETED) return document.createTextNode('');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'psd-reopen-btn';
+    btn.textContent = 'Reopen';
+    btn.onclick = function () { psdReopen(params.data.id); };
+    return btn;
+}
+
+function psdAdminRecordsActionRenderer(params) {
+    if (!params.data) return document.createTextNode('');
+    if (params.data.psdStatus === PSD_STATUS.INPROGRESS) return psdCompleteActionRenderer(params);
+    if (params.data.psdStatus === PSD_STATUS.COMPLETED) return psdReopenActionRenderer(params);
+    return document.createTextNode('');
+}
+
 function psdDataColumnDefs() {
     var fmtD = function (p) { return psdFmtGridDate(p.value); };
     return [
@@ -1353,7 +1371,7 @@ function psdBuildColDefs(mode) {
     } else if (mode === 'agentqueue') {
         cols.push({ headerName: 'Action', width: 120, minWidth: 100, pinned: 'right', sortable: false, filter: false, cellRenderer: psdCompleteActionRenderer });
     } else if (mode === 'records' && psdIsAdminLike()) {
-        cols.push({ headerName: 'Complete', width: 120, minWidth: 100, pinned: 'right', sortable: false, filter: false, cellRenderer: psdCompleteActionRenderer });
+        cols.push({ headerName: 'Action', width: 130, minWidth: 110, pinned: 'right', sortable: false, filter: false, cellRenderer: psdAdminRecordsActionRenderer });
     }
     return cols.map(function (col) { return col.colId === 'psd_select' ? col : psdEnhanceColDef(col); });
 }
@@ -2079,6 +2097,26 @@ window.psdComplete = async function (id) {
         await psdFetchItems();
         psdRenderTabBody();
     } catch (e) { psdToast('Could not complete', 'error'); }
+};
+
+window.psdReopen = async function (id) {
+    if (!psdIsAdminLike()) { psdToast('Only admins can reopen activities', 'warn'); return; }
+    var item = psdAllItems.find(function (it) { return it.ID === id; });
+    if (!item || item.PSDStatus !== PSD_STATUS.COMPLETED) {
+        psdToast('Only completed activities can be reopened', 'warn');
+        return;
+    }
+    var label = item.ActivityNumber || ('ID ' + id);
+    if (!confirm('Reopen activity ' + label + '?\n\nIt will return to In Progress for the assigned agent.')) return;
+
+    var digest;
+    try { digest = await psdGetDigest(); } catch (e) { psdToast('Digest error', 'error'); return; }
+    try {
+        await psdUpdateItem(id, { PSDStatus: PSD_STATUS.INPROGRESS, CompletedDate: null }, digest);
+        psdToast('Activity reopened', 'success');
+        await psdFetchItems();
+        psdRenderTabBody();
+    } catch (e) { psdToast('Could not reopen', 'error'); }
 };
 
 // ============================================================
