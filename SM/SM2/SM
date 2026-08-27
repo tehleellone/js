@@ -714,7 +714,7 @@
         }
 
         #rcView .top-stats {
-            grid-template-columns: repeat(6, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
         @media (max-width: 1400px) {
@@ -2276,6 +2276,7 @@
                             <i data-lucide="info" style="width: 14px; height: 14px;"></i>
                             <span>Please wait while we verify your permissions...</span>
                         </p>
+
                         <!-- OWNER VIEW AS PANEL -->
                         <div id="ownerViewAsPanel" style="display:none; margin-top:16px; padding:16px;
                           background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px;">
@@ -5012,6 +5013,11 @@ function computeLMRNPS(rnpsGrouped) {
             if (r === 'PSD Agent') return 'PSD_Agent';
             if (r === 'RC Admin') return 'RC_Admin';
             if (r === 'RC Agent') return 'RC_Agent';
+            var lower = r.toLowerCase();
+            if (lower === 'rc admin') return 'RC_Admin';
+            if (lower === 'rc agent') return 'RC_Agent';
+            if (lower === 'psd admin') return 'PSD_Admin';
+            if (lower === 'psd agent') return 'PSD_Agent';
             return r;
         }
         function isPsdRole(role) {
@@ -5591,7 +5597,7 @@ else {
                 `;
 
                 dashboardBtn.onclick = function() {
-       if (USER_CONTEXT.role === 'Admin' || USER_CONTEXT.role === 'Line Manager' || USER_CONTEXT.role === 'Service Manager' || USER_CONTEXT.role === 'Read Only' || USER_CONTEXT.role === 'TSM Manager' || USER_CONTEXT.role === 'Auditor' || USER_CONTEXT.role === 'TSM_SE_Viewer' || isPsdRole(USER_CONTEXT.role)) {
+       if (USER_CONTEXT.role === 'Admin' || USER_CONTEXT.role === 'Line Manager' || USER_CONTEXT.role === 'Service Manager' || USER_CONTEXT.role === 'Read Only' || USER_CONTEXT.role === 'TSM Manager' || USER_CONTEXT.role === 'Auditor' || USER_CONTEXT.role === 'TSM_SE_Viewer' || isPsdRole(USER_CONTEXT.role) || isRcRole(USER_CONTEXT.role)) {
     showDashboard();
 }
 
@@ -5737,6 +5743,26 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 if (typeof nlCheckOnLoad === 'function') nlCheckOnLoad();
             } catch (err) {
                 console.error('PSD shell init error:', err);
+            }
+        }
+
+        function initRcShell() {
+            try {
+                setCurrentDate();
+                var loading = document.getElementById('loading');
+                var content = document.getElementById('content');
+                if (loading) loading.style.display = 'none';
+                if (content) content.style.display = 'block';
+
+                var rcNav = document.getElementById('rcNavItem');
+                if (rcNav) rcNav.style.display = 'flex';
+                applyRcNavRestrictions();
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                if (typeof analyticsStartSession === 'function') analyticsStartSession();
+                if (typeof nlCheckOnLoad === 'function') nlCheckOnLoad();
+            } catch (err) {
+                console.error('RC shell init error:', err);
             }
         }
 
@@ -8622,6 +8648,8 @@ else if (sectionId === 'rcView') {
             initAMView();
         } else if (isPsdRole(USER_CONTEXT.role)) {
             initPsdShell();
+        } else if (isRcRole(USER_CONTEXT.role)) {
+            initRcShell();
         }
         if (typeof tsmSeInit === 'function') tsmSeInit();
     });
@@ -8636,176 +8664,6 @@ else if (sectionId === 'rcView') {
         } else {
             window.addEventListener('load', initAll);
         }
-// ===== OWNER: VIEW AS USER =====
-async function ownerFetchUserRole(email) {
-            // Step 1: Check Access_Control list
-            const url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                "$select=UserEmailID,Role,OCC_SEARCH&" +
-                "$filter=UserEmailID eq '" + email + "'&$top=1";
-            const res = await fetch(url, {
-                headers: { 'Accept': 'application/json;odata=verbose' },
-                credentials: 'include'
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const results = data.d.results;
-                if (results.length > 0) return { role: results[0].Role, name: null, occSearch: results[0].OCC_SEARCH };
-            }
-
-            // Step 2: Get their display name from the main SP list directly
-            // Search by email in Line_Manager or Service_Manager expanded fields
-            const spListUrl = SP_URL + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items?" +
-                "$select=Line_x0020_Manager/Title,Line_x0020_Manager/EMail," +
-                "Service_x0020_Manager/Title,Service_x0020_Manager/EMail&" +
-                "$expand=Line_x0020_Manager,Service_x0020_Manager&" +
-                "$filter=(Line_x0020_Manager/EMail eq '" + email + "') or " +
-                "(Service_x0020_Manager/EMail eq '" + email + "')&$top=1";
-
-            const spRes = await fetch(spListUrl, {
-                headers: { 'Accept': 'application/json;odata=verbose' },
-                credentials: 'include'
-            });
-
-            if (spRes.ok) {
-                const spData = await spRes.json();
-                const spResults = spData.d.results;
-                if (spResults.length > 0) {
-                    const item = spResults[0];
-                    if (item.Line_x0020_Manager && 
-                        item.Line_x0020_Manager.EMail && 
-                        item.Line_x0020_Manager.EMail.toLowerCase() === email) {
-                        return { role: 'Line Manager', name: item.Line_x0020_Manager.Title };
-                    }
-                    if (item.Service_x0020_Manager && 
-                        item.Service_x0020_Manager.EMail && 
-                        item.Service_x0020_Manager.EMail.toLowerCase() === email) {
-                        return { role: 'Service Manager', name: item.Service_x0020_Manager.Title };
-                    }
-                }
-            }
-
-            return null;
-        }        async function ownerFetchUserName(email) {
-            const url = SP_URL + "/_api/web/siteusers?$filter=Email eq '" + email + "'&$select=Title,Email&$top=1";
-            const res = await fetch(url, {
-                headers: { 'Accept': 'application/json;odata=verbose' },
-                credentials: 'include'
-            });
-            if (!res.ok) return null;
-            const data = await res.json();
-            const results = data.d.results;
-            if (results.length > 0) return results[0].Title;
-            return null;
-        }
-
-        window.ownerSwitchView = async function() {
-            const email = document.getElementById('ownerViewAsEmail').value.trim().toLowerCase();
-            const msgEl = document.getElementById('ownerViewAsMsg');
-
-            if (!email) {
-                msgEl.innerHTML = '<span style="color:#ef4444;">Please enter an email.</span>';
-                return;
-            }
-
-            msgEl.innerHTML = '<span style="color:var(--t3);">Checking access...</span>';
-
-          const result = await ownerFetchUserRole(email);
-            if (!result) {
-                msgEl.innerHTML = '<span style="color:#ef4444;">No access found for this email.</span>';
-                return;
-            }
-
-            const role = result.role;
-            let displayName = result.name;
-
-            // If name not returned (Admin/AM/AD roles), fetch from siteusers
-            if (!displayName) {
-                displayName = await ownerFetchUserName(email);
-            }
-            if (!displayName) displayName = email.split('@')[0];
-            msgEl.innerHTML = '<span style="color:#10b981;">Found: ' + role + ' — loading view...</span>';
-
-            msgEl.innerHTML = '<span style="color:#10b981;">Found: ' + role + ' — loading view...</span>';
-
-            USER_CONTEXT.userEmail    = email;
-            USER_CONTEXT.userName     = displayName;
-            USER_CONTEXT.role         = role;
-            USER_CONTEXT.isActive     = true;
-            USER_CONTEXT.isAdmin      = role === 'Admin';
-            USER_CONTEXT.isAM         = role === 'Account Manager';
-            USER_CONTEXT.isAD         = role === 'Account Director';
-            USER_CONTEXT.isLM         = role === 'Line Manager';
-            USER_CONTEXT.isSM         = role === 'Service Manager';
-            USER_CONTEXT.isReadOnly   = role === 'Read Only';
-            USER_CONTEXT.isTSMManager = role === 'TSM Manager';
-            USER_CONTEXT.occSearchEnabled = result.occSearch ? parseAccessControlYesNo(result.occSearch) : false;
-            window.USER_CONTEXT       = USER_CONTEXT;
-
-            document.getElementById('ownerViewAsPanel').style.display = 'none';
-
-            setTimeout(async function() {
-                if (role === 'Account Manager' || role === 'Account Director') {
-                    showAMDashboard();
-                } else {
-                    if (role === 'Line Manager') {
-                        window.ALL_FILTERED = ALL_DATA.filter(a => a.lm === displayName);
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                    } else if (role === 'Service Manager') {
-                        window.ALL_FILTERED = ALL_DATA.filter(a => a.sm === displayName);
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                    } else if (role === 'TSM Manager') {
-                        window.ALL_FILTERED = ALL_DATA.filter(a => a.team === 'TSM_ME' || a.team === 'TSM_SE');
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                   } else {
-                        window.ALL_FILTERED = ALL_DATA.slice();
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                    }
-
-                    populateLandingPage();
-                    showDashboard();
-                    populateFilters({ preserve: false });
-                    updateServiceManagerFilter();
-                    applyFilters();
-
-                    // Reset all nav items first
-                    ['portalAnalyticsNavItem','transferRequestsNavItem','pendingRequestsNavItem',
-                     'intelligenceNavLabel','executiveHubNavItem','qaNavItem','rnpsNavItem',
-                     'projectMgmtNavItem'].forEach(function(id) {
-                        var el = document.getElementById(id);
-                        if (el) el.style.display = 'none';
-                    });
-
-                    // Show nav items for the impersonated role
-                    if (USER_CONTEXT.isAdmin) {
-                        ['portalAnalyticsNavItem','transferRequestsNavItem','pendingRequestsNavItem',
-                         'executiveHubNavItem','qaNavItem','projectMgmtNavItem'].forEach(function(id) {
-                            var el = document.getElementById(id);
-                            if (el) el.style.display = 'flex';
-                        });
-                        var lbl = document.getElementById('intelligenceNavLabel');
-                        if (lbl) lbl.style.display = 'block';
-                    }
-
-                    if (USER_CONTEXT.isTSMManager) {
-                        var ehNav = document.getElementById('executiveHubNavItem');
-                        if (ehNav) ehNav.style.display = 'flex';
-                        var qaNav = document.getElementById('qaNavItem');
-                        if (qaNav) qaNav.style.display = 'flex';
-                    }
-
-                    if (USER_CONTEXT.role === 'Line Manager' || USER_CONTEXT.role === 'Service Manager') {
-                        var qaNavLmSm = document.getElementById('qaNavItem');
-                        if (qaNavLmSm) qaNavLmSm.style.display = 'flex';
-                    }
-
-                    var rnpsNav = document.getElementById('rnpsNavItem');
-                    if (rnpsNav) rnpsNav.style.display = 'flex';
-
-                    if (typeof lucide !== 'undefined') lucide.createIcons();
-                }
-            }, 300);
-        };
-
 
         // ========================================
         // ACCOUNT REQUESTS FUNCTIONS (ADMIN)
@@ -11099,7 +10957,7 @@ async function ownerFetchUserRole(email) {
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/processdocs.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/qualityassurance.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd-assignment.js?v=2.4.0"></script>
-    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/repeated-calls.js?v=1.1.1"></script>
+    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/repeated-calls.js?v=1.5.0"></script>
     <script>
     (function () {
         window.psdResolve = async function (id) {
