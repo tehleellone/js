@@ -1,5 +1,5 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.4.0
+// repeated-calls.js — Repeated Calls Module v1.5.0
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
 // SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
@@ -18,7 +18,9 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.4.0';
+window.RC_MODULE_VERSION = '1.5.0';
+
+var RC_SP_CONCURRENCY = 10;
 
 // SharePoint internal names (match Repeated_Calls list)
 var RC_SP = {
@@ -698,6 +700,88 @@ function rcToast(msg, type) {
     setTimeout(function () { t.remove(); }, 3700);
 }
 
+function rcSpinnerBlock(msg, sub, pct) {
+    var pctNum = pct == null ? null : Math.max(0, Math.min(100, Math.round(pct)));
+    return '<div class="rc-spinner-box">' +
+        '<div class="rc-spinner-ring"></div>' +
+        '<div class="rc-spinner-msg">' + rcEsc(msg || 'Working…') + '</div>' +
+        (sub ? '<div class="rc-spinner-sub">' + rcEsc(sub) + '</div>' : '') +
+        (pctNum != null ?
+            '<div class="rc-progress-bar"><div class="rc-progress-fill" style="width:' + pctNum + '%;"></div></div>' +
+            '<div class="rc-spinner-sub">' + pctNum + '%</div>' : '') +
+        '</div>';
+}
+
+function rcEnsureBusyOverlay() {
+    var root = document.getElementById('rcContainer') || document.getElementById('rcView');
+    if (!root) return null;
+    var el = document.getElementById('rcBusyOverlay');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'rcBusyOverlay';
+        el.className = 'rc-busy-overlay';
+        if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
+        root.appendChild(el);
+    }
+    return el;
+}
+
+function rcShowBusy(msg, sub, pct) {
+    var el = rcEnsureBusyOverlay();
+    if (!el) return;
+    el.style.display = 'flex';
+    el.innerHTML = rcSpinnerBlock(msg, sub, pct);
+}
+
+function rcHideBusy() {
+    var el = document.getElementById('rcBusyOverlay');
+    if (el) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+    }
+}
+
+function rcSetInlineProgress(elId, msg, pct) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = rcSpinnerBlock(msg, null, pct);
+}
+
+async function rcRunPool(items, worker, options) {
+    options = options || {};
+    var concurrency = options.concurrency || RC_SP_CONCURRENCY;
+    var onProgress = options.onProgress;
+    var digestRefreshEvery = options.digestRefreshEvery || 100;
+    var getDigest = options.getDigest;
+    var setDigest = options.setDigest;
+    var total = items.length;
+    var idx = 0, ok = 0, fail = 0;
+    if (!total) return { ok: 0, fail: 0 };
+
+    async function runWorker() {
+        while (true) {
+            var i = idx++;
+            if (i >= total) return;
+            if (getDigest && setDigest && digestRefreshEvery > 0 && i > 0 && i % digestRefreshEvery === 0) {
+                try { setDigest(await rcGetDigest()); } catch (e) { /* keep prior digest */ }
+            }
+            try {
+                await worker(items[i], i);
+                ok++;
+            } catch (e) {
+                fail++;
+                console.error('[RC pool]', e);
+            }
+            if (onProgress) onProgress(i + 1, total, ok, fail);
+        }
+    }
+
+    var workers = [];
+    for (var w = 0; w < Math.min(concurrency, total); w++) workers.push(runWorker());
+    await Promise.all(workers);
+    return { ok: ok, fail: fail };
+}
+
 // ── Chart theme ───────────────────────────────────────────────
 var RC_CHART_PALETTE = {
     pending:    { from: '#64748b', to: '#94a3b8' },
@@ -759,6 +843,14 @@ function rcInjectStyles() {
         '.rc-grid-action .rc-reopen-btn{padding:4px 10px;font-size:.68rem;border:1px solid rgba(245,158,11,.45);border-radius:6px;background:rgba(245,158,11,.12);color:#d97706;font-weight:700;cursor:pointer;white-space:nowrap}' +
         '.rc-grid-action .rc-delete-btn{padding:4px 10px;font-size:.68rem;border:1px solid rgba(239,68,68,.45);border-radius:6px;background:rgba(239,68,68,.12);color:#dc2626;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}' +
         '.rc-delete-all-bar{display:flex;align-items:center;flex-wrap:wrap;gap:.65rem;margin-top:1rem;padding:.65rem .85rem;border:1px solid rgba(239,68,68,.25);border-radius:10px;background:rgba(239,68,68,.06)}' +
+        '.rc-busy-overlay{display:none;position:absolute;inset:0;z-index:500;background:rgba(15,23,42,.42);backdrop-filter:blur(2px);align-items:center;justify-content:center;flex-direction:column;border-radius:12px}' +
+        '.rc-spinner-box{display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 28px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.22);min-width:280px;max-width:92vw}' +
+        '.rc-spinner-ring{width:44px;height:44px;border:4px solid rgba(148,163,184,.25);border-top-color:var(--acc);border-radius:50%;animation:rcSpin .75s linear infinite;flex-shrink:0}' +
+        '.rc-spinner-msg{font-size:.88rem;font-weight:800;color:var(--t1);text-align:center}' +
+        '.rc-spinner-sub{font-size:.75rem;color:var(--t3);text-align:center;line-height:1.35}' +
+        '.rc-progress-bar{height:8px;width:100%;background:var(--bg-input);border-radius:999px;overflow:hidden}' +
+        '.rc-progress-fill{height:100%;background:var(--grad);transition:width .15s ease;border-radius:999px}' +
+        '@keyframes rcSpin{to{transform:rotate(360deg)}}' +
         '.rc-agent-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:var(--cs)}' +
         '.rc-agent-tile:hover{transform:translateY(-2px);box-shadow:var(--ch)}' +
         '.rc-agent-tile.selected{border-color:var(--acc);box-shadow:0 0 0 2px var(--glow)}' +
@@ -898,17 +990,22 @@ async function rcFetchAgents() {
     rcBuildCtiMap();
 }
 
-async function rcFetchItems() {
+async function rcFetchItems(showBusy) {
     if (RC_DUMMY_MODE) { rcAllItems = rcDummyItems(); return; }
-    var cols = RC_COLS.map(function (c) { return c.key; }).join(',');
-    var url = SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items?" +
-        "$select=ID," + cols + "," + RC_SP.STATUS + "," + RC_SP.UPLOAD + "," + RC_SP.ASSIGN + "," + RC_SP.REASSIGN + "," + RC_SP.RESOLVED + "," +
-        RC_SP.ASSIGNED + "/Title," + RC_SP.ASSIGNED + "/EMail&$expand=" + RC_SP.ASSIGNED + "&$orderby=ID desc&$top=50000";
-    var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
-    if (!r.ok) throw new Error('Failed to load Repeated Calls (' + r.status + ')');
-    var data = await r.json();
-    rcAllItems = (data.d.results || []).map(function (it) { return rcNormalizeItem(it); });
-    rcRebuildMsisdnCounts(rcAllItems);
+    if (showBusy) rcShowBusy('Loading records…', 'Fetching from SharePoint');
+    try {
+        var cols = RC_COLS.map(function (c) { return c.key; }).join(',');
+        var url = SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items?" +
+            "$select=ID," + cols + "," + RC_SP.STATUS + "," + RC_SP.UPLOAD + "," + RC_SP.ASSIGN + "," + RC_SP.REASSIGN + "," + RC_SP.RESOLVED + "," +
+            RC_SP.ASSIGNED + "/Title," + RC_SP.ASSIGNED + "/EMail&$expand=" + RC_SP.ASSIGNED + "&$orderby=ID desc&$top=50000";
+        var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+        if (!r.ok) throw new Error('Failed to load Repeated Calls (' + r.status + ')');
+        var data = await r.json();
+        rcAllItems = (data.d.results || []).map(function (it) { return rcNormalizeItem(it); });
+        rcRebuildMsisdnCounts(rcAllItems);
+    } finally {
+        if (showBusy) rcHideBusy();
+    }
 }
 
 async function rcResolveUserId(email, name) {
@@ -925,8 +1022,8 @@ async function rcResolveUserId(email, name) {
     return null;
 }
 
-async function rcCreateItem(fields, digest) {
-    var body = Object.assign({ __metadata: { type: await rcGetEntityType() } }, fields);
+async function rcCreateItem(fields, digest, entityType) {
+    var body = Object.assign({ __metadata: { type: entityType || await rcGetEntityType() } }, fields);
     var r = await fetch(SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items", {
         method: 'POST', credentials: 'include',
         headers: { 'Accept': 'application/json;odata=verbose', 'Content-Type': 'application/json;odata=verbose', 'X-RequestDigest': digest },
@@ -975,7 +1072,10 @@ window.rcInit = async function () {
             rcInjectStyles();
             if (typeof injectAGGridThemeStyles === 'function') injectAGGridThemeStyles();
             rcSetFullLayout(true);
-            if (loadingEl) loadingEl.style.display = 'block';
+            if (loadingEl) {
+                loadingEl.style.display = 'block';
+                loadingEl.innerHTML = rcSpinnerBlock('Loading Repeated Calls…', 'Fetching records and agents');
+            }
             if (contentEl) contentEl.style.display = 'none';
 
             if (!rcHasAccess()) {
@@ -984,8 +1084,8 @@ window.rcInit = async function () {
             }
 
             await Promise.race([
-                Promise.all([rcFetchItems(), rcFetchAgents()]),
-                new Promise(function (_, rej) { setTimeout(function () { rej(new Error('Request timed out after 15s')); }, 15000); })
+                Promise.all([rcFetchItems(false), rcFetchAgents()]),
+                new Promise(function (_, rej) { setTimeout(function () { rej(new Error('Request timed out after 60s — list may be very large')); }, 60000); })
             ]);
 
             if (loadingEl) loadingEl.style.display = 'none';
@@ -1763,12 +1863,18 @@ window.rcExportAgentRecordsCsv = function () { rcExportGrid('agentRecords', 'RC_
 
 function rcExportGrid(key, prefix) {
     var api = rcGrids[key];
-    if (api && api.exportDataAsCsv) {
-        api.exportDataAsCsv({
-            fileName: prefix + '_' + new Date().toISOString().slice(0, 10) + '.csv',
-            allColumns: true
-        });
-    }
+    if (!api || !api.exportDataAsCsv) return;
+    rcShowBusy('Preparing export…', 'Building CSV file');
+    setTimeout(function () {
+        try {
+            api.exportDataAsCsv({
+                fileName: prefix + '_' + new Date().toISOString().slice(0, 10) + '.csv',
+                allColumns: true
+            });
+        } finally {
+            rcHideBusy();
+        }
+    }, 30);
 }
 
 function rcBulkBarHTML(type) {
@@ -2351,23 +2457,34 @@ async function rcDoAssign(pairs, isReassign) {
     if (!pairs.length) { rcToast('Select rows and an agent', 'warn'); return; }
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
-    var now = new Date().toISOString(), ok = 0, fail = 0;
-    for (var i = 0; i < pairs.length; i++) {
-        var p = pairs[i];
+
+    rcShowBusy(isReassign ? 'Reassigning…' : 'Assigning…', '0 / ' + pairs.length);
+    var agentUidCache = {};
+    var result = await rcRunPool(pairs, async function (p) {
         var agent = rcAllAgents.find(function (a) { return a.name === p.agentName; });
-        if (!agent) { fail++; continue; }
-        try {
+        if (!agent) throw new Error('Agent not found');
+        if (!agentUidCache[p.agentName]) {
             var uid = await rcResolveUserId(agent.email, agent.name);
-            if (!uid) { fail++; continue; }
-            var fields = rcSpFields({ AssignedToId: uid, RCStatus: RC_STATUS.INPROGRESS });
-            if (isReassign) fields[RC_SP.REASSIGN] = now;
-            else fields[RC_SP.ASSIGN] = now;
-            await rcUpdateItem(p.id, fields, digest);
-            ok++;
-        } catch (e) { console.error('[RC]', e); fail++; }
-    }
-    rcToast((isReassign ? 'Reassigned ' : 'Assigned ') + ok + (fail ? ', ' + fail + ' failed' : ''), fail ? 'warn' : 'success');
-    await rcFetchItems();
+            if (!uid) throw new Error('User id not found');
+            agentUidCache[p.agentName] = uid;
+        }
+        var now = new Date().toISOString();
+        var fields = rcSpFields({ AssignedToId: agentUidCache[p.agentName], RCStatus: RC_STATUS.INPROGRESS });
+        if (isReassign) fields[RC_SP.REASSIGN] = now;
+        else fields[RC_SP.ASSIGN] = now;
+        await rcUpdateItem(p.id, fields, digest);
+    }, {
+        concurrency: RC_SP_CONCURRENCY,
+        getDigest: function () { return digest; },
+        setDigest: function (d) { digest = d; },
+        onProgress: function (done, total) {
+            rcShowBusy(isReassign ? 'Reassigning…' : 'Assigning…', done + ' / ' + total, (done / total) * 100);
+        }
+    });
+    rcHideBusy();
+
+    rcToast((isReassign ? 'Reassigned ' : 'Assigned ') + result.ok + (result.fail ? ', ' + result.fail + ' failed' : ''), result.fail ? 'warn' : 'success');
+    await rcFetchItems(true);
     rcRenderTabBody();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -2394,9 +2511,11 @@ window.rcBulkReassign = function () {
 window.rcParseFile = function (ev) {
     var file = ev.target.files && ev.target.files[0], prev = document.getElementById('rcUploadPreview');
     if (!file || typeof XLSX === 'undefined') return;
+    if (prev) prev.innerHTML = rcSpinnerBlock('Reading file…', file.name);
     var reader = new FileReader();
     reader.onload = function (e) {
         try {
+            if (prev) prev.innerHTML = rcSpinnerBlock('Parsing Excel…', 'Processing rows');
             var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
             rcUploadRows = [];
             var sheet = wb.Sheets[wb.SheetNames[0]];
@@ -2417,9 +2536,15 @@ window.rcParseFile = function (ev) {
                 if (rec.MSISDN && rec.Call_DateTime) rcUploadRows.push(rec);
             }
             rcRenderUploadPreview();
-        } catch (err) { prev.innerHTML = rcErrBox(rcEsc(err.message)); }
+        } catch (err) {
+            if (prev) prev.innerHTML = rcErrBox(rcEsc(err.message));
+        }
+    };
+    reader.onerror = function () {
+        if (prev) prev.innerHTML = rcErrBox('Could not read the selected file.');
     };
     reader.readAsArrayBuffer(file);
+    ev.target.value = '';
 };
 
 function rcRenderUploadPreview() {
@@ -2455,10 +2580,22 @@ function rcRenderUploadPreview() {
 window.rcConfirmUpload = async function () {
     var toAdd = rcUploadRows._toAdd || [];
     if (!toAdd.length) return;
-    var digest, now = new Date().toISOString(), ok = 0;
-    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
-    for (var i = 0; i < toAdd.length; i++) {
-        var rec = toAdd[i], key = rcCallKey(rec);
+
+    var btn = document.getElementById('rcConfirmUploadBtn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+    var digest, entityType, now = new Date().toISOString();
+    try {
+        digest = await rcGetDigest();
+        entityType = await rcGetEntityType();
+    } catch (e) {
+        rcToast('Digest error', 'error');
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        return;
+    }
+
+    var payloads = toAdd.map(function (rec) {
+        var key = rcCallKey(rec);
         var fields = rcSpFields({ Title: key, RCStatus: RC_STATUS.PENDING, UploadDate: now });
         RC_COLS.forEach(function (col) {
             if (col.key === 'Call_DateTime') {
@@ -2467,10 +2604,25 @@ window.rcConfirmUpload = async function () {
                 fields[col.key] = rec[col.key] || '';
             }
         });
-        try { await rcCreateItem(fields, digest); ok++; } catch (e) { console.error(e); }
-    }
-    rcToast('Uploaded ' + ok + ' calls', 'success');
-    await rcFetchItems();
+        return fields;
+    });
+
+    rcShowBusy('Uploading to SharePoint…', '0 / ' + payloads.length, 0);
+    var result = await rcRunPool(payloads, function (fields) {
+        return rcCreateItem(fields, digest, entityType);
+    }, {
+        concurrency: RC_SP_CONCURRENCY,
+        getDigest: function () { return digest; },
+        setDigest: function (d) { digest = d; },
+        onProgress: function (done, total) {
+            rcShowBusy('Uploading to SharePoint…', done + ' / ' + total + ' calls', (done / total) * 100);
+        }
+    });
+    rcHideBusy();
+
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    rcToast('Uploaded ' + result.ok + ' calls' + (result.fail ? ' (' + result.fail + ' failed)' : ''), result.fail ? 'warn' : 'success');
+    await rcFetchItems(true);
     rcRenderTabBody();
 };
 
@@ -2508,14 +2660,16 @@ function rcRenderMyQueue(body) {
 }
 
 window.rcResolve = async function (id) {
+    rcShowBusy('Updating…', 'Marking resolved');
     var digest;
-    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+    try { digest = await rcGetDigest(); } catch (e) { rcHideBusy(); rcToast('Digest error', 'error'); return; }
     try {
         await rcUpdateItem(id, rcSpFields({ RCStatus: RC_STATUS.RESOLVED, CompletedDate: new Date().toISOString() }), digest);
         rcToast('Marked resolved', 'success');
-        await rcFetchItems();
+        await rcFetchItems(true);
         rcRenderTabBody();
     } catch (e) { rcToast('Could not resolve', 'error'); }
+    finally { rcHideBusy(); }
 };
 window.rcComplete = window.rcResolve;
 
@@ -2531,12 +2685,14 @@ window.rcReopen = async function (id) {
 
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+    rcShowBusy('Reopening…', label);
     try {
         await rcUpdateItem(id, rcSpFields({ RCStatus: RC_STATUS.INPROGRESS, CompletedDate: null }), digest);
         rcToast('Activity reopened', 'success');
-        await rcFetchItems();
+        await rcFetchItems(true);
         rcRenderTabBody();
     } catch (e) { rcToast('Could not reopen', 'error'); }
+    finally { rcHideBusy(); }
 };
 
 window.rcDeleteRecord = async function (id) {
@@ -2547,12 +2703,14 @@ window.rcDeleteRecord = async function (id) {
 
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+    rcShowBusy('Deleting…', label);
     try {
         await rcDeleteItem(id, digest);
         rcToast('Record deleted', 'success');
-        await rcFetchItems();
+        await rcFetchItems(true);
         rcRenderTabBody();
     } catch (e) { rcToast('Could not delete record', 'error'); }
+    finally { rcHideBusy(); }
 };
 
 window.rcDeleteAll = async function () {
@@ -2562,29 +2720,24 @@ window.rcDeleteAll = async function () {
     if (!confirm('Delete ALL ' + ids.length + ' records from Repeated Calls?\n\nThis permanently removes every row in the list.')) return;
     if (!confirm('Final confirmation: delete ' + ids.length + ' records? This cannot be undone.')) return;
 
-    var digest, ok = 0, fail = 0;
+    var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
 
-    rcSetDeleteProgress('Deleting 0 / ' + ids.length + '…');
-    for (var i = 0; i < ids.length; i++) {
-        if (i > 0 && i % 100 === 0) {
-            try { digest = await rcGetDigest(); } catch (e) { /* keep prior digest */ }
+    rcShowBusy('Deleting all records…', '0 / ' + ids.length, 0);
+    var result = await rcRunPool(ids, function (id) {
+        return rcDeleteItem(id, digest);
+    }, {
+        concurrency: RC_SP_CONCURRENCY,
+        getDigest: function () { return digest; },
+        setDigest: function (d) { digest = d; },
+        onProgress: function (done, total) {
+            rcShowBusy('Deleting all records…', done + ' / ' + total, (done / total) * 100);
         }
-        try {
-            await rcDeleteItem(ids[i], digest);
-            ok++;
-        } catch (e) {
-            fail++;
-            console.error('[rcDeleteAll]', ids[i], e);
-        }
-        if (i === 0 || (i + 1) % 25 === 0 || i === ids.length - 1) {
-            rcSetDeleteProgress('Deleting ' + (i + 1) + ' / ' + ids.length + '… (' + ok + ' deleted' + (fail ? ', ' + fail + ' failed' : '') + ')');
-        }
-    }
+    });
+    rcHideBusy();
 
-    rcSetDeleteProgress('');
-    rcToast('Deleted ' + ok + ' record' + (ok !== 1 ? 's' : '') + (fail ? ' (' + fail + ' failed)' : ''), fail ? 'warn' : 'success');
-    await rcFetchItems();
+    rcToast('Deleted ' + result.ok + ' record' + (result.ok !== 1 ? 's' : '') + (result.fail ? ' (' + result.fail + ' failed)' : ''), result.fail ? 'warn' : 'success');
+    await rcFetchItems(true);
     rcRenderTabBody();
 };
 
