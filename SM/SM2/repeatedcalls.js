@@ -1,5 +1,5 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.5.0
+// repeated-calls.js — Repeated Calls Module v1.5.1
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
 // SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
@@ -18,7 +18,7 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.5.0';
+window.RC_MODULE_VERSION = '1.5.1';
 
 var RC_SP_CONCURRENCY = 10;
 
@@ -165,6 +165,46 @@ function rcRepeatCallersList(items) {
         });
     });
     return rows.sort(function (a, b) { return b.count - a.count; });
+}
+
+function rcTop10RepeatCallers(items) {
+    return rcRepeatCallersList(items).slice(0, 10);
+}
+
+function rcTop10CallerTileHTML(items) {
+    var top10 = rcTop10RepeatCallers(items);
+    if (!top10.length) {
+        return rcTile('Top 10 Who Called', '—', 'No customer called 2+ times yet', '#94a3b8');
+    }
+    var top = top10[0];
+    return rcClickTile(
+        'Top 10 Who Called',
+        top.msisdn,
+        '#1 · ' + top.count + ' calls' + (top10.length > 1 ? ' · click for top 10 chart' : ''),
+        '#ef4444',
+        'rcShowTop10Callers()'
+    );
+}
+
+function rcTop10CallersPanelHTML(items) {
+    var top10 = rcTop10RepeatCallers(items);
+    if (!top10.length) return '';
+    return '<div class="rc-panel" style="margin-top:0;margin-bottom:1rem;border-color:rgba(239,68,68,.25);">' +
+        '<div class="rc-panel-title"><i data-lucide="trophy" style="width:18px;height:18px;color:#ef4444;"></i>Top 10 Who Called Most</div>' +
+        '<p style="font-size:.76rem;color:var(--t3);margin:-.35rem 0 .75rem;">Customers (MSISDN) ranked by number of calls. Same person, different call times = repeat caller.</p>' +
+        '<div class="rc-repeat-table-wrap"><table class="rc-repeat-table"><thead><tr>' +
+        '<th>#</th><th>MSISDN</th><th>Times Called</th><th>LOB</th><th>Language</th><th></th>' +
+        '</tr></thead><tbody>' +
+        top10.map(function (r, i) {
+            var safe = rcEsc(r.msisdn).replace(/'/g, "\\'");
+            return '<tr class="rc-repeat-row"><td style="font-weight:800;color:var(--t3);">' + (i + 1) + '</td>' +
+                '<td style="font-weight:800;">' + rcEsc(r.msisdn) + '</td>' +
+                '<td>' + rcCallCountCell(r.count) + '</td>' +
+                '<td>' + rcEsc(r.lob) + '</td>' +
+                '<td>' + rcEsc(r.language) + '</td>' +
+                '<td><button type="button" class="export-btn" style="padding:4px 10px;font-size:.68rem;" onclick="rcFilterByMsisdn(\'' + safe + '\')">View calls</button></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
 }
 
 function rcCallCountCell(val) {
@@ -1256,6 +1296,19 @@ window.rcShowRepeatCallersOnly = function () {
     rcRefreshDashboardContent();
 };
 
+window.rcShowTop10Callers = function () {
+    rcRepeatVisible = true;
+    rcChartsBuilt = true;
+    rcDashFilters.repeatOnly = false;
+    var repeatChk = document.getElementById('rcFilterRepeatOnly');
+    if (repeatChk) repeatChk.checked = false;
+    rcRefreshDashboardContent();
+    setTimeout(function () {
+        var target = document.getElementById('rcTop10Panel') || document.getElementById('rcChartRepeat');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+};
+
 window.rcFilterByMsisdn = function (msisdn) {
     rcDashFilters.search = String(msisdn || '');
     rcDashFilters.repeatOnly = false;
@@ -1908,7 +1961,9 @@ function rcUploadSectionHTML() {
         '</div>' : '';
     return '<div style="margin:1.25rem 0;padding:1rem;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);">' +
         '<h3 style="font-size:.92rem;font-weight:800;color:var(--t1);margin:0 0 .5rem;">Daily Upload</h3>' +
-        '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Upload the daily Repeated Calls Excel. <b>Agent_Name</b> is matched to Account Mapping via <b>CTI</b> (all teams). Duplicate <b>MSISDN + DateTime</b> skipped. New rows saved as <b>Pending</b>.</p>' +
+        '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Upload the daily Repeated Calls Excel. <b>Agent_Name</b> is matched to Account Mapping via <b>CTI</b> (all teams). ' +
+        '<b>Exact duplicate rows</b> (same MSISDN + same DateTime already in the list or twice in the file) are skipped — this stops re-uploading the same file from creating doubles. ' +
+        'Same customer calling at <b>different times</b> is kept and counts as a <b>repeat caller</b>. New rows save as <b>Pending</b>.</p>' +
         '<label class="rc-upload-zone"><input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="rcParseFile(event)">Click or drop Excel file here</label>' +
         adminBar +
         '<div id="rcUploadPreview" style="margin-top:1rem;"></div></div>';
@@ -1917,6 +1972,7 @@ function rcUploadSectionHTML() {
 function rcDashboardMainHTML(dateFiltered, items, s) {
     return '<div class="top-stats">' +
             rcTile('Total Calls', s.total, 'Filtered view', 'var(--acc)') +
+            rcTop10CallerTileHTML(dateFiltered) +
             rcClickTile('Repeat Callers', s.repeatCallers, 'Unique MSISDN · 2+ calls', '#f59e0b', 'rcShowRepeatCallersOnly()') +
             rcClickTile('Repeat Call Volume', s.repeatCalls, 'Total calls from repeaters', '#ef4444', 'rcShowRepeatCallersOnly()') +
             rcTile('Pending', s.pending, 'Awaiting assign', rcStatusColor(RC_STATUS.PENDING)) +
@@ -1935,6 +1991,7 @@ function rcDashboardMainHTML(dateFiltered, items, s) {
                 '<span id="rcChartsText">' + (rcChartsBuilt ? 'Hide Analytics Charts' : 'Show Analytics Charts') + '</span></button>' +
         '</div>' +
         '<div id="rcRepeatSection" style="display:' + (rcRepeatVisible ? 'block' : 'none') + ';">' +
+            '<div id="rcTop10Panel">' + rcTop10CallersPanelHTML(dateFiltered) + '</div>' +
             rcRepeatCallersPanelHTML(dateFiltered) +
         '</div>' +
         '<div id="rcAgentsSection" style="display:' + (rcAgentsVisible ? 'block' : 'none') + ';">' +
@@ -1942,7 +1999,7 @@ function rcDashboardMainHTML(dateFiltered, items, s) {
         '</div>' +
         '<div id="rcChartsSection" class="rc-chart-grid" style="display:' + (rcChartsBuilt ? 'grid' : 'none') + ';margin-top:1rem;">' +
             rcTrendChartCardHTML() +
-            rcChartCard('Top Repeat Callers', 'rcChartRepeat', 'MSISDN · 2+ calls', false) +
+            rcChartCard('Top 10 Who Called', 'rcChartRepeat', 'Most calls by MSISDN (2+ calls)', false) +
             rcChartCard('Status Breakdown', 'rcChartStatus', 'Pipeline mix', true) +
             rcChartCard('Agent Workload', 'rcChartAgent', 'Resolved vs in progress', true) +
             rcChartCard('By LOB', 'rcChartCategory', 'Line of business', false) +
@@ -2260,7 +2317,7 @@ function rcBuildDashboardCharts(items, s) {
 
     rcBuildTrendChart(items);
 
-    var repeatRows = rcRepeatCallersList(items).slice(0, 12);
+    var repeatRows = rcTop10RepeatCallers(items);
     var rpc = document.getElementById('rcChartRepeat');
     if (rpc) rcCharts.repeat = new Chart(rpc, {
         type: 'bar',
@@ -2569,8 +2626,10 @@ function rcRenderUploadPreview() {
     var merged = toAdd.map(function (r) { return { MSISDN: r.MSISDN }; }).concat(rcAllItems.map(function (it) { return { MSISDN: it.MSISDN }; }));
     var mergedCounts = rcBuildMsisdnCounts(merged);
     var afterRepeat = Object.keys(mergedCounts).filter(function (m) { return mergedCounts[m] >= 2; }).length;
-    prev.innerHTML = '<div style="font-size:.82rem;color:var(--t2);margin-bottom:.75rem;"><b>' + toAdd.length + '</b> new calls · <b>' + dupE + '</b> skipped (same MSISDN+DateTime)' +
-        (batchRepeat ? ' · <b style="color:#f59e0b;">' + batchRepeat + '</b> repeat MSISDN in file' : '') +
+    prev.innerHTML = '<div style="font-size:.82rem;color:var(--t2);margin-bottom:.75rem;line-height:1.5;">' +
+        '<b>' + toAdd.length + '</b> new calls to upload · ' +
+        '<b>' + dupE + '</b> exact duplicates skipped <span style="color:var(--t3);">(same MSISDN + same DateTime — already in list or repeated in file; not repeat callers)</span>' +
+        (batchRepeat ? ' · <b style="color:#f59e0b;">' + batchRepeat + '</b> customers call 2+ times in this file' : '') +
         (afterRepeat ? ' · <b style="color:#ef4444;">' + afterRepeat + '</b> total repeat callers after upload' : '') +
         (unmapped ? ' · <b style="color:#f59e0b;">' + unmapped + '</b> CTI not mapped' : '') + '</div>' +
         (toAdd.length ? '<button type="button" class="export-btn" id="rcConfirmUploadBtn" onclick="rcConfirmUpload()">Confirm Upload (' + toAdd.length + ')</button>' : '<div style="color:var(--t3);">Nothing new to upload.</div>') +
