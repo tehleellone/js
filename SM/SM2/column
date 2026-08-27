@@ -1,0 +1,36 @@
+List Information
+Name:	Repeated_Calls
+Web Address:	http://sharedspaces:8086/sites/SM/Lists/Repeated_Calls/AllItems.aspx
+
+Columns
+A column stores information about each item in the list. The following columns are currently available in this list:
+Column (click to edit)	Type	Required
+Title	Single line of text	
+RC_Status	Choice	
+Upload_Date	Date and Time	
+Assignment_Date	Date and Time	
+Reassign_Date	Date and Time	
+Resolved_Date	Date and Time	
+Assigned_To	Person or Group	
+Site	Single line of text	
+Call_Date	Single line of text	
+Call_DateTime	Date and Time	
+MSISDN	Single line of text	
+skill_group_enterprisename	Single line of text	
+Language	Single line of text	
+Customer_Type	Single line of text	
+Agent_Name	Single line of text	
+Talk_Time	Number	
+Hold_Time	Number	
+WrapUp_Time	Number	
+Customer_Value	Single line of text	
+Handling_Time	Number	
+Market_For_Weekly_Score_Card	Single line of text	
+SIEBEL_ID	Single line of text	
+KB_ID	Single line of text	
+Segment_Value	Single line of text	
+LOB	Single line of text	
+Modified	Date and Time	
+Created	Date and Time	
+Created By	Person or Group	
+Modified By	Person or Group
