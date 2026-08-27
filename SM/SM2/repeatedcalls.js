@@ -1,5 +1,5 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.3.0
+// repeated-calls.js — Repeated Calls Module v1.4.0
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
 // SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
@@ -18,7 +18,7 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.3.0';
+window.RC_MODULE_VERSION = '1.4.0';
 
 // SharePoint internal names (match Repeated_Calls list)
 var RC_SP = {
@@ -757,6 +757,8 @@ function rcInjectStyles() {
         '.rc-grid-action .rc-action-btn{padding:4px 10px;font-size:.68rem;border:none;border-radius:6px;background:var(--grad);color:#fff;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}' +
         '.rc-grid-action .rc-complete-btn{padding:4px 10px;font-size:.68rem;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--t1);font-weight:700;cursor:pointer;white-space:nowrap}' +
         '.rc-grid-action .rc-reopen-btn{padding:4px 10px;font-size:.68rem;border:1px solid rgba(245,158,11,.45);border-radius:6px;background:rgba(245,158,11,.12);color:#d97706;font-weight:700;cursor:pointer;white-space:nowrap}' +
+        '.rc-grid-action .rc-delete-btn{padding:4px 10px;font-size:.68rem;border:1px solid rgba(239,68,68,.45);border-radius:6px;background:rgba(239,68,68,.12);color:#dc2626;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}' +
+        '.rc-delete-all-bar{display:flex;align-items:center;flex-wrap:wrap;gap:.65rem;margin-top:1rem;padding:.65rem .85rem;border:1px solid rgba(239,68,68,.25);border-radius:10px;background:rgba(239,68,68,.06)}' +
         '.rc-agent-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:var(--cs)}' +
         '.rc-agent-tile:hover{transform:translateY(-2px);box-shadow:var(--ch)}' +
         '.rc-agent-tile.selected{border-color:var(--acc);box-shadow:0 0 0 2px var(--glow)}' +
@@ -942,6 +944,19 @@ async function rcUpdateItem(id, fields, digest) {
         body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error('Update failed: ' + r.status);
+}
+
+async function rcDeleteItem(id, digest) {
+    var r = await fetch(SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items(" + id + ")", {
+        method: 'POST', credentials: 'include',
+        headers: { 'Accept': 'application/json;odata=verbose', 'X-RequestDigest': digest, 'IF-MATCH': '*', 'X-HTTP-Method': 'DELETE' }
+    });
+    if (!r.ok) throw new Error('Delete failed: ' + r.status);
+}
+
+function rcSetDeleteProgress(msg) {
+    var el = document.getElementById('rcDeleteProgress');
+    if (el) el.innerHTML = msg;
 }
 
 // ============================================================
@@ -1578,9 +1593,20 @@ function rcReopenActionRenderer(params) {
 
 function rcAdminRecordsActionRenderer(params) {
     if (!params.data) return document.createTextNode('');
-    if (params.data.rcStatus === RC_STATUS.INPROGRESS) return rcResolveActionRenderer(params);
-    if (params.data.rcStatus === RC_STATUS.RESOLVED) return rcReopenActionRenderer(params);
-    return document.createTextNode('');
+    var wrap = document.createElement('div');
+    wrap.className = 'rc-grid-action';
+    if (params.data.rcStatus === RC_STATUS.INPROGRESS) {
+        wrap.appendChild(rcResolveActionRenderer(params));
+    } else if (params.data.rcStatus === RC_STATUS.RESOLVED) {
+        wrap.appendChild(rcReopenActionRenderer(params));
+    }
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'rc-delete-btn';
+    delBtn.textContent = 'Delete';
+    delBtn.onclick = function () { rcDeleteRecord(params.data.id); };
+    wrap.appendChild(delBtn);
+    return wrap;
 }
 
 function rcDataColumnDefs() {
@@ -1646,7 +1672,7 @@ function rcBuildColDefs(mode) {
     } else if (mode === 'agentqueue') {
         cols.push({ headerName: 'Action', width: 120, minWidth: 100, pinned: 'right', sortable: false, filter: false, cellRenderer: rcResolveActionRenderer });
     } else if (mode === 'records' && rcIsAdminLike()) {
-        cols.push({ headerName: 'Action', width: 130, minWidth: 110, pinned: 'right', sortable: false, filter: false, cellRenderer: rcAdminRecordsActionRenderer });
+        cols.push({ headerName: 'Action', width: 180, minWidth: 160, pinned: 'right', sortable: false, filter: false, cellRenderer: rcAdminRecordsActionRenderer });
     }
     return cols.map(function (col) { return col.colId === 'rc_select' ? col : rcEnhanceColDef(col); });
 }
@@ -1767,10 +1793,18 @@ function rcAgentOptionsHTML(selected) {
 // RC DASHBOARD
 // ============================================================
 function rcUploadSectionHTML() {
+    var adminBar = rcIsAdminLike() ?
+        '<div class="rc-delete-all-bar">' +
+            '<button type="button" class="export-btn" onclick="rcDeleteAll()" style="padding:.5rem 1rem;font-size:.82rem;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;color:#fff;">' +
+                '<i data-lucide="trash-2" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Delete All Records</button>' +
+            '<span style="font-size:.72rem;color:var(--t3);">Permanently removes every row in the Repeated_Calls list. Admin only.</span>' +
+            '<div id="rcDeleteProgress" style="flex:1 1 100%;font-size:.75rem;color:var(--t2);"></div>' +
+        '</div>' : '';
     return '<div style="margin:1.25rem 0;padding:1rem;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);">' +
         '<h3 style="font-size:.92rem;font-weight:800;color:var(--t1);margin:0 0 .5rem;">Daily Upload</h3>' +
         '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Upload the daily Repeated Calls Excel. <b>Agent_Name</b> is matched to Account Mapping via <b>CTI</b> (all teams). Duplicate <b>MSISDN + DateTime</b> skipped. New rows saved as <b>Pending</b>.</p>' +
         '<label class="rc-upload-zone"><input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="rcParseFile(event)">Click or drop Excel file here</label>' +
+        adminBar +
         '<div id="rcUploadPreview" style="margin-top:1rem;"></div></div>';
 }
 
@@ -2503,6 +2537,55 @@ window.rcReopen = async function (id) {
         await rcFetchItems();
         rcRenderTabBody();
     } catch (e) { rcToast('Could not reopen', 'error'); }
+};
+
+window.rcDeleteRecord = async function (id) {
+    if (!rcIsAdminLike()) { rcToast('Only admins can delete records', 'warn'); return; }
+    var item = rcAllItems.find(function (it) { return it.ID === id; });
+    var label = item ? (rcCallKey(item) || ('ID ' + id)) : ('ID ' + id);
+    if (!confirm('Delete record ' + label + '?\n\nThis cannot be undone.')) return;
+
+    var digest;
+    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+    try {
+        await rcDeleteItem(id, digest);
+        rcToast('Record deleted', 'success');
+        await rcFetchItems();
+        rcRenderTabBody();
+    } catch (e) { rcToast('Could not delete record', 'error'); }
+};
+
+window.rcDeleteAll = async function () {
+    if (!rcIsAdminLike()) { rcToast('Only admins can delete records', 'warn'); return; }
+    var ids = rcAllItems.map(function (it) { return it.ID; }).filter(Boolean);
+    if (!ids.length) { rcToast('No records to delete', 'warn'); return; }
+    if (!confirm('Delete ALL ' + ids.length + ' records from Repeated Calls?\n\nThis permanently removes every row in the list.')) return;
+    if (!confirm('Final confirmation: delete ' + ids.length + ' records? This cannot be undone.')) return;
+
+    var digest, ok = 0, fail = 0;
+    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+
+    rcSetDeleteProgress('Deleting 0 / ' + ids.length + '…');
+    for (var i = 0; i < ids.length; i++) {
+        if (i > 0 && i % 100 === 0) {
+            try { digest = await rcGetDigest(); } catch (e) { /* keep prior digest */ }
+        }
+        try {
+            await rcDeleteItem(ids[i], digest);
+            ok++;
+        } catch (e) {
+            fail++;
+            console.error('[rcDeleteAll]', ids[i], e);
+        }
+        if (i === 0 || (i + 1) % 25 === 0 || i === ids.length - 1) {
+            rcSetDeleteProgress('Deleting ' + (i + 1) + ' / ' + ids.length + '… (' + ok + ' deleted' + (fail ? ', ' + fail + ' failed' : '') + ')');
+        }
+    }
+
+    rcSetDeleteProgress('');
+    rcToast('Deleted ' + ok + ' record' + (ok !== 1 ? 's' : '') + (fail ? ' (' + fail + ' failed)' : ''), fail ? 'warn' : 'success');
+    await rcFetchItems();
+    rcRenderTabBody();
 };
 
 // ============================================================
