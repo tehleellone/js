@@ -1,5 +1,5 @@
 // ============================================================
-// psd-assignment.js — PSD Assignment Module v2.4.0
+// psd-assignment.js — PSD Assignment Module v2.4.1
 // List: PSD_Assignments | Agents: Account Mapping (Team = PSD)
 // ============================================================
 
@@ -17,10 +17,12 @@ var psdCharts        = {};
 var psdGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var psdUploadRows    = [];
 var psdSelectedAgent = null;
-window.PSD_MODULE_VERSION = '2.4.0';
+window.PSD_MODULE_VERSION = '2.4.1';
 
 var psdDashFilters   = { status: [], category: [], agent: [], product: [], search: '' };
 var psdDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
+var psdAssignDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
+var psdAssignedDateFilters = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
 var psdTrendGranularity = 'monthly';
 var psdChartsBuilt   = false;
 var psdLastChartItems = null;
@@ -60,11 +62,37 @@ var PSD_COLS = [
 
 var PSD_STATUS = { PENDING: 'Pending', INPROGRESS: 'Inprogress', RESOLVED: 'Resolved' };
 
+function psdNormStatusRaw(s) {
+    if (s == null || s === undefined) return '';
+    return String(s).trim();
+}
+function psdIsPendingStatus(s) {
+    var v = psdNormStatusRaw(s);
+    if (!v) return true;
+    return v === PSD_STATUS.PENDING || v.toLowerCase() === 'pending';
+}
+function psdIsInProgressStatus(s) {
+    var v = psdNormStatusRaw(s);
+    return v === PSD_STATUS.INPROGRESS || v === 'In Progress' || v.toLowerCase() === 'in progress' || v.toLowerCase() === 'inprogress';
+}
 function psdIsResolvedStatus(s) {
     return s === PSD_STATUS.RESOLVED || s === 'Completed';
 }
 function psdCanonicalStatus(s) {
-    return psdIsResolvedStatus(s) ? PSD_STATUS.RESOLVED : s;
+    if (psdIsPendingStatus(s)) return PSD_STATUS.PENDING;
+    if (psdIsInProgressStatus(s)) return PSD_STATUS.INPROGRESS;
+    if (psdIsResolvedStatus(s)) return PSD_STATUS.RESOLVED;
+    var v = psdNormStatusRaw(s);
+    return v || '—';
+}
+
+function psdDateFiltersRef(prefix) {
+    if (prefix === 'psdAssignF') return psdAssignDateFilters;
+    if (prefix === 'psdAssignedF') return psdAssignedDateFilters;
+    return psdDateFilters;
+}
+function psdFreshDateFilters() {
+    return { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
 }
 
 // ── Roles ─────────────────────────────────────────────────────
@@ -180,15 +208,16 @@ function psdApplyDateFilters(items, f) {
 
 function psdReadDateFiltersFromDom(prefix) {
     prefix = prefix || 'psdFilter';
-    psdDateFilters.dateField = psdGetSelectVal(prefix + 'DateField') || 'UploadDate';
-    psdDateFilters.dateMode = psdGetSelectVal(prefix + 'DateMode') || 'any';
-    psdDateFilters.from = psdGetSelectVal(prefix + 'DateFrom');
-    psdDateFilters.to = psdGetSelectVal(prefix + 'DateTo');
-    psdDateFilters.specific = psdGetSelectVal(prefix + 'DateSpecific');
-    psdDateFilters.years = psdGetMsValues(prefix + 'DateYearDropdown');
-    psdDateFilters.quarters = psdGetMsValues(prefix + 'DateQuarterDropdown');
-    psdDateFilters.months = psdGetMsValues(prefix + 'DateMonthDropdown');
-    psdDateFilters.weeks = psdGetMsValues(prefix + 'DateWeekDropdown');
+    var f = psdDateFiltersRef(prefix);
+    f.dateField = psdGetSelectVal(prefix + 'DateField') || 'UploadDate';
+    f.dateMode = psdGetSelectVal(prefix + 'DateMode') || 'any';
+    f.from = psdGetSelectVal(prefix + 'DateFrom');
+    f.to = psdGetSelectVal(prefix + 'DateTo');
+    f.specific = psdGetSelectVal(prefix + 'DateSpecific');
+    f.years = psdGetMsValues(prefix + 'DateYearDropdown');
+    f.quarters = psdGetMsValues(prefix + 'DateQuarterDropdown');
+    f.months = psdGetMsValues(prefix + 'DateMonthDropdown');
+    f.weeks = psdGetMsValues(prefix + 'DateWeekDropdown');
 }
 
 function psdResetDateFiltersState() {
@@ -203,13 +232,15 @@ function psdDateModeHint(mode) {
 }
 
 window.psdOnDateModeChange = function (prefix, onChangeFn) {
-    psdDateFilters.dateMode = psdGetSelectVal(prefix + 'DateMode') || 'any';
+    var f = psdDateFiltersRef(prefix);
+    f.dateMode = psdGetSelectVal(prefix + 'DateMode') || 'any';
     psdSyncDateModeUI(prefix);
 };
 
 function psdSyncDateModeUI(prefix) {
     prefix = prefix || 'psdFilter';
-    var mode = psdGetSelectVal(prefix + 'DateMode') || psdDateFilters.dateMode || 'any';
+    var f = psdDateFiltersRef(prefix);
+    var mode = psdGetSelectVal(prefix + 'DateMode') || f.dateMode || 'any';
     var rangeG = document.getElementById(prefix + 'DateRangeGroup');
     var singleG = document.getElementById(prefix + 'DateSingleGroup');
     var periodG = document.getElementById(prefix + 'DatePeriodGroup');
@@ -300,11 +331,12 @@ function psdBindMsOutsideClick() {
 function psdPopulateDateMsDropdowns(prefix, items, onChangeFn) {
     prefix = prefix || 'psdFilter';
     onChangeFn = onChangeFn || 'psdApplyDashboardFilters';
-    var field = psdDateFilters.dateField || 'UploadDate';
+    var f = psdDateFiltersRef(prefix);
+    var field = f.dateField || 'UploadDate';
     var metas = psdCollectDateMetas(items, field);
-    var ySel = psdDateFilters.years || [];
-    var qSel = psdDateFilters.quarters || [];
-    var mSel = psdDateFilters.months || [];
+    var ySel = f.years || [];
+    var qSel = f.quarters || [];
+    var mSel = f.months || [];
 
     var years = [], quarters = [], months = [], weeks = [];
     metas.forEach(function (m) {
@@ -339,10 +371,10 @@ function psdPopulateDateMsDropdowns(prefix, items, onChangeFn) {
     });
     weeks.sort(function (a, b) { return parseInt(a, 10) - parseInt(b, 10); });
 
-    psdBuildMsDropdown(prefix + 'DateYearDropdown', prefix + 'DateYearText', 'Years', years, psdDateFilters.years, onChangeFn);
-    psdBuildMsDropdown(prefix + 'DateQuarterDropdown', prefix + 'DateQuarterText', 'Quarters', quarters, psdDateFilters.quarters, onChangeFn, function (v) { return 'Q' + v; });
-    psdBuildMsDropdown(prefix + 'DateMonthDropdown', prefix + 'DateMonthText', 'Months', months, psdDateFilters.months, onChangeFn, function (v) { return PSD_MONTHS[parseInt(v, 10)] || v; });
-    psdBuildMsDropdown(prefix + 'DateWeekDropdown', prefix + 'DateWeekText', 'Weeks', weeks, psdDateFilters.weeks, onChangeFn, function (v) { return 'W' + v; });
+    psdBuildMsDropdown(prefix + 'DateYearDropdown', prefix + 'DateYearText', 'Years', years, f.years, onChangeFn);
+    psdBuildMsDropdown(prefix + 'DateQuarterDropdown', prefix + 'DateQuarterText', 'Quarters', quarters, f.quarters, onChangeFn, function (v) { return 'Q' + v; });
+    psdBuildMsDropdown(prefix + 'DateMonthDropdown', prefix + 'DateMonthText', 'Months', months, f.months, onChangeFn, function (v) { return PSD_MONTHS[parseInt(v, 10)] || v; });
+    psdBuildMsDropdown(prefix + 'DateWeekDropdown', prefix + 'DateWeekText', 'Weeks', weeks, f.weeks, onChangeFn, function (v) { return 'W' + v; });
 }
 
 function psdSafeUpdateDateFilterOptions(prefix, items, onChangeFn) {
@@ -995,7 +1027,7 @@ window.psdApplyAssignFilters = function () {
 };
 window.psdResetAssignFilters = function () {
     psdAssignFilters = { category: [], product: [] };
-    psdResetDateFiltersState();
+    psdAssignDateFilters = psdFreshDateFilters();
     psdRenderTabBody();
 };
 window.psdApplyAssignedFilters = function () {
@@ -1007,12 +1039,12 @@ window.psdApplyAssignedFilters = function () {
 };
 window.psdResetAssignedFilters = function () {
     psdAssignedFilters = { category: [], product: [], agent: [] };
-    psdResetDateFiltersState();
+    psdAssignedDateFilters = psdFreshDateFilters();
     psdRenderTabBody();
 };
 
-function psdApplyQueueFilters(items, f, includeAgent) {
-    items = psdApplyDateFilters(items, psdDateFilters);
+function psdApplyQueueFilters(items, f, includeAgent, dateF) {
+    items = psdApplyDateFilters(items, dateF || psdDateFilters);
     return items.filter(function (it) {
         if (!psdMatchMulti(it.Category, f.category)) return false;
         if (!psdMatchMulti(it.Product, f.product)) return false;
@@ -1024,8 +1056,8 @@ function psdApplyQueueFilters(items, f, includeAgent) {
 function psdSummary(items) {
     var s = { total: items.length, pending: 0, inprogress: 0, completed: 0, agingSum: 0, agingN: 0, ttcSum: 0, ttcN: 0 };
     items.forEach(function (it) {
-        if (it.PSDStatus === PSD_STATUS.PENDING) s.pending++;
-        else if (it.PSDStatus === PSD_STATUS.INPROGRESS) s.inprogress++;
+        if (psdIsPendingStatus(it.PSDStatus)) s.pending++;
+        else if (psdIsInProgressStatus(it.PSDStatus)) s.inprogress++;
         else if (psdIsResolvedStatus(it.PSDStatus)) s.completed++;
         var ag = psdAging(it); if (ag != null) { s.agingSum += ag; s.agingN++; }
         var ttc = psdTimeToComplete(it); if (ttc != null) { s.ttcSum += ttc; s.ttcN++; }
@@ -1060,7 +1092,7 @@ function psdAgentStats(items) {
         if (!stats[key]) stats[key] = { name: canon, email: it.AssignedToEmail || '', assigned: 0, inprogress: 0, completed: 0, slaSum: 0, slaN: 0 };
         var st = stats[key];
         st.assigned++;
-        if (it.PSDStatus === PSD_STATUS.INPROGRESS) st.inprogress++;
+        if (psdIsInProgressStatus(it.PSDStatus)) st.inprogress++;
         if (psdIsResolvedStatus(it.PSDStatus)) {
             st.completed++;
             var sla = psdSlaDays(it);
@@ -1569,8 +1601,8 @@ function psdRefreshDashboardContent() {
 }
 
 function psdRefreshAssignContent() {
-    var pendingAll = psdAllItems.filter(function (it) { return it.PSDStatus === PSD_STATUS.PENDING; });
-    var pending = psdApplyQueueFilters(pendingAll, psdAssignFilters, false);
+    var pendingAll = psdAllItems.filter(function (it) { return psdIsPendingStatus(it.PSDStatus); });
+    var pending = psdApplyQueueFilters(pendingAll, psdAssignFilters, false, psdAssignDateFilters);
     var main = document.getElementById('psdAssignMain');
     if (!main) {
         var body = document.getElementById('psdTabBody');
@@ -1586,8 +1618,8 @@ function psdRefreshAssignContent() {
 }
 
 function psdRefreshAssignedContent() {
-    var assignedAll = psdAllItems.filter(function (it) { return it.PSDStatus === PSD_STATUS.INPROGRESS; });
-    var assigned = psdApplyQueueFilters(assignedAll, psdAssignedFilters, true);
+    var assignedAll = psdAllItems.filter(function (it) { return psdIsInProgressStatus(it.PSDStatus); });
+    var assigned = psdApplyQueueFilters(assignedAll, psdAssignedFilters, true, psdAssignedDateFilters);
     var main = document.getElementById('psdAssignedMain');
     if (!main) {
         var body = document.getElementById('psdTabBody');
@@ -1605,7 +1637,7 @@ function psdRefreshAssignedContent() {
 function psdRefreshMyQueueContent() {
     var mine = psdApplyDateFilters(psdScopedItems(), psdDateFilters);
     var s = psdSummary(mine);
-    var inq = mine.filter(function (it) { return it.PSDStatus === PSD_STATUS.INPROGRESS; });
+    var inq = mine.filter(function (it) { return psdIsInProgressStatus(it.PSDStatus); });
     var main = document.getElementById('psdMyQueueMain');
     if (!main) {
         var body = document.getElementById('psdTabBody');
@@ -1838,7 +1870,7 @@ function psdBuildDashboardCharts(items, s) {
         if (!agent) return;
         if (!agentMap[agent]) agentMap[agent] = { completed: 0, inprogress: 0 };
         if (psdIsResolvedStatus(it.PSDStatus)) agentMap[agent].completed++;
-        else if (it.PSDStatus === PSD_STATUS.INPROGRESS) agentMap[agent].inprogress++;
+        else if (psdIsInProgressStatus(it.PSDStatus)) agentMap[agent].inprogress++;
     });
     var names = Object.keys(agentMap).filter(function (n) {
         return agentMap[n].completed + agentMap[n].inprogress > 0;
@@ -1902,7 +1934,7 @@ function psdBuildDashboardCharts(items, s) {
     var slaKeys = ['0-1d', '1-2d', '2-3d', '3-5d', '5d+'], slaBuckets = {};
     slaKeys.forEach(function (k) { slaBuckets[k] = 0; });
     items.forEach(function (it) {
-        if (it.PSDStatus === PSD_STATUS.PENDING) return;
+        if (psdIsPendingStatus(it.PSDStatus)) return;
         var sla = psdSlaDays(it);
         var bk = psdSlaBucketKey(sla);
         if (bk && slaBuckets[bk] != null) slaBuckets[bk]++;
@@ -1933,8 +1965,8 @@ function psdBuildDashboardCharts(items, s) {
 // ============================================================
 function psdRenderAssignQueue(body) {
     if (!psdAllAgents.length) { body.innerHTML = psdErrBox('No PSD agents in Account Mapping (Team = PSD).'); return; }
-    var pendingAll = psdAllItems.filter(function (it) { return it.PSDStatus === PSD_STATUS.PENDING; });
-    var pending = psdApplyQueueFilters(pendingAll, psdAssignFilters, false);
+    var pendingAll = psdAllItems.filter(function (it) { return psdIsPendingStatus(it.PSDStatus); });
+    var pending = psdApplyQueueFilters(pendingAll, psdAssignFilters, false, psdAssignDateFilters);
     body.innerHTML = psdQueueFilterBarHTML('assign', pendingAll) +
         '<div id="psdAssignMain">' +
         psdBulkBarHTML('assign') +
@@ -1950,8 +1982,8 @@ function psdRenderAssignQueue(body) {
 
 function psdRenderAssignedQueue(body) {
     if (!psdAllAgents.length) { body.innerHTML = psdErrBox('No PSD agents in Account Mapping (Team = PSD).'); return; }
-    var assignedAll = psdAllItems.filter(function (it) { return it.PSDStatus === PSD_STATUS.INPROGRESS; });
-    var assigned = psdApplyQueueFilters(assignedAll, psdAssignedFilters, true);
+    var assignedAll = psdAllItems.filter(function (it) { return psdIsInProgressStatus(it.PSDStatus); });
+    var assigned = psdApplyQueueFilters(assignedAll, psdAssignedFilters, true, psdAssignedDateFilters);
     body.innerHTML = psdQueueFilterBarHTML('assigned', assignedAll) +
         '<div id="psdAssignedMain">' +
         psdBulkBarHTML('reassign') +
@@ -2071,7 +2103,7 @@ function psdErrBox(msg) {
 function psdRenderMyQueue(body) {
     var mine = psdApplyDateFilters(psdScopedItems(), psdDateFilters);
     var s = psdSummary(mine);
-    var inq = mine.filter(function (it) { return it.PSDStatus === PSD_STATUS.INPROGRESS; });
+    var inq = mine.filter(function (it) { return psdIsInProgressStatus(it.PSDStatus); });
 
     body.innerHTML =
         psdDateFilterBarOnlyHTML('psdAgentF') +
