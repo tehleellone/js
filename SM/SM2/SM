@@ -687,6 +687,48 @@
             }
         }
 
+        /* Repeated Calls — full-bleed layout (same as PSD) */
+        .portal-shell.rc-full-shell {
+            max-width: none;
+            width: 100%;
+        }
+
+        .content.rc-full-mode {
+            padding: 0 !important;
+            width: 100%;
+            flex: 1;
+            min-width: 0;
+        }
+
+        #rcView {
+            width: 100%;
+            max-width: none;
+            padding: 0.75rem 1rem 1.25rem;
+            box-sizing: border-box;
+        }
+
+        #rcView #rcContainer,
+        #rcView .rc-root {
+            width: 100%;
+            max-width: none;
+        }
+
+        #rcView .top-stats {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+
+        @media (max-width: 1400px) {
+            #rcView .top-stats {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 900px) {
+            #rcView .top-stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
         @keyframes fadeSection {
             from {
                 opacity: 0;
@@ -2381,6 +2423,10 @@
                         <div class="nav-icon"><i data-lucide="clipboard-list"></i></div>
                         <div class="nav-label">PSD Assignment</div>
                     </div>
+                    <div class="nav-item" id="rcNavItem" data-section="rcView" onclick="switchDashboardSection('rcView')" style="display:none;">
+                        <div class="nav-icon"><i data-lucide="phone-call"></i></div>
+                        <div class="nav-label">Repeated Calls</div>
+                    </div>
 <div class="nav-item" data-section="seMailboxView" onclick="switchDashboardSection('seMailboxView');initSEMailbox();">
     <div class="nav-icon"><i data-lucide="inbox"></i></div>
     <div class="nav-label">SE Mailbox</div>
@@ -2746,6 +2792,14 @@
                     <div style="margin-top:12px;font-weight:600;">Loading PSD Assignment...</div>
                 </div>
                 <div id="psdContent" style="display:none;"><div id="psdContainer"></div></div>
+            </div>
+            <!-- REPEATED CALLS SECTION -->
+            <div class="dashboard-section" style="display:none;" id="rcView">
+                <div id="rcLoading" style="text-align:center;padding:40px;color:var(--t2);">
+                    <i data-lucide="loader-2" style="width:40px;height:40px;animation:spin 1s linear infinite;color:var(--acc);display:inline-block;"></i>
+                    <div style="margin-top:12px;font-weight:600;">Loading Repeated Calls...</div>
+                </div>
+                <div id="rcContent" style="display:none;"><div id="rcContainer"></div></div>
             </div>
             <!-- PENDING REQUESTS SECTION -->
             <div id="pending-requests" class="dashboard-section" style="display: none;">
@@ -4956,10 +5010,15 @@ function computeLMRNPS(rnpsGrouped) {
             var r = String(role).trim();
             if (r === 'PSD Admin') return 'PSD_Admin';
             if (r === 'PSD Agent') return 'PSD_Agent';
+            if (r === 'RC Admin') return 'RC_Admin';
+            if (r === 'RC Agent') return 'RC_Agent';
             return r;
         }
         function isPsdRole(role) {
             return role === 'PSD_Admin' || role === 'PSD_Agent';
+        }
+        function isRcRole(role) {
+            return role === 'RC_Admin' || role === 'RC_Agent';
         }
         function applyPsdNavRestrictions() {
             var psdAllowedLabels = [
@@ -4976,6 +5035,26 @@ function computeLMRNPS(rnpsGrouped) {
                 var labelEl = item.querySelector('.nav-label');
                 var label = labelEl ? labelEl.textContent.trim() : '';
                 item.style.display = (psdAllowedLabels.indexOf(label) >= 0) ? 'flex' : 'none';
+            });
+            document.querySelectorAll('.nav-section-label').forEach(function(lbl) {
+                lbl.style.display = 'none';
+            });
+        }
+        function applyRcNavRestrictions() {
+            var rcAllowedLabels = [
+                'Newsletter',
+                'Events / TT / Activity',
+                'Project Management',
+                'Synergy 360',
+                'Suggestion Box',
+                'Process Documents',
+                'Contact Us',
+                'Repeated Calls'
+            ];
+            document.querySelectorAll('.nav-item').forEach(function(item) {
+                var labelEl = item.querySelector('.nav-label');
+                var label = labelEl ? labelEl.textContent.trim() : '';
+                item.style.display = (rcAllowedLabels.indexOf(label) >= 0) ? 'flex' : 'none';
             });
             document.querySelectorAll('.nav-section-label').forEach(function(lbl) {
                 lbl.style.display = 'none';
@@ -5249,6 +5328,8 @@ USER_CONTEXT.isTSMManager = (USER_CONTEXT.role === 'TSM Manager');
 USER_CONTEXT.isTSMSEViewer = (USER_CONTEXT.role === 'TSM_SE_Viewer');
 USER_CONTEXT.isPsdAdmin = (USER_CONTEXT.role === 'PSD_Admin');
 USER_CONTEXT.isPsdAgent = (USER_CONTEXT.role === 'PSD_Agent');
+USER_CONTEXT.isRcAdmin = (USER_CONTEXT.role === 'RC_Admin');
+USER_CONTEXT.isRcAgent = (USER_CONTEXT.role === 'RC_Agent');
 USER_CONTEXT.occSearchEnabled = parseAccessControlYesNo(accessRecord.OCC_SEARCH);
 USER_CONTEXT.isActive = true;
 
@@ -5409,6 +5490,14 @@ USER_CONTEXT.isActive = true;
     roleEl.innerHTML = '<i data-lucide="inbox" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>PSD Agent';
     roleEl.style.background = 'linear-gradient(135deg, rgba(8, 145, 178, 0.2), rgba(6, 182, 212, 0.2))';
     roleEl.style.borderColor = 'rgba(8, 145, 178, 0.6)';
+} else if (USER_CONTEXT.role === 'RC_Admin') {
+    roleEl.innerHTML = '<i data-lucide="phone-call" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>RC Admin';
+    roleEl.style.background = 'linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(139, 92, 246, 0.2))';
+    roleEl.style.borderColor = 'rgba(124, 58, 237, 0.6)';
+} else if (USER_CONTEXT.role === 'RC_Agent') {
+    roleEl.innerHTML = '<i data-lucide="phone-incoming" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>RC Agent';
+    roleEl.style.background = 'linear-gradient(135deg, rgba(8, 145, 178, 0.2), rgba(6, 182, 212, 0.2))';
+    roleEl.style.borderColor = 'rgba(8, 145, 178, 0.6)';
 }
 else {
     roleEl.innerHTML = '<i data-lucide="user" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>Guest User';
@@ -5473,6 +5562,18 @@ else {
                     dashboardBtn.innerHTML = `
                         <span class="btn-icon"><i data-lucide="inbox" style="width: 20px; height: 20px;"></i></span>
                         <span class="btn-text">Launch My PSD Queue</span>
+                        <span class="btn-shine"></span>
+                    `;
+                } else if (USER_CONTEXT.role === 'RC_Admin') {
+                    dashboardBtn.innerHTML = `
+                        <span class="btn-icon"><i data-lucide="phone-call" style="width: 20px; height: 20px;"></i></span>
+                        <span class="btn-text">Launch Repeated Calls</span>
+                        <span class="btn-shine"></span>
+                    `;
+                } else if (USER_CONTEXT.role === 'RC_Agent') {
+                    dashboardBtn.innerHTML = `
+                        <span class="btn-icon"><i data-lucide="phone-incoming" style="width: 20px; height: 20px;"></i></span>
+                        <span class="btn-text">Launch My RC Queue</span>
                         <span class="btn-shine"></span>
                     `;
                 }
@@ -5583,6 +5684,13 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
             if (isPsdRole(USER_CONTEXT.role)) {
                 setTimeout(function() {
                     switchDashboardSection('psdView');
+                }, 150);
+            }
+
+            // RC roles: jump straight to Repeated Calls
+            if (isRcRole(USER_CONTEXT.role)) {
+                setTimeout(function() {
+                    switchDashboardSection('rcView');
                 }, 150);
             }
 
@@ -5732,9 +5840,18 @@ if (rnpsNav) rnpsNav.style.display = 'flex';
                     var psdNav = document.getElementById('psdNavItem');
                     if (psdNav) psdNav.style.display = 'flex';
                 }
+                // Repeated Calls: visible to SM Admin, RC_Admin and RC_Agent
+                if (USER_CONTEXT.isAdmin || USER_CONTEXT.role === 'RC_Admin' || USER_CONTEXT.role === 'RC_Agent') {
+                    var rcNav = document.getElementById('rcNavItem');
+                    if (rcNav) rcNav.style.display = 'flex';
+                }
                 // PSD_Admin / PSD_Agent: restrict the sidebar to an allowed set of menus
                 if (isPsdRole(USER_CONTEXT.role)) {
                     applyPsdNavRestrictions();
+                }
+                // RC_Admin / RC_Agent: restrict the sidebar
+                if (isRcRole(USER_CONTEXT.role)) {
+                    applyRcNavRestrictions();
                 }
 
                 // Auditor: hide all nav items except allowed ones
@@ -8254,9 +8371,13 @@ ${USER_CONTEXT.userName}`
             if (contentDiv) {
                 contentDiv.classList.remove('section-mode');
                 contentDiv.classList.remove('psd-full-mode');
+                contentDiv.classList.remove('rc-full-mode');
             }
             var portalShell = document.querySelector('.portal-shell');
-            if (portalShell) portalShell.classList.remove('psd-full-shell');
+            if (portalShell) {
+                portalShell.classList.remove('psd-full-shell');
+                portalShell.classList.remove('rc-full-shell');
+            }
 
             // ── HIDE ALL SECTIONS ─────────────────────────────────────────
             document.querySelectorAll('.dashboard-section').forEach(function(section) {
@@ -8288,6 +8409,10 @@ ${USER_CONTEXT.userName}`
                 if (sectionId === 'psdView') {
                     contentDiv.classList.add('psd-full-mode');
                     if (portalShell) portalShell.classList.add('psd-full-shell');
+                }
+                if (sectionId === 'rcView') {
+                    contentDiv.classList.add('rc-full-mode');
+                    if (portalShell) portalShell.classList.add('rc-full-shell');
                 }
             }
 
@@ -8323,6 +8448,15 @@ else if (sectionId === 'psdView') {
         var psdLoading = document.getElementById('psdLoading');
         if (psdLoading) {
             psdLoading.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">PSD script failed to load. Re-upload psd-assignment.js to SharePoint and hard-refresh (Ctrl+F5).</div>';
+        }
+    }
+}
+else if (sectionId === 'rcView') {
+    if (typeof rcInit === 'function') rcInit();
+    else {
+        var rcLoading = document.getElementById('rcLoading');
+        if (rcLoading) {
+            rcLoading.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">Repeated Calls script failed to load. Re-upload repeated-calls.js to SharePoint and hard-refresh (Ctrl+F5).</div>';
         }
     }
 }
@@ -10965,6 +11099,7 @@ async function ownerFetchUserRole(email) {
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/processdocs.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/qualityassurance.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd-assignment.js?v=2.4.0"></script>
+    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/repeated-calls.js?v=1.1.1"></script>
     <script>
     (function () {
         window.psdResolve = async function (id) {
