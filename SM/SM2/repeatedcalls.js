@@ -1,6 +1,7 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.1.0
+// repeated-calls.js — Repeated Calls Module v1.1.1
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
+// SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
 
 var RC_DUMMY_MODE = false;
@@ -17,7 +18,56 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.1.0';
+window.RC_MODULE_VERSION = '1.1.1';
+
+// SharePoint internal names (match Repeated_Calls list)
+var RC_SP = {
+    STATUS: 'RC_Status',
+    UPLOAD: 'Upload_Date',
+    ASSIGN: 'Assignment_Date',
+    REASSIGN: 'Reassign_Date',
+    RESOLVED: 'Resolved_Date',
+    ASSIGNED: 'Assigned_To',
+    ASSIGNED_ID: 'Assigned_ToId'
+};
+
+function rcNormalizeItem(it) {
+    if (!it) return it;
+    it.RCStatus = it.RC_Status != null ? it.RC_Status : it.RCStatus;
+    it.UploadDate = it.Upload_Date != null ? it.Upload_Date : it.UploadDate;
+    it.AssignmentDate = it.Assignment_Date != null ? it.Assignment_Date : it.AssignmentDate;
+    it.ReassignDate = it.Reassign_Date != null ? it.Reassign_Date : it.ReassignDate;
+    it.CompletedDate = it.Resolved_Date != null ? it.Resolved_Date : it.CompletedDate;
+    var at = it.Assigned_To || it.AssignedTo;
+    it.AssignedToName = at ? at.Title : (it.AssignedToName || '');
+    it.AssignedToEmail = at ? at.EMail : (it.AssignedToEmail || '');
+    return it;
+}
+
+function rcSpFields(obj) {
+    var map = {
+        RCStatus: RC_SP.STATUS,
+        UploadDate: RC_SP.UPLOAD,
+        AssignmentDate: RC_SP.ASSIGN,
+        ReassignDate: RC_SP.REASSIGN,
+        CompletedDate: RC_SP.RESOLVED,
+        AssignedToId: RC_SP.ASSIGNED_ID
+    };
+    var out = {};
+    Object.keys(obj).forEach(function (k) {
+        if (obj[k] === undefined) return;
+        out[map[k] || k] = obj[k];
+    });
+    return out;
+}
+
+function rcExcelSerialToIso(serial) {
+    if (serial == null || serial === '') return null;
+    var n = parseFloat(String(serial).trim());
+    if (isNaN(n)) return String(serial);
+    var epoch = Date.UTC(1899, 11, 30);
+    return new Date(epoch + n * 86400000).toISOString();
+}
 
 var rcDashFilters   = { status: [], language: [], lob: [], segment: [], agent: [], search: '' };
 var rcDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
@@ -789,16 +839,12 @@ async function rcFetchItems() {
     if (RC_DUMMY_MODE) { rcAllItems = rcDummyItems(); return; }
     var cols = RC_COLS.map(function (c) { return c.key; }).join(',');
     var url = SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items?" +
-        "$select=ID," + cols + ",RCStatus,UploadDate,AssignmentDate,ReassignDate,CompletedDate," +
-        "AssignedTo/Title,AssignedTo/EMail&$expand=AssignedTo&$orderby=ID desc&$top=50000";
+        "$select=ID," + cols + "," + RC_SP.STATUS + "," + RC_SP.UPLOAD + "," + RC_SP.ASSIGN + "," + RC_SP.REASSIGN + "," + RC_SP.RESOLVED + "," +
+        RC_SP.ASSIGNED + "/Title," + RC_SP.ASSIGNED + "/EMail&$expand=" + RC_SP.ASSIGNED + "&$orderby=ID desc&$top=50000";
     var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
     if (!r.ok) throw new Error('Failed to load Repeated Calls (' + r.status + ')');
     var data = await r.json();
-    rcAllItems = (data.d.results || []).map(function (it) {
-        it.AssignedToName  = it.AssignedTo ? it.AssignedTo.Title : '';
-        it.AssignedToEmail = it.AssignedTo ? it.AssignedTo.EMail : '';
-        return it;
-    });
+    rcAllItems = (data.d.results || []).map(function (it) { return rcNormalizeItem(it); });
 }
 
 async function rcResolveUserId(email, name) {
@@ -2090,9 +2136,9 @@ async function rcDoAssign(pairs, isReassign) {
         try {
             var uid = await rcResolveUserId(agent.email, agent.name);
             if (!uid) { fail++; continue; }
-            var fields = { AssignedToId: uid, RCStatus: RC_STATUS.INPROGRESS };
-            if (isReassign) fields.ReassignDate = now;
-            else fields.AssignmentDate = now;
+            var fields = rcSpFields({ AssignedToId: uid, RCStatus: RC_STATUS.INPROGRESS });
+            if (isReassign) fields[RC_SP.REASSIGN] = now;
+            else fields[RC_SP.ASSIGN] = now;
             await rcUpdateItem(p.id, fields, digest);
             ok++;
         } catch (e) { console.error('[RC]', e); fail++; }
@@ -2183,8 +2229,14 @@ window.rcConfirmUpload = async function () {
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
     for (var i = 0; i < toAdd.length; i++) {
         var rec = toAdd[i], key = rcCallKey(rec);
-        var fields = { Title: key, RCStatus: RC_STATUS.PENDING, UploadDate: now };
-        RC_COLS.forEach(function (col) { fields[col.key] = rec[col.key] || ''; });
+        var fields = rcSpFields({ Title: key, RCStatus: RC_STATUS.PENDING, UploadDate: now });
+        RC_COLS.forEach(function (col) {
+            if (col.key === 'Call_DateTime') {
+                fields[col.key] = rcExcelSerialToIso(rec[col.key]) || rec[col.key] || '';
+            } else {
+                fields[col.key] = rec[col.key] || '';
+            }
+        });
         try { await rcCreateItem(fields, digest); ok++; } catch (e) { console.error(e); }
     }
     rcToast('Uploaded ' + ok + ' calls', 'success');
@@ -2229,7 +2281,7 @@ window.rcResolve = async function (id) {
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
     try {
-        await rcUpdateItem(id, { RCStatus: RC_STATUS.RESOLVED, CompletedDate: new Date().toISOString() }, digest);
+        await rcUpdateItem(id, rcSpFields({ RCStatus: RC_STATUS.RESOLVED, CompletedDate: new Date().toISOString() }), digest);
         rcToast('Marked resolved', 'success');
         await rcFetchItems();
         rcRenderTabBody();
@@ -2250,7 +2302,7 @@ window.rcReopen = async function (id) {
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
     try {
-        await rcUpdateItem(id, { RCStatus: RC_STATUS.INPROGRESS, CompletedDate: null }, digest);
+        await rcUpdateItem(id, rcSpFields({ RCStatus: RC_STATUS.INPROGRESS, CompletedDate: null }), digest);
         rcToast('Activity reopened', 'success');
         await rcFetchItems();
         rcRenderTabBody();
@@ -2281,7 +2333,7 @@ function rcDummyItems() {
         var cmp = rcIsResolvedStatus(st) ? new Date(Date.now() - i * 86400000).toISOString() : null;
         var msisdn = '9715' + (1000000 + i);
         var dt = String(46259 + (i * 0.001));
-        out.push({
+        out.push(rcNormalizeItem({
             ID: i + 1,
             MSISDN: msisdn,
             Call_Date: '46259',
@@ -2301,14 +2353,14 @@ function rcDummyItems() {
             KB_ID: '',
             Segment_Value: 'Prem',
             LOB: lobs[i % 3],
-            RCStatus: st,
-            UploadDate: up,
-            AssignmentDate: asg,
-            ReassignDate: rea,
-            CompletedDate: cmp,
+            RC_Status: st,
+            Upload_Date: up,
+            Assignment_Date: asg,
+            Reassign_Date: rea,
+            Resolved_Date: cmp,
             AssignedToName: st === RC_STATUS.PENDING ? '' : agents[i % 3],
             AssignedToEmail: ''
-        });
+        }));
     }
     return out;
 }
