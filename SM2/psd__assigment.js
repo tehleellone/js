@@ -1,5 +1,5 @@
 // ============================================================
-// psd__assignment.js — PSD Assignment Module v1.1.0
+// psd__assignment.js — PSD Assignment Module v1.2.0
 // List: PSD__Assignment | Agents: Account Mapping (Team = PSD)
 // ============================================================
 
@@ -16,9 +16,11 @@ var psdCharts        = {};
 var psdGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var psdUploadRows    = [];
 var psdSelectedAgent = null;
-window.PSD_MODULE_VERSION = '1.1.0';
+window.PSD_MODULE_VERSION = '1.2.0';
 
 var PSD_DELETE_ALL_EMAILS = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
+var PSD_LEGACY_LIST = 'PSD_Assignments';
+var psdLegacyMigrateRows = null;
 
 var PSD_SP_CONCURRENCY = 10;
 
@@ -939,6 +941,60 @@ async function psdResolveUserId(email, name) {
     return null;
 }
 
+async function psdFetchLegacyItems() {
+    var cols = PSD_COLS.map(function (c) { return c.key; }).join(',');
+    var url = SP_URL + "/_api/web/lists/getbytitle('" + PSD_LEGACY_LIST + "')/items?" +
+        "$select=ID," + cols + ",Category," + PSD_SP.STATUS + "," + PSD_SP.UPLOAD + "," + PSD_SP.ASSIGN + "," + PSD_SP.REASSIGN + "," + PSD_SP.COMPLETED + "," +
+        PSD_SP.ASSIGNED + "/Title," + PSD_SP.ASSIGNED + "/EMail&$expand=" + PSD_SP.ASSIGNED + "&$orderby=ID asc&$top=50000";
+    var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+    if (!r.ok) throw new Error('Could not read old list ' + PSD_LEGACY_LIST + ' (' + r.status + ')');
+    var data = await r.json();
+    return (data.d.results || []).map(function (it) { return psdNormalizeItem(it); });
+}
+
+function psdBuildExactMigrateFields(it) {
+    var out = { Title: String(it.ActivityNumber || it.Title || '').trim() };
+    PSD_COLS.forEach(function (col) {
+        var v = it[col.key];
+        if (v !== undefined && v !== null && String(v).trim() !== '') out[col.key] = v;
+    });
+    if (it.PSDStatus != null && String(it.PSDStatus).trim() !== '') out[PSD_SP.STATUS] = it.PSDStatus;
+    if (it.UploadDate) out[PSD_SP.UPLOAD] = it.UploadDate;
+    if (it.AssignmentDate) out[PSD_SP.ASSIGN] = it.AssignmentDate;
+    if (it.ReassignDate) out[PSD_SP.REASSIGN] = it.ReassignDate;
+    if (it.CompletedDate) out[PSD_SP.COMPLETED] = it.CompletedDate;
+    return out;
+}
+
+function psdLegacyMigratePlan(legacyItems) {
+    var existing = {};
+    psdAllItems.forEach(function (it) {
+        var k = psdActivityKey({ ActivityNumber: it.ActivityNumber });
+        if (k) existing[k] = true;
+    });
+    var toImport = [], skipped = 0, noKey = 0;
+    legacyItems.forEach(function (it) {
+        var k = psdActivityKey({ ActivityNumber: it.ActivityNumber });
+        if (!k) { noKey++; return; }
+        if (existing[k]) { skipped++; return; }
+        existing[k] = true;
+        toImport.push(it);
+    });
+    return { toImport: toImport, skipped: skipped, noKey: noKey, total: legacyItems.length };
+}
+
+async function psdLegacyMigrateOne(it, digest, entityType, uidCache) {
+    var fields = psdBuildExactMigrateFields(it);
+    if (it.AssignedToName || it.AssignedToEmail) {
+        var cacheKey = (it.AssignedToEmail || '').toLowerCase() + '|' + psdNormAgentName(it.AssignedToName);
+        if (!uidCache[cacheKey]) {
+            uidCache[cacheKey] = await psdResolveUserId(it.AssignedToEmail, it.AssignedToName);
+        }
+        if (uidCache[cacheKey]) fields[PSD_SP.ASSIGNED_ID] = uidCache[cacheKey];
+    }
+    return psdCreateItem(fields, digest, entityType);
+}
+
 async function psdCreateItem(fields, digest, entityType) {
     var body = Object.assign({ __metadata: { type: entityType || await psdGetEntityType() } }, fields);
     var r = await fetch(SP_URL + "/_api/web/lists/getbytitle('" + PSD_LIST + "')/items", {
@@ -1768,17 +1824,26 @@ function psdAgentOptionsHTML(selected) {
 // PSD DASHBOARD
 // ============================================================
 function psdUploadSectionHTML() {
-    var deleteBar = psdCanDeleteAll() ?
-        '<div class="psd-delete-all-bar">' +
-            '<button type="button" class="export-btn" onclick="psdDeleteAll()" style="padding:.5rem 1rem;font-size:.82rem;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;color:#fff;">' +
-                '<i data-lucide="trash-2" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Delete All Records</button>' +
-            '<span style="font-size:.72rem;color:var(--t3);">Permanently removes every row in PSD__Assignment.</span>' +
-            '<div id="psdDeleteProgress" style="flex:1 1 100%;font-size:.75rem;color:var(--t2);"></div>' +
+    var ownerTools = psdCanDeleteAll() ?
+        '<div class="psd-owner-tools" style="margin-top:1rem;padding:.85rem;border:1px solid rgba(2,132,199,.25);border-radius:10px;background:rgba(2,132,199,.05);">' +
+            '<div style="font-weight:800;font-size:.85rem;color:var(--t1);margin-bottom:.35rem;">Owner tools (Tehleel / Ubaid)</div>' +
+            '<div class="psd-migrate-bar" style="margin-bottom:.85rem;">' +
+                '<div style="font-weight:700;font-size:.8rem;margin-bottom:.25rem;">Import from old list — ' + psdEsc(PSD_LEGACY_LIST) + '</div>' +
+                '<p style="font-size:.75rem;color:var(--t3);margin-bottom:.6rem;line-height:1.45;">Copies into <b>' + psdEsc(PSD_LIST) + '</b> <b>exactly</b> — same PSD Status, dates, Assigned To, Category, and every column. Does not reset to Pending. Skips Activity # already in the new list.</p>' +
+                '<button type="button" class="export-btn" onclick="psdPreviewLegacyMigrate()" style="padding:.45rem 1rem;font-size:.8rem;">Preview exact import</button>' +
+                '<div id="psdMigratePreview" style="margin-top:.65rem;font-size:.78rem;color:var(--t2);"></div>' +
+            '</div>' +
+            '<div class="psd-delete-all-bar" style="margin:0;border:none;padding:0;background:transparent;">' +
+                '<button type="button" class="export-btn" onclick="psdDeleteAll()" style="padding:.5rem 1rem;font-size:.82rem;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;color:#fff;">' +
+                    '<i data-lucide="trash-2" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Delete All Records</button>' +
+                '<span style="font-size:.72rem;color:var(--t3);">Permanently removes every row in ' + psdEsc(PSD_LIST) + '.</span>' +
+                '<div id="psdDeleteProgress" style="flex:1 1 100%;font-size:.75rem;color:var(--t2);"></div>' +
+            '</div>' +
         '</div>' : '';
     return '<div class="psd-panel"><div class="psd-panel-title"><i data-lucide="upload" style="width:18px;height:18px;color:var(--acc);"></i>Upload Activities</div>' +
         '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Each worksheet tab = <b>Category</b>. Row 1 is skipped when it looks like a header row; otherwise columns are read by position (Activity #, Order #, …). Duplicate <b>Activity #</b> skipped. New rows saved as <b>Pending</b>.</p>' +
         '<input type="file" id="psdFile" accept=".xlsx,.xls,.csv" onchange="psdParseFile(event)" class="psd-upload-zone" />' +
-        deleteBar +
+        ownerTools +
         '<div id="psdUploadPreview" style="margin-top:1rem;"></div></div>';
 }
 
@@ -2541,6 +2606,72 @@ window.psdDeleteAll = async function () {
     psdHideBusy();
 
     psdToast('Deleted ' + result.ok + ' record' + (result.ok !== 1 ? 's' : '') + (result.fail ? ' (' + result.fail + ' failed)' : ''), result.fail ? 'warn' : 'success');
+    await psdFetchItems(true);
+    psdRenderTabBody();
+};
+
+window.psdPreviewLegacyMigrate = async function () {
+    if (!psdCanDeleteAll()) { psdToast('Only Tehleel and Ubaid can import from the old list', 'warn'); return; }
+    var prev = document.getElementById('psdMigratePreview');
+    if (prev) prev.innerHTML = psdSpinnerBlock('Reading old list…', PSD_LEGACY_LIST);
+    try {
+        var legacy = await psdFetchLegacyItems();
+        var plan = psdLegacyMigratePlan(legacy);
+        psdLegacyMigrateRows = plan.toImport;
+        if (prev) {
+            prev.innerHTML =
+                '<div style="line-height:1.55;margin-bottom:.65rem;">' +
+                    '<b>' + plan.total + '</b> records in <i>' + psdEsc(PSD_LEGACY_LIST) + '</i> · ' +
+                    '<b>' + plan.toImport.length + '</b> to import · ' +
+                    '<b>' + plan.skipped + '</b> already in new list' +
+                    (plan.noKey ? ' · <b>' + plan.noKey + '</b> skipped (no Activity #)' : '') +
+                '</div>' +
+                (plan.toImport.length ?
+                    '<button type="button" class="export-btn" id="psdConfirmLegacyMigrateBtn" onclick="psdConfirmLegacyMigrate()" style="padding:.45rem 1rem;font-size:.8rem;">Confirm exact import (' + plan.toImport.length + ')</button>' :
+                    '<div style="color:var(--t3);">Nothing to import — all old records are already in ' + psdEsc(PSD_LIST) + '.</div>');
+        }
+    } catch (e) {
+        if (prev) prev.innerHTML = psdErrBox(psdEsc(e.message || String(e)));
+        psdToast('Could not read old list', 'error');
+    }
+};
+
+window.psdConfirmLegacyMigrate = async function () {
+    if (!psdCanDeleteAll()) { psdToast('Only Tehleel and Ubaid can import from the old list', 'warn'); return; }
+    var toImport = psdLegacyMigrateRows || [];
+    if (!toImport.length) { psdToast('Nothing to import — run Preview first', 'warn'); return; }
+    if (!confirm('Import ' + toImport.length + ' records from ' + PSD_LEGACY_LIST + ' into ' + PSD_LIST + '?\n\nData is copied exactly (status, dates, assignment, all columns).')) return;
+    if (!confirm('Final confirmation: import ' + toImport.length + ' records with no changes to field values?')) return;
+
+    var btn = document.getElementById('psdConfirmLegacyMigrateBtn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+    var digest, entityType, uidCache = {};
+    try {
+        digest = await psdGetDigest();
+        entityType = await psdGetEntityType();
+    } catch (e) {
+        psdToast('Digest error', 'error');
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        return;
+    }
+
+    psdShowBusy('Exact import in progress…', '0 / ' + toImport.length, 0);
+    var result = await psdRunPool(toImport, function (it) {
+        return psdLegacyMigrateOne(it, digest, entityType, uidCache);
+    }, {
+        concurrency: PSD_SP_CONCURRENCY,
+        getDigest: function () { return digest; },
+        setDigest: function (d) { digest = d; },
+        onProgress: function (done, total) {
+            psdShowBusy('Exact import in progress…', done + ' / ' + total, (done / total) * 100);
+        }
+    });
+    psdHideBusy();
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+
+    psdToast('Imported ' + result.ok + ' record' + (result.ok !== 1 ? 's' : '') + ' exactly' + (result.fail ? ' (' + result.fail + ' failed)' : ''), result.fail ? 'warn' : 'success');
+    psdLegacyMigrateRows = null;
     await psdFetchItems(true);
     psdRenderTabBody();
 };
