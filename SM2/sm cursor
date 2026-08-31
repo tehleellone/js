@@ -10956,7 +10956,7 @@ else if (sectionId === 'rcView') {
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/suggestions.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/processdocs.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/qualityassurance.js"></script>
-    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd__assignment.js?v=1.1.0"></script>
+    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd__assignment.js?v=1.2.0"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/repeated-calls.js?v=1.5.1"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/rnps.js"></script>
   <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/semailbox.js"></script>
