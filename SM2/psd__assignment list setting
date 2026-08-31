@@ -1,0 +1,38 @@
+
+List Information
+Name:	PSD__Assignment
+Web Address:	http://sharedspaces:8086/sites/SM/Lists/PSD__Assignment/AllItems.aspx
+
+
+Columns
+A column stores information about each item in the list. The following columns are currently available in this list:
+Column (click to edit)	Type	Required
+Title	Single line of text	
+ActivityNumber	Single line of text	
+OrderNumber	Single line of text	
+OrderStatus	Single line of text	
+ActivityTypeText	Single line of text	
+Description	Single line of text	
+Owner	Single line of text	
+CustomerAccount	Single line of text	
+CreatedOn	Single line of text	
+OrderCreatedDate	Single line of text	
+Product	Single line of text	
+BUStatus	Single line of text	
+DNSStatus	Single line of text	
+ProvisioningOwner	Single line of text	
+ProvisioningType	Single line of text	
+ProvisioningStatus	Single line of text	
+DNSActivityRef	Single line of text	
+BUActivityRef	Single line of text	
+Category	Single line of text	
+PSDStatus	Choice	
+UploadDate	Date and Time	
+AssignmentDate	Date and Time	
+CompletedDate	Date and Time	
+AssignedTo	Person or Group	
+ReassignDate	Date and Time	
+Modified	Date and Time	
+Created	Date and Time	
+Created By	Person or Group	
+Modified By	Person or Group
