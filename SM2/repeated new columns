@@ -1,0 +1,20 @@
+1. New editable workflow columns
+Added 8 fields with an Edit button on Assign, Assigned, My Queue, and Records grids:
+
+Column	Type
+Account_Number
+Text
+Call_Driver
+Choice
+Issue_In_Details
+Comments (multiline)
+LOB
+Choice
+Call_Back_Status
+Choice
+Resolution_Type
+Choice
+Pending_With
+Choice
+Resolution_Status
+Choice
