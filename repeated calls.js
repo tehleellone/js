@@ -1,6 +1,7 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.1.0
+// repeated-calls.js — Repeated Calls Module v1.6.0
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
+// SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
 
 var RC_DUMMY_MODE = false;
@@ -17,9 +18,85 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.1.0';
+window.RC_MODULE_VERSION = '1.6.0';
 
-var rcDashFilters   = { status: [], language: [], lob: [], segment: [], agent: [], search: '' };
+var RC_DELETE_ALL_EMAILS = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
+
+// Editable workflow fields (SharePoint list columns)
+var RC_WORKFLOW_FIELDS = [
+    { key: 'Account_Number', label: 'Account Number', type: 'text' },
+    { key: 'Call_Driver', label: 'Call Driver', type: 'choice', choiceKey: 'Call_Driver' },
+    { key: 'Issue_In_Details', label: 'Issue In Details', type: 'multiline' },
+    { key: 'LOB', label: 'LOB', type: 'choice', choiceKey: 'LOB' },
+    { key: 'Call_Back_Status', label: 'Call Back Status', type: 'choice', choiceKey: 'Call_Back_Status' },
+    { key: 'Resolution_Type', label: 'Resolution Type', type: 'choice', choiceKey: 'Resolution_Type' },
+    { key: 'Pending_With', label: 'Pending With', type: 'choice', choiceKey: 'Pending_With' },
+    { key: 'Resolution_Status', label: 'Resolution Status', type: 'choice', choiceKey: 'Resolution_Status' }
+];
+
+var RC_CHOICE_DEFAULTS = {
+    Call_Driver: ['Billing', 'Technical', 'Complaint', 'Information', 'Service Request', 'Other'],
+    LOB: ['Mobile', 'Fixed', 'Enterprise', 'B2B', 'Other'],
+    Call_Back_Status: ['Pending', 'Completed', 'Not Required', 'Scheduled', 'No Answer'],
+    Resolution_Type: ['Resolved', 'Escalated', 'Callback', 'Transferred', 'No Action'],
+    Pending_With: ['Support', 'Back Office', 'Technical', 'Billing', 'Customer'],
+    Resolution_Status: ['Open', 'In Progress', 'Resolved', 'Closed', 'Pending']
+};
+
+var RC_SP_CONCURRENCY = 10;
+
+// SharePoint internal names (match Repeated_Calls list)
+var RC_SP = {
+    STATUS: 'RC_Status',
+    UPLOAD: 'Upload_Date',
+    ASSIGN: 'Assignment_Date',
+    REASSIGN: 'Reassign_Date',
+    RESOLVED: 'Resolved_Date',
+    ASSIGNED: 'Assigned_To',
+    ASSIGNED_ID: 'Assigned_ToId'
+};
+
+function rcNormalizeItem(it) {
+    if (!it) return it;
+    it.RCStatus = it.RC_Status != null ? it.RC_Status : it.RCStatus;
+    it.UploadDate = it.Upload_Date != null ? it.Upload_Date : it.UploadDate;
+    it.AssignmentDate = it.Assignment_Date != null ? it.Assignment_Date : it.AssignmentDate;
+    it.ReassignDate = it.Reassign_Date != null ? it.Reassign_Date : it.ReassignDate;
+    it.CompletedDate = it.Resolved_Date != null ? it.Resolved_Date : it.CompletedDate;
+    var at = it.Assigned_To || it.AssignedTo;
+    it.AssignedToName = at ? at.Title : (it.AssignedToName || '');
+    it.AssignedToEmail = at ? at.EMail : (it.AssignedToEmail || '');
+    return it;
+}
+
+function rcSpFields(obj) {
+    var map = {
+        RCStatus: RC_SP.STATUS,
+        UploadDate: RC_SP.UPLOAD,
+        AssignmentDate: RC_SP.ASSIGN,
+        ReassignDate: RC_SP.REASSIGN,
+        CompletedDate: RC_SP.RESOLVED,
+        AssignedToId: RC_SP.ASSIGNED_ID
+    };
+    var out = {};
+    Object.keys(obj).forEach(function (k) {
+        if (obj[k] === undefined) return;
+        out[map[k] || k] = obj[k];
+    });
+    return out;
+}
+
+function rcExcelSerialToIso(serial) {
+    if (serial == null || serial === '') return null;
+    var n = parseFloat(String(serial).trim());
+    if (isNaN(n)) return String(serial);
+    var epoch = Date.UTC(1899, 11, 30);
+    return new Date(epoch + n * 86400000).toISOString();
+}
+
+var rcDashFilters   = { status: [], language: [], lob: [], segment: [], agent: [], search: '', repeatOnly: false };
+var rcMsisdnCounts  = {};
+var rcRepeatVisible = false;
 var rcDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
 var rcAssignDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
 var rcAssignedDateFilters = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
@@ -39,6 +116,8 @@ var RC_DATE_FIELD_OPTS = [
     { key: 'Call_Date', label: 'Call Date' },
     { key: 'Call_DateTime', label: 'Call DateTime' }
 ];
+
+var RC_WF_COLS = ['Account_Number', 'Call_Driver', 'Issue_In_Details', 'Call_Back_Status', 'Resolution_Type', 'Pending_With', 'Resolution_Status'];
 
 var RC_COLS = [
     { key: 'Site', header: 'Site' },
@@ -71,6 +150,93 @@ function rcCallKey(rec) {
     var msisdn = rec && rec.MSISDN != null ? String(rec.MSISDN).trim() : '';
     var dt = rec && rec.Call_DateTime != null ? String(rec.Call_DateTime).trim() : '';
     return msisdn && dt ? (msisdn + '_' + dt) : (msisdn || dt || '');
+}
+
+function rcBuildMsisdnCounts(items) {
+    var map = {};
+    (items || []).forEach(function (it) {
+        var m = String(it.MSISDN || '').trim();
+        if (m) map[m] = (map[m] || 0) + 1;
+    });
+    return map;
+}
+
+function rcRebuildMsisdnCounts(items) {
+    rcMsisdnCounts = rcBuildMsisdnCounts(items || rcAllItems);
+}
+
+function rcMsisdnCallCount(msisdn) {
+    var m = String(msisdn || '').trim();
+    return m ? (rcMsisdnCounts[m] || 0) : 0;
+}
+
+function rcIsRepeatMsisdn(msisdn) {
+    return rcMsisdnCallCount(msisdn) >= 2;
+}
+
+function rcRepeatCallersList(items) {
+    var map = rcBuildMsisdnCounts(items);
+    var rows = [];
+    Object.keys(map).forEach(function (m) {
+        if (map[m] < 2) return;
+        var calls = items.filter(function (it) { return String(it.MSISDN || '').trim() === m; });
+        var latest = calls[0] || {};
+        rows.push({
+            msisdn: m,
+            count: map[m],
+            customerValue: latest.Customer_Value || '—',
+            lob: latest.LOB || '—',
+            language: latest.Language || '—'
+        });
+    });
+    return rows.sort(function (a, b) { return b.count - a.count; });
+}
+
+function rcTop10RepeatCallers(items) {
+    return rcRepeatCallersList(items).slice(0, 10);
+}
+
+function rcTop10CallerTileHTML(items) {
+    var top10 = rcTop10RepeatCallers(items);
+    if (!top10.length) {
+        return rcTile('Top 10 Who Called', '—', 'No customer called 2+ times yet', '#94a3b8');
+    }
+    var top = top10[0];
+    return rcClickTile(
+        'Top 10 Who Called',
+        top.msisdn,
+        '#1 · ' + top.count + ' calls' + (top10.length > 1 ? ' · click for top 10 chart' : ''),
+        '#ef4444',
+        'rcShowTop10Callers()'
+    );
+}
+
+function rcTop10CallersPanelHTML(items) {
+    var top10 = rcTop10RepeatCallers(items);
+    if (!top10.length) return '';
+    return '<div class="rc-panel" style="margin-top:0;margin-bottom:1rem;border-color:rgba(239,68,68,.25);">' +
+        '<div class="rc-panel-title"><i data-lucide="trophy" style="width:18px;height:18px;color:#ef4444;"></i>Top 10 Who Called Most</div>' +
+        '<p style="font-size:.76rem;color:var(--t3);margin:-.35rem 0 .75rem;">Customers (MSISDN) ranked by number of calls. Same person, different call times = repeat caller.</p>' +
+        '<div class="rc-repeat-table-wrap"><table class="rc-repeat-table"><thead><tr>' +
+        '<th>#</th><th>MSISDN</th><th>Times Called</th><th>LOB</th><th>Language</th><th></th>' +
+        '</tr></thead><tbody>' +
+        top10.map(function (r, i) {
+            var safe = rcEsc(r.msisdn).replace(/'/g, "\\'");
+            return '<tr class="rc-repeat-row"><td style="font-weight:800;color:var(--t3);">' + (i + 1) + '</td>' +
+                '<td style="font-weight:800;">' + rcEsc(r.msisdn) + '</td>' +
+                '<td>' + rcCallCountCell(r.count) + '</td>' +
+                '<td>' + rcEsc(r.lob) + '</td>' +
+                '<td>' + rcEsc(r.language) + '</td>' +
+                '<td><button type="button" class="export-btn" style="padding:4px 10px;font-size:.68rem;" onclick="rcFilterByMsisdn(\'' + safe + '\')">View calls</button></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+}
+
+function rcCallCountCell(val) {
+    var n = parseInt(val, 10) || 0;
+    if (n >= 5) return '<span class="rc-call-count rc-call-count-high">' + n + '</span>';
+    if (n >= 2) return '<span class="rc-call-count rc-call-count-repeat">' + n + '</span>';
+    return '<span class="rc-call-count">' + n + '</span>';
 }
 
 var RC_STATUS = { PENDING: 'Pending', INPROGRESS: 'Inprogress', RESOLVED: 'Resolved' };
@@ -122,6 +288,35 @@ function rcIsRcAdmin()  { return rcRole() === 'RC_Admin'; }
 function rcIsAdminLike() { return rcIsSMAdmin() || rcIsRcAdmin(); }
 function rcIsAgent()     { return rcRole() === 'RC_Agent'; }
 function rcHasAccess()   { return rcIsAdminLike() || rcIsAgent(); }
+
+function rcCanDeleteAll() {
+    var em = (rcUserEmail() || '').toLowerCase().trim();
+    return RC_DELETE_ALL_EMAILS.indexOf(em) >= 0;
+}
+
+function rcChoiceOptions(choiceKey, fieldKey) {
+    var base = (RC_CHOICE_DEFAULTS[choiceKey] || []).slice();
+    var seen = {};
+    base.forEach(function (v) { seen[String(v).toLowerCase()] = true; });
+    rcUniqueValues(rcAllItems, fieldKey || choiceKey).forEach(function (v) {
+        var k = String(v).toLowerCase();
+        if (!seen[k]) { seen[k] = true; base.push(v); }
+    });
+    return base.sort(function (a, b) { return String(a).localeCompare(String(b)); });
+}
+
+function rcFilterRepeatCallerRows(rows) {
+    var mergedCounts = rcBuildMsisdnCounts(
+        (rows || []).map(function (r) { return { MSISDN: r.MSISDN }; }).concat(rcAllItems)
+    );
+    var kept = [], skipped = 0;
+    (rows || []).forEach(function (rec) {
+        var m = String(rec.MSISDN || '').trim();
+        if ((mergedCounts[m] || 0) >= 2) kept.push(rec);
+        else skipped++;
+    });
+    return { rows: kept, skipped: skipped };
+}
 
 function rcEsc(s) {
     return String(s == null ? '' : s)
@@ -599,6 +794,88 @@ function rcToast(msg, type) {
     setTimeout(function () { t.remove(); }, 3700);
 }
 
+function rcSpinnerBlock(msg, sub, pct) {
+    var pctNum = pct == null ? null : Math.max(0, Math.min(100, Math.round(pct)));
+    return '<div class="rc-spinner-box">' +
+        '<div class="rc-spinner-ring"></div>' +
+        '<div class="rc-spinner-msg">' + rcEsc(msg || 'Working…') + '</div>' +
+        (sub ? '<div class="rc-spinner-sub">' + rcEsc(sub) + '</div>' : '') +
+        (pctNum != null ?
+            '<div class="rc-progress-bar"><div class="rc-progress-fill" style="width:' + pctNum + '%;"></div></div>' +
+            '<div class="rc-spinner-sub">' + pctNum + '%</div>' : '') +
+        '</div>';
+}
+
+function rcEnsureBusyOverlay() {
+    var root = document.getElementById('rcContainer') || document.getElementById('rcView');
+    if (!root) return null;
+    var el = document.getElementById('rcBusyOverlay');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'rcBusyOverlay';
+        el.className = 'rc-busy-overlay';
+        if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
+        root.appendChild(el);
+    }
+    return el;
+}
+
+function rcShowBusy(msg, sub, pct) {
+    var el = rcEnsureBusyOverlay();
+    if (!el) return;
+    el.style.display = 'flex';
+    el.innerHTML = rcSpinnerBlock(msg, sub, pct);
+}
+
+function rcHideBusy() {
+    var el = document.getElementById('rcBusyOverlay');
+    if (el) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+    }
+}
+
+function rcSetInlineProgress(elId, msg, pct) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = rcSpinnerBlock(msg, null, pct);
+}
+
+async function rcRunPool(items, worker, options) {
+    options = options || {};
+    var concurrency = options.concurrency || RC_SP_CONCURRENCY;
+    var onProgress = options.onProgress;
+    var digestRefreshEvery = options.digestRefreshEvery || 100;
+    var getDigest = options.getDigest;
+    var setDigest = options.setDigest;
+    var total = items.length;
+    var idx = 0, ok = 0, fail = 0;
+    if (!total) return { ok: 0, fail: 0 };
+
+    async function runWorker() {
+        while (true) {
+            var i = idx++;
+            if (i >= total) return;
+            if (getDigest && setDigest && digestRefreshEvery > 0 && i > 0 && i % digestRefreshEvery === 0) {
+                try { setDigest(await rcGetDigest()); } catch (e) { /* keep prior digest */ }
+            }
+            try {
+                await worker(items[i], i);
+                ok++;
+            } catch (e) {
+                fail++;
+                console.error('[RC pool]', e);
+            }
+            if (onProgress) onProgress(i + 1, total, ok, fail);
+        }
+    }
+
+    var workers = [];
+    for (var w = 0; w < Math.min(concurrency, total); w++) workers.push(runWorker());
+    await Promise.all(workers);
+    return { ok: ok, fail: fail };
+}
+
 // ── Chart theme ───────────────────────────────────────────────
 var RC_CHART_PALETTE = {
     pending:    { from: '#64748b', to: '#94a3b8' },
@@ -658,15 +935,47 @@ function rcInjectStyles() {
         '.rc-grid-action .rc-action-btn{padding:4px 10px;font-size:.68rem;border:none;border-radius:6px;background:var(--grad);color:#fff;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}' +
         '.rc-grid-action .rc-complete-btn{padding:4px 10px;font-size:.68rem;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--t1);font-weight:700;cursor:pointer;white-space:nowrap}' +
         '.rc-grid-action .rc-reopen-btn{padding:4px 10px;font-size:.68rem;border:1px solid rgba(245,158,11,.45);border-radius:6px;background:rgba(245,158,11,.12);color:#d97706;font-weight:700;cursor:pointer;white-space:nowrap}' +
+        '.rc-grid-action .rc-delete-btn{padding:4px 10px;font-size:.68rem;border:1px solid rgba(239,68,68,.45);border-radius:6px;background:rgba(239,68,68,.12);color:#dc2626;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}' +
+        '.rc-delete-all-bar{display:flex;align-items:center;flex-wrap:wrap;gap:.65rem;margin-top:1rem;padding:.65rem .85rem;border:1px solid rgba(239,68,68,.25);border-radius:10px;background:rgba(239,68,68,.06)}' +
+        '.rc-busy-overlay{display:none;position:absolute;inset:0;z-index:500;background:rgba(15,23,42,.42);backdrop-filter:blur(2px);align-items:center;justify-content:center;flex-direction:column;border-radius:12px}' +
+        '.rc-spinner-box{display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 28px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.22);min-width:280px;max-width:92vw}' +
+        '.rc-spinner-ring{width:44px;height:44px;border:4px solid rgba(148,163,184,.25);border-top-color:var(--acc);border-radius:50%;animation:rcSpin .75s linear infinite;flex-shrink:0}' +
+        '.rc-spinner-msg{font-size:.88rem;font-weight:800;color:var(--t1);text-align:center}' +
+        '.rc-spinner-sub{font-size:.75rem;color:var(--t3);text-align:center;line-height:1.35}' +
+        '.rc-progress-bar{height:8px;width:100%;background:var(--bg-input);border-radius:999px;overflow:hidden}' +
+        '.rc-progress-fill{height:100%;background:var(--grad);transition:width .15s ease;border-radius:999px}' +
+        '@keyframes rcSpin{to{transform:rotate(360deg)}}' +
         '.rc-agent-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:var(--cs)}' +
         '.rc-agent-tile:hover{transform:translateY(-2px);box-shadow:var(--ch)}' +
         '.rc-agent-tile.selected{border-color:var(--acc);box-shadow:0 0 0 2px var(--glow)}' +
         '.rc-agent-tile-head{display:flex;align-items:center;gap:.55rem;margin-bottom:.55rem}' +
         '.rc-agent-avatar{width:36px;height:36px;border-radius:50%;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.78rem;flex-shrink:0}' +
         '.rc-agent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.85rem;margin:1rem 0}' +
+        '.rc-call-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:800;background:rgba(148,163,184,.15);color:#64748b}' +
+        '.rc-call-count-repeat{background:rgba(245,158,11,.18);color:#d97706}' +
+        '.rc-call-count-high{background:rgba(239,68,68,.15);color:#dc2626}' +
+        '.rc-repeat-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}' +
+        '.rc-repeat-table{width:100%;border-collapse:collapse;font-size:.78rem}' +
+        '.rc-repeat-table th,.rc-repeat-table td{padding:.55rem .65rem;text-align:left;border-bottom:1px solid var(--border)}' +
+        '.rc-repeat-table th{font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);background:var(--bg-input)}' +
+        '.rc-repeat-table tr:last-child td{border-bottom:none}' +
+        '.rc-repeat-row:hover td{background:rgba(2,132,199,.06)}' +
+        '.ag-theme-alpine .rc-row-repeat{background:rgba(245,158,11,.07)!important}' +
+        '.stat-card.rc-stat-clickable{cursor:pointer;transition:transform .15s,box-shadow .15s}' +
+        '.stat-card.rc-stat-clickable:hover{transform:translateY(-2px);box-shadow:var(--ch)}' +
         '.rc-ms.custom-multiselect{position:relative;z-index:120;width:100%}' +
         '.rc-ms .multiselect-selected{padding:.38rem .65rem;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.8rem;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;box-sizing:border-box}' +
         '.rc-ms .multiselect-selected:hover{border-color:var(--acc);box-shadow:0 0 0 2px var(--glow)}' +
+        '.rc-edit-field textarea{min-height:80px;resize:vertical}' +
+        '.rc-modal-overlay{position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:1rem}' +
+        '.rc-modal-box{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}' +
+        '.rc-modal-head{padding:1rem 1.15rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}' +
+        '.rc-modal-head h3{margin:0;font-size:.95rem;font-weight:800;color:var(--t1)}' +
+        '.rc-modal-close{border:none;background:transparent;color:var(--t3);font-size:1.25rem;cursor:pointer;line-height:1}' +
+        '.rc-modal-body{padding:1rem 1.15rem;display:flex;flex-direction:column;gap:.75rem}' +
+        '.rc-modal-foot{padding:.85rem 1.15rem;border-top:1px solid var(--border);display:flex;gap:.5rem;justify-content:flex-end}' +
+        '.rc-edit-field label{display:block;font-size:.68rem;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:.25rem}' +
+        '.rc-edit-field input,.rc-edit-field select,.rc-edit-field textarea{width:100%;box-sizing:border-box;padding:.45rem .65rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-input);color:var(--t1);font-size:.82rem}' +
         '.rc-ms .multiselect-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--ch);max-height:240px;overflow-y:auto;z-index:9999}' +
         '.rc-ms .multiselect-option{padding:8px 12px;display:flex;align-items:center;cursor:pointer;border-bottom:1px solid var(--border)}' +
         '.rc-ms .multiselect-option:last-child{border-bottom:none}' +
@@ -785,20 +1094,23 @@ async function rcFetchAgents() {
     rcBuildCtiMap();
 }
 
-async function rcFetchItems() {
+async function rcFetchItems(showBusy) {
     if (RC_DUMMY_MODE) { rcAllItems = rcDummyItems(); return; }
-    var cols = RC_COLS.map(function (c) { return c.key; }).join(',');
-    var url = SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items?" +
-        "$select=ID," + cols + ",RCStatus,UploadDate,AssignmentDate,ReassignDate,CompletedDate," +
-        "AssignedTo/Title,AssignedTo/EMail&$expand=AssignedTo&$orderby=ID desc&$top=50000";
-    var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
-    if (!r.ok) throw new Error('Failed to load Repeated Calls (' + r.status + ')');
-    var data = await r.json();
-    rcAllItems = (data.d.results || []).map(function (it) {
-        it.AssignedToName  = it.AssignedTo ? it.AssignedTo.Title : '';
-        it.AssignedToEmail = it.AssignedTo ? it.AssignedTo.EMail : '';
-        return it;
-    });
+    if (showBusy) rcShowBusy('Loading records…', 'Fetching from SharePoint');
+    try {
+        var cols = RC_COLS.map(function (c) { return c.key; }).join(',');
+        var wf = RC_WF_COLS.join(',');
+        var url = SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items?" +
+            "$select=ID," + cols + "," + wf + "," + RC_SP.STATUS + "," + RC_SP.UPLOAD + "," + RC_SP.ASSIGN + "," + RC_SP.REASSIGN + "," + RC_SP.RESOLVED + "," +
+            RC_SP.ASSIGNED + "/Title," + RC_SP.ASSIGNED + "/EMail&$expand=" + RC_SP.ASSIGNED + "&$orderby=ID desc&$top=50000";
+        var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+        if (!r.ok) throw new Error('Failed to load Repeated Calls (' + r.status + ')');
+        var data = await r.json();
+        rcAllItems = (data.d.results || []).map(function (it) { return rcNormalizeItem(it); });
+        rcRebuildMsisdnCounts(rcAllItems);
+    } finally {
+        if (showBusy) rcHideBusy();
+    }
 }
 
 async function rcResolveUserId(email, name) {
@@ -815,8 +1127,8 @@ async function rcResolveUserId(email, name) {
     return null;
 }
 
-async function rcCreateItem(fields, digest) {
-    var body = Object.assign({ __metadata: { type: await rcGetEntityType() } }, fields);
+async function rcCreateItem(fields, digest, entityType) {
+    var body = Object.assign({ __metadata: { type: entityType || await rcGetEntityType() } }, fields);
     var r = await fetch(SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items", {
         method: 'POST', credentials: 'include',
         headers: { 'Accept': 'application/json;odata=verbose', 'Content-Type': 'application/json;odata=verbose', 'X-RequestDigest': digest },
@@ -836,6 +1148,19 @@ async function rcUpdateItem(id, fields, digest) {
     if (!r.ok) throw new Error('Update failed: ' + r.status);
 }
 
+async function rcDeleteItem(id, digest) {
+    var r = await fetch(SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/items(" + id + ")", {
+        method: 'POST', credentials: 'include',
+        headers: { 'Accept': 'application/json;odata=verbose', 'X-RequestDigest': digest, 'IF-MATCH': '*', 'X-HTTP-Method': 'DELETE' }
+    });
+    if (!r.ok) throw new Error('Delete failed: ' + r.status);
+}
+
+function rcSetDeleteProgress(msg) {
+    var el = document.getElementById('rcDeleteProgress');
+    if (el) el.innerHTML = msg;
+}
+
 // ============================================================
 // ENTRY + SHELL
 // ============================================================
@@ -852,7 +1177,10 @@ window.rcInit = async function () {
             rcInjectStyles();
             if (typeof injectAGGridThemeStyles === 'function') injectAGGridThemeStyles();
             rcSetFullLayout(true);
-            if (loadingEl) loadingEl.style.display = 'block';
+            if (loadingEl) {
+                loadingEl.style.display = 'block';
+                loadingEl.innerHTML = rcSpinnerBlock('Loading Repeated Calls…', 'Fetching records and agents');
+            }
             if (contentEl) contentEl.style.display = 'none';
 
             if (!rcHasAccess()) {
@@ -861,8 +1189,8 @@ window.rcInit = async function () {
             }
 
             await Promise.race([
-                Promise.all([rcFetchItems(), rcFetchAgents()]),
-                new Promise(function (_, rej) { setTimeout(function () { rej(new Error('Request timed out after 15s')); }, 15000); })
+                Promise.all([rcFetchItems(false), rcFetchAgents()]),
+                new Promise(function (_, rej) { setTimeout(function () { rej(new Error('Request timed out after 60s — list may be very large')); }, 60000); })
             ]);
 
             if (loadingEl) loadingEl.style.display = 'none';
@@ -987,6 +1315,7 @@ function rcApplyDashFilters(items) {
         if (!rcMatchMulti(it.LOB, f.lob)) return false;
         if (!rcMatchMulti(it.Segment_Value, f.segment)) return false;
         if (f.agent && f.agent.length && !rcMatchMulti(rcCanonicalAgentName(it.AssignedToName), f.agent)) return false;
+        if (f.repeatOnly && !rcIsRepeatMsisdn(it.MSISDN)) return false;
         if (f.search) {
             var q = f.search.toLowerCase();
             var blob = [it.MSISDN, it.Agent_Name, it.Site, it.LOB, it.Language, it.Segment_Value, it.AssignedToName, it.skill_group_enterprisename].join(' ').toLowerCase();
@@ -1007,6 +1336,8 @@ function rcReadDashFiltersFromDom() {
     rcDashFilters.segment  = rcGetMsValues('rcFilterSegmentDropdown');
     rcDashFilters.agent    = rcGetMsValues('rcFilterAgentDropdown');
     rcDashFilters.search   = (document.getElementById('rcFilterSearch') || {}).value || '';
+    var repeatEl = document.getElementById('rcFilterRepeatOnly');
+    rcDashFilters.repeatOnly = repeatEl ? !!repeatEl.checked : false;
     rcReadDateFiltersFromDom('rcFilter');
     rcSelectedAgent = rcDashFilters.agent.length === 1 ? rcDashFilters.agent[0] : null;
 }
@@ -1017,10 +1348,40 @@ window.rcApplyDashboardFilters = function () {
 };
 
 window.rcResetDashboardFilters = function () {
-    rcDashFilters = { status: [], language: [], lob: [], segment: [], agent: [], search: '' };
+    rcDashFilters = { status: [], language: [], lob: [], segment: [], agent: [], search: '', repeatOnly: false };
     rcResetDateFiltersState();
     rcSelectedAgent = null;
     rcRenderTabBody();
+};
+
+window.rcShowRepeatCallersOnly = function () {
+    rcDashFilters.repeatOnly = true;
+    var el = document.getElementById('rcFilterRepeatOnly');
+    if (el) el.checked = true;
+    rcRefreshDashboardContent();
+};
+
+window.rcShowTop10Callers = function () {
+    rcRepeatVisible = true;
+    rcChartsBuilt = true;
+    rcDashFilters.repeatOnly = false;
+    var repeatChk = document.getElementById('rcFilterRepeatOnly');
+    if (repeatChk) repeatChk.checked = false;
+    rcRefreshDashboardContent();
+    setTimeout(function () {
+        var target = document.getElementById('rcTop10Panel') || document.getElementById('rcChartRepeat');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+};
+
+window.rcFilterByMsisdn = function (msisdn) {
+    rcDashFilters.search = String(msisdn || '');
+    rcDashFilters.repeatOnly = false;
+    var el = document.getElementById('rcFilterRepeatOnly');
+    if (el) el.checked = false;
+    var searchEl = document.getElementById('rcFilterSearch');
+    if (searchEl) searchEl.value = rcDashFilters.search;
+    rcRefreshDashboardContent();
 };
 
 window.rcSelectAgentTile = function (name) {
@@ -1051,6 +1412,10 @@ function rcFilterBarHTML(items, prefix) {
             rcMsFilterHTML(prefix, 'Agent', 'Agents') +
             '<div class="fb-group"><div class="fb-group-label">Search</div>' +
             '<input type="text" class="fb-select" id="' + prefix + 'Search" placeholder="MSISDN, Agent, Site, LOB…" value="' + rcEsc(rcDashFilters.search) + '" oninput="rcApplyDashboardFilters()" style="cursor:text;"></div>' +
+            '<div class="fb-group" style="display:flex;align-items:flex-end;">' +
+            '<label style="display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:600;color:var(--t2);cursor:pointer;padding:.45rem 0;">' +
+            '<input type="checkbox" id="rcFilterRepeatOnly"' + (rcDashFilters.repeatOnly ? ' checked' : '') + ' onchange="rcApplyDashboardFilters()" style="width:16px;height:16px;">' +
+            'Repeat callers only (2+ calls)</label></div>' +
         '</div>' +
         rcDateFilterRowHTML(prefix, 'rcApplyDashboardFilters') +
         '</div>';
@@ -1113,8 +1478,16 @@ function rcApplyQueueFilters(items, f, includeAgent, dateF) {
     });
 }
 
-function rcSummary(items) {
-    var s = { total: items.length, pending: 0, inprogress: 0, completed: 0, agingSum: 0, agingN: 0, ttcSum: 0, ttcN: 0 };
+function rcSummary(items, countSource) {
+    countSource = countSource || items;
+    var s = { total: items.length, pending: 0, inprogress: 0, completed: 0, agingSum: 0, agingN: 0, ttcSum: 0, ttcN: 0, repeatCallers: 0, repeatCalls: 0 };
+    var counts = rcBuildMsisdnCounts(countSource);
+    Object.keys(counts).forEach(function (m) {
+        if (counts[m] >= 2) {
+            s.repeatCallers++;
+            s.repeatCalls += counts[m];
+        }
+    });
     items.forEach(function (it) {
         if (rcIsPendingStatus(it.RCStatus)) s.pending++;
         else if (rcIsInProgressStatus(it.RCStatus)) s.inprogress++;
@@ -1131,6 +1504,36 @@ function rcTile(label, value, subtitle, color) {
     return '<div class="stat-card"><div class="stat-label">' + rcEsc(label) + '</div>' +
         '<div class="stat-value"' + (color ? ' style="color:' + color + ';"' : '') + '>' + rcEsc(String(value)) + '</div>' +
         (subtitle ? '<div class="stat-subtitle">' + rcEsc(subtitle) + '</div>' : '') + '</div>';
+}
+
+function rcClickTile(label, value, subtitle, color, onclick) {
+    return '<div class="stat-card rc-stat-clickable" onclick="' + onclick + '" title="Click to filter">' +
+        '<div class="stat-label">' + rcEsc(label) + '</div>' +
+        '<div class="stat-value"' + (color ? ' style="color:' + color + ';"' : '') + '>' + rcEsc(String(value)) + '</div>' +
+        (subtitle ? '<div class="stat-subtitle">' + rcEsc(subtitle) + '</div>' : '') + '</div>';
+}
+
+function rcRepeatCallersPanelHTML(items) {
+    var rows = rcRepeatCallersList(items);
+    if (!rows.length) {
+        return '<div class="rc-panel"><div class="rc-panel-title"><i data-lucide="phone-missed" style="width:18px;height:18px;color:var(--acc);"></i>Repeat Callers</div>' +
+            '<p style="color:var(--t3);font-size:.82rem;margin:0;">No MSISDN with 2+ calls in the current date/filter view.</p></div>';
+    }
+    return '<div class="rc-panel"><div class="rc-panel-title"><i data-lucide="phone-missed" style="width:18px;height:18px;color:#f59e0b;"></i>Repeat Callers · ' + rows.length + ' numbers</div>' +
+        '<p style="font-size:.76rem;color:var(--t3);margin:-.35rem 0 .75rem;">Same MSISDN calling multiple times. Click <b>View calls</b> or the dashboard tile to filter.</p>' +
+        '<div class="rc-repeat-table-wrap"><table class="rc-repeat-table"><thead><tr>' +
+        '<th>MSISDN</th><th>Times Called</th><th>Customer Value</th><th>LOB</th><th>Language</th><th></th>' +
+        '</tr></thead><tbody>' +
+        rows.slice(0, 100).map(function (r) {
+            var safe = rcEsc(r.msisdn).replace(/'/g, "\\'");
+            return '<tr class="rc-repeat-row"><td style="font-weight:800;">' + rcEsc(r.msisdn) + '</td>' +
+                '<td>' + rcCallCountCell(r.count) + '</td>' +
+                '<td>' + rcEsc(r.customerValue) + '</td>' +
+                '<td>' + rcEsc(r.lob) + '</td>' +
+                '<td>' + rcEsc(r.language) + '</td>' +
+                '<td><button type="button" class="export-btn" style="padding:4px 10px;font-size:.68rem;" onclick="rcFilterByMsisdn(\'' + safe + '\')">View calls</button></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
 }
 
 function rcInitials(name) {
@@ -1198,6 +1601,8 @@ function rcMapRow(it) {
         callDate: v(it.Call_Date),
         callDateTime: v(it.Call_DateTime),
         msisdn: v(it.MSISDN),
+        callCount: rcMsisdnCallCount(it.MSISDN),
+        isRepeat: rcIsRepeatMsisdn(it.MSISDN),
         skillGroup: v(it.skill_group_enterprisename),
         language: v(it.Language),
         customerType: v(it.Customer_Type),
@@ -1213,6 +1618,13 @@ function rcMapRow(it) {
         kbId: v(it.KB_ID),
         segmentValue: v(it.Segment_Value),
         lob: v(it.LOB),
+        accountNumber: v(it.Account_Number),
+        callDriver: v(it.Call_Driver),
+        issueInDetails: v(it.Issue_In_Details),
+        callBackStatus: v(it.Call_Back_Status),
+        resolutionType: v(it.Resolution_Type),
+        pendingWith: v(it.Pending_With),
+        resolutionStatus: v(it.Resolution_Status),
         rcStatus: rcCanonicalStatus(it.RCStatus) || '—',
         assignedTo: v(it.AssignedToName),
         uploadDate: it.UploadDate || null,
@@ -1302,7 +1714,7 @@ RcSetColumnFilter.prototype.setModel = function (model) {
 RcSetColumnFilter.prototype.destroy = function () {};
 
 var RC_MS_FILTER_FIELDS = new Set([
-    'msisdn', 'site', 'callDate', 'callDateTime', 'skillGroup', 'language', 'customerType', 'agentName', 'agentCti',
+    'msisdn', 'callCount', 'site', 'callDate', 'callDateTime', 'skillGroup', 'language', 'customerType', 'agentName', 'agentCti',
     'customerValue', 'market', 'siebelId', 'kbId', 'segmentValue', 'lob', 'rcStatus', 'assignedTo'
 ]);
 var RC_DATE_FILTER_FIELDS = new Set([
@@ -1346,6 +1758,132 @@ function rcAgentSelectEl(selected) {
         sel.appendChild(opt);
     });
     return sel;
+}
+
+var rcEditModalId = null;
+
+function rcEnsureEditModal() {
+    if (document.getElementById('rcEditModal')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'rcEditModal';
+    overlay.className = 'rc-modal-overlay';
+    overlay.style.display = 'none';
+    overlay.innerHTML =
+        '<div class="rc-modal-box" role="dialog" aria-modal="true" aria-labelledby="rcEditModalTitle">' +
+            '<div class="rc-modal-head">' +
+                '<h3 id="rcEditModalTitle">Edit Record</h3>' +
+                '<button type="button" class="rc-modal-close" onclick="rcCloseEditModal()" aria-label="Close">&times;</button>' +
+            '</div>' +
+            '<div class="rc-modal-body" id="rcEditForm"></div>' +
+            '<div class="rc-modal-foot">' +
+                '<button type="button" class="rc-complete-btn" onclick="rcCloseEditModal()">Cancel</button>' +
+                '<button type="button" class="rc-action-btn" id="rcEditSaveBtn" onclick="rcSaveEditModal()">Save</button>' +
+            '</div>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) rcCloseEditModal(); });
+}
+
+function rcBuildEditFieldHTML(field, value) {
+    var val = value === '—' ? '' : (value || '');
+    var id = 'rcEdit_' + field.key;
+    if (field.type === 'multiline') {
+        return '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + '</label>' +
+            '<textarea id="' + id + '" rows="4">' + rcEsc(val) + '</textarea></div>';
+    }
+    if (field.type === 'choice') {
+        var opts = rcChoiceOptions(field.choiceKey || field.key, field.key);
+        var html = '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + '</label>' +
+            '<select id="' + id + '"><option value="">— Select —</option>';
+        opts.forEach(function (o) {
+            html += '<option value="' + rcEsc(o) + '"' + (String(o) === String(val) ? ' selected' : '') + '>' + rcEsc(o) + '</option>';
+        });
+        html += '</select></div>';
+        return html;
+    }
+    return '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + '</label>' +
+        '<input type="text" id="' + id + '" value="' + rcEsc(val) + '"></div>';
+}
+
+var RC_WF_ROW_MAP = {
+    Account_Number: 'accountNumber',
+    Call_Driver: 'callDriver',
+    Issue_In_Details: 'issueInDetails',
+    LOB: 'lob',
+    Call_Back_Status: 'callBackStatus',
+    Resolution_Type: 'resolutionType',
+    Pending_With: 'pendingWith',
+    Resolution_Status: 'resolutionStatus'
+};
+
+window.rcOpenEditModal = function (id) {
+    var item = rcAllItems.find(function (it) { return it.ID === id; });
+    if (!item) { rcToast('Record not found', 'warn'); return; }
+    rcEnsureEditModal();
+    rcEditModalId = id;
+    var row = rcMapRow(item);
+    var form = document.getElementById('rcEditForm');
+    if (!form) return;
+    form.innerHTML = RC_WORKFLOW_FIELDS.map(function (f) {
+        return rcBuildEditFieldHTML(f, row[RC_WF_ROW_MAP[f.key] || f.key]);
+    }).join('');
+    document.getElementById('rcEditModalTitle').textContent = 'Edit · ' + (item.MSISDN || ('ID ' + id));
+    document.getElementById('rcEditModal').style.display = 'flex';
+};
+
+window.rcCloseEditModal = function () {
+    rcEditModalId = null;
+    var m = document.getElementById('rcEditModal');
+    if (m) m.style.display = 'none';
+};
+
+window.rcSaveEditModal = async function () {
+    if (!rcEditModalId) return;
+    var btn = document.getElementById('rcEditSaveBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var fields = {};
+    RC_WORKFLOW_FIELDS.forEach(function (f) {
+        var el = document.getElementById('rcEdit_' + f.key);
+        if (el) fields[f.key] = el.value || '';
+    });
+    var digest;
+    try { digest = await rcGetDigest(); } catch (e) {
+        rcToast('Digest error', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+        return;
+    }
+    rcShowBusy('Saving…', 'Updating record');
+    try {
+        await rcUpdateItem(rcEditModalId, fields, digest);
+        rcToast('Record updated', 'success');
+        rcCloseEditModal();
+        await rcFetchItems(true);
+        rcRenderTabBody();
+    } catch (e) { rcToast('Could not save record', 'error'); }
+    finally {
+        rcHideBusy();
+        if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    }
+};
+
+function rcEditActionRenderer(params) {
+    if (!params.data) return document.createTextNode('');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rc-action-btn';
+    btn.textContent = 'Edit';
+    btn.onclick = function () { rcOpenEditModal(params.data.id); };
+    return btn;
+}
+
+function rcAgentQueueActionRenderer(params) {
+    if (!params.data) return document.createTextNode('');
+    var wrap = document.createElement('div');
+    wrap.className = 'rc-grid-action';
+    wrap.appendChild(rcEditActionRenderer(params));
+    var resolve = rcResolveActionRenderer(params);
+    if (resolve && resolve.nodeType) wrap.appendChild(resolve);
+    return wrap;
 }
 
 function rcAssignActionRenderer(params) {
@@ -1406,15 +1944,32 @@ function rcReopenActionRenderer(params) {
 
 function rcAdminRecordsActionRenderer(params) {
     if (!params.data) return document.createTextNode('');
-    if (params.data.rcStatus === RC_STATUS.INPROGRESS) return rcResolveActionRenderer(params);
-    if (params.data.rcStatus === RC_STATUS.RESOLVED) return rcReopenActionRenderer(params);
-    return document.createTextNode('');
+    var wrap = document.createElement('div');
+    wrap.className = 'rc-grid-action';
+    wrap.appendChild(rcEditActionRenderer(params));
+    if (params.data.rcStatus === RC_STATUS.INPROGRESS) {
+        wrap.appendChild(rcResolveActionRenderer(params));
+    } else if (params.data.rcStatus === RC_STATUS.RESOLVED) {
+        wrap.appendChild(rcReopenActionRenderer(params));
+    }
+    if (rcCanDeleteAll()) {
+        var delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'rc-delete-btn';
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = function () { rcDeleteRecord(params.data.id); };
+        wrap.appendChild(delBtn);
+    }
+    return wrap;
 }
 
 function rcDataColumnDefs() {
     var fmtD = function (p) { return rcFmtGridDate(p.value); };
     return [
         { field: 'msisdn', headerName: 'MSISDN', width: 130, minWidth: 120, pinned: 'left', suppressSizeToFit: true },
+        { field: 'callCount', headerName: 'Times Called', width: 110, minWidth: 100, type: 'numericColumn',
+            cellRenderer: function (p) { return rcCallCountCell(p.value); },
+            comparator: function (a, b) { return (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0); } },
         { field: 'callDateTime', headerName: 'DateTime', width: 160, minWidth: 140 },
         { field: 'site', headerName: 'Site', width: 130, minWidth: 110 },
         { field: 'callDate', headerName: 'Date', width: 100, minWidth: 90 },
@@ -1433,6 +1988,17 @@ function rcDataColumnDefs() {
         { field: 'kbId', headerName: 'KB ID', width: 90, minWidth: 80 },
         { field: 'segmentValue', headerName: 'Segment', width: 90, minWidth: 80 },
         { field: 'lob', headerName: 'LOB', width: 140, minWidth: 110 },
+        { field: 'accountNumber', headerName: 'Account #', width: 120, minWidth: 100 },
+        { field: 'callDriver', headerName: 'Call Driver', width: 130, minWidth: 110 },
+        { field: 'issueInDetails', headerName: 'Issue Details', width: 180, minWidth: 140, tooltipField: 'issueInDetails',
+            valueFormatter: function (p) {
+                var s = p.value === '—' ? '' : String(p.value || '');
+                return s.length > 45 ? s.slice(0, 45) + '…' : (s || '—');
+            } },
+        { field: 'callBackStatus', headerName: 'Callback Status', width: 130, minWidth: 110 },
+        { field: 'resolutionType', headerName: 'Resolution Type', width: 130, minWidth: 110 },
+        { field: 'pendingWith', headerName: 'Pending With', width: 120, minWidth: 100 },
+        { field: 'resolutionStatus', headerName: 'Resolution Status', width: 140, minWidth: 120 },
         { field: 'rcStatus', headerName: 'RC Status', width: 125, minWidth: 110, cellRenderer: function (p) { return rcStatusBadge(p.value); } },
         { field: 'assignedTo', headerName: 'Assigned To', width: 140, minWidth: 120 },
         { field: 'uploadDate', headerName: 'Upload Date', width: 120, minWidth: 110, valueFormatter: fmtD },
@@ -1464,14 +2030,16 @@ function rcBuildColDefs(mode) {
     }
     cols = cols.concat(rcDataColumnDefs());
     if (mode === 'assign') {
+        cols.push({ headerName: 'Edit', width: 72, minWidth: 68, pinned: 'right', sortable: false, filter: false, cellRenderer: rcEditActionRenderer });
         cols.push({ headerName: 'Action', width: 210, minWidth: 190, pinned: 'right', sortable: false, filter: false, cellRenderer: rcAssignActionRenderer });
     } else if (mode === 'assigned') {
+        cols.push({ headerName: 'Edit', width: 72, minWidth: 68, pinned: 'right', sortable: false, filter: false, cellRenderer: rcEditActionRenderer });
         cols.push({ headerName: 'Reassign', width: 240, minWidth: 220, pinned: 'right', sortable: false, filter: false, cellRenderer: rcReassignActionRenderer });
         cols.push({ headerName: 'Resolve', width: 110, minWidth: 100, pinned: 'right', sortable: false, filter: false, cellRenderer: rcResolveActionRenderer });
     } else if (mode === 'agentqueue') {
-        cols.push({ headerName: 'Action', width: 120, minWidth: 100, pinned: 'right', sortable: false, filter: false, cellRenderer: rcResolveActionRenderer });
+        cols.push({ headerName: 'Action', width: 160, minWidth: 140, pinned: 'right', sortable: false, filter: false, cellRenderer: rcAgentQueueActionRenderer });
     } else if (mode === 'records' && rcIsAdminLike()) {
-        cols.push({ headerName: 'Action', width: 130, minWidth: 110, pinned: 'right', sortable: false, filter: false, cellRenderer: rcAdminRecordsActionRenderer });
+        cols.push({ headerName: 'Action', width: rcCanDeleteAll() ? 220 : 180, minWidth: rcCanDeleteAll() ? 200 : 160, pinned: 'right', sortable: false, filter: false, cellRenderer: rcAdminRecordsActionRenderer });
     }
     return cols.map(function (col) { return col.colId === 'rc_select' ? col : rcEnhanceColDef(col); });
 }
@@ -1529,6 +2097,10 @@ function rcRenderGrid(gridKey, gridId, countId, items, mode) {
         headerHeight: 50,
         animateRows: true,
         enableCellTextSelection: true,
+        getRowClass: function (params) {
+            if (params.data && params.data.isRepeat) return 'rc-row-repeat';
+            return '';
+        },
         onGridReady: function (p) {
             rcGrids[gridKey] = p.api;
             rcUpdateBulkSelCount(gridKey);
@@ -1558,12 +2130,18 @@ window.rcExportAgentRecordsCsv = function () { rcExportGrid('agentRecords', 'RC_
 
 function rcExportGrid(key, prefix) {
     var api = rcGrids[key];
-    if (api && api.exportDataAsCsv) {
-        api.exportDataAsCsv({
-            fileName: prefix + '_' + new Date().toISOString().slice(0, 10) + '.csv',
-            allColumns: true
-        });
-    }
+    if (!api || !api.exportDataAsCsv) return;
+    rcShowBusy('Preparing export…', 'Building CSV file');
+    setTimeout(function () {
+        try {
+            api.exportDataAsCsv({
+                fileName: prefix + '_' + new Date().toISOString().slice(0, 10) + '.csv',
+                allColumns: true
+            });
+        } finally {
+            rcHideBusy();
+        }
+    }, 30);
 }
 
 function rcBulkBarHTML(type) {
@@ -1588,39 +2166,54 @@ function rcAgentOptionsHTML(selected) {
 // RC DASHBOARD
 // ============================================================
 function rcUploadSectionHTML() {
+    var adminBar = rcCanDeleteAll() ?
+        '<div class="rc-delete-all-bar">' +
+            '<button type="button" class="export-btn" onclick="rcDeleteAll()" style="padding:.5rem 1rem;font-size:.82rem;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;color:#fff;">' +
+                '<i data-lucide="trash-2" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Delete All Records</button>' +
+            '<span style="font-size:.72rem;color:var(--t3);">Permanently removes every row in the Repeated_Calls list. Tehleel &amp; Ubaid only.</span>' +
+            '<div id="rcDeleteProgress" style="flex:1 1 100%;font-size:.75rem;color:var(--t2);"></div>' +
+        '</div>' : '';
     return '<div style="margin:1.25rem 0;padding:1rem;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);">' +
         '<h3 style="font-size:.92rem;font-weight:800;color:var(--t1);margin:0 0 .5rem;">Daily Upload</h3>' +
-        '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Upload the daily Repeated Calls Excel. <b>Agent_Name</b> is matched to Account Mapping via <b>CTI</b> (all teams). Duplicate <b>MSISDN + DateTime</b> skipped. New rows saved as <b>Pending</b>.</p>' +
+        '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Upload the daily Repeated Calls Excel. <b>Agent_Name</b> is matched to Account Mapping via <b>CTI</b> (all teams). ' +
+        '<b>Exact duplicate rows</b> (same MSISDN + same DateTime already in the list or twice in the file) are skipped. ' +
+        'Only <b>repeat callers (2+ calls)</b> are uploaded — single-call MSISDNs are excluded so support only receives actual repeated numbers. New rows save as <b>Pending</b>.</p>' +
         '<label class="rc-upload-zone"><input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="rcParseFile(event)">Click or drop Excel file here</label>' +
+        adminBar +
         '<div id="rcUploadPreview" style="margin-top:1rem;"></div></div>';
 }
 
 function rcDashboardMainHTML(dateFiltered, items, s) {
     return '<div class="top-stats">' +
-            rcTile('Total', s.total, 'Filtered view', 'var(--acc)') +
+            rcTile('Total Calls', s.total, 'Filtered view', 'var(--acc)') +
+            rcTop10CallerTileHTML(dateFiltered) +
+            rcClickTile('Repeat Callers', s.repeatCallers, 'Unique MSISDN · 2+ calls', '#f59e0b', 'rcShowRepeatCallersOnly()') +
+            rcClickTile('Repeat Call Volume', s.repeatCalls, 'Total calls from repeaters', '#ef4444', 'rcShowRepeatCallersOnly()') +
             rcTile('Pending', s.pending, 'Awaiting assign', rcStatusColor(RC_STATUS.PENDING)) +
             rcTile('In Progress', s.inprogress, 'With agents', rcStatusColor(RC_STATUS.INPROGRESS)) +
             rcTile('Resolved', s.completed, 'Done', rcStatusColor(RC_STATUS.RESOLVED)) +
-            rcTile('Avg Aging', s.avgAging + ' d', 'Upload → now/done', 'var(--acc2)') +
-            rcTile('Avg SLA', s.avgTtc + ' d', 'Assign/Reassign → done', 'var(--acc2)') +
         '</div>' +
-        '<div style="text-align:center;margin:1rem 0;">' +
-            '<button type="button" id="rcToggleAgentsBtn" class="export-btn" onclick="rcToggleAgents()" style="padding:12px 24px;font-size:14px;">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:1rem 0;">' +
+            '<button type="button" id="rcToggleRepeatBtn" class="export-btn" onclick="rcToggleRepeatCallers()" style="padding:12px 20px;font-size:14px;">' +
+                '<i data-lucide="phone-missed" id="rcRepeatIcon" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>' +
+                '<span id="rcRepeatText">' + (rcRepeatVisible ? 'Hide Repeat Callers' : 'Show Repeat Callers') + '</span></button>' +
+            '<button type="button" id="rcToggleAgentsBtn" class="export-btn" onclick="rcToggleAgents()" style="padding:12px 20px;font-size:14px;">' +
                 '<i data-lucide="eye" id="rcAgentsIcon" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>' +
-                '<span id="rcAgentsText">' + (rcAgentsVisible ? 'Hide RC Agents' : 'Show RC Agents') + '</span>' +
-            '</button>' +
+                '<span id="rcAgentsText">' + (rcAgentsVisible ? 'Hide RC Agents' : 'Show RC Agents') + '</span></button>' +
+            '<button type="button" id="rcToggleChartsBtn" class="export-btn" onclick="rcToggleCharts()" style="padding:12px 20px;font-size:14px;">' +
+                '<i data-lucide="eye" id="rcChartsIcon" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>' +
+                '<span id="rcChartsText">' + (rcChartsBuilt ? 'Hide Analytics Charts' : 'Show Analytics Charts') + '</span></button>' +
+        '</div>' +
+        '<div id="rcRepeatSection" style="display:' + (rcRepeatVisible ? 'block' : 'none') + ';">' +
+            '<div id="rcTop10Panel">' + rcTop10CallersPanelHTML(dateFiltered) + '</div>' +
+            rcRepeatCallersPanelHTML(dateFiltered) +
         '</div>' +
         '<div id="rcAgentsSection" style="display:' + (rcAgentsVisible ? 'block' : 'none') + ';">' +
             rcAgentTilesHTML(dateFiltered) +
         '</div>' +
-        '<div style="text-align:center;margin:1rem 0;">' +
-            '<button type="button" id="rcToggleChartsBtn" class="export-btn" onclick="rcToggleCharts()" style="padding:12px 24px;font-size:14px;">' +
-                '<i data-lucide="eye" id="rcChartsIcon" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>' +
-                '<span id="rcChartsText">' + (rcChartsBuilt ? 'Hide Analytics Charts' : 'Show Analytics Charts') + '</span>' +
-            '</button>' +
-        '</div>' +
-        '<div id="rcChartsSection" class="rc-chart-grid" style="display:' + (rcChartsBuilt ? 'grid' : 'none') + ';">' +
+        '<div id="rcChartsSection" class="rc-chart-grid" style="display:' + (rcChartsBuilt ? 'grid' : 'none') + ';margin-top:1rem;">' +
             rcTrendChartCardHTML() +
+            rcChartCard('Top 10 Who Called', 'rcChartRepeat', 'Most calls by MSISDN (2+ calls)', false) +
             rcChartCard('Status Breakdown', 'rcChartStatus', 'Pipeline mix', true) +
             rcChartCard('Agent Workload', 'rcChartAgent', 'Resolved vs in progress', true) +
             rcChartCard('By LOB', 'rcChartCategory', 'Line of business', false) +
@@ -1635,8 +2228,9 @@ function rcRefreshDashboardContent() {
     var body = document.getElementById('rcTabBody');
     var base = rcAllItems;
     var dateFiltered = rcApplyDateFilters(base, rcDateFilters);
+    rcRebuildMsisdnCounts(dateFiltered);
     var items = rcApplyDashFilters(dateFiltered);
-    var s = rcSummary(items);
+    var s = rcSummary(items, dateFiltered);
     rcLastChartItems = items;
     rcLastChartSummary = s;
 
@@ -1660,8 +2254,12 @@ function rcRefreshDashboardContent() {
     if (rcAgentsVisible) {
         var agIcon = document.getElementById('rcAgentsIcon');
         if (agIcon) agIcon.setAttribute('data-lucide', 'eye-off');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+    if (rcRepeatVisible) {
+        var rpIcon = document.getElementById('rcRepeatIcon');
+        if (rpIcon) rpIcon.setAttribute('data-lucide', 'eye-off');
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function rcRefreshAssignContent() {
@@ -1727,8 +2325,9 @@ function rcRefreshMyQueueContent() {
 function rcRenderDashboard(body) {
     var base = rcAllItems;
     var dateFiltered = rcApplyDateFilters(base, rcDateFilters);
+    rcRebuildMsisdnCounts(dateFiltered);
     var items = rcApplyDashFilters(dateFiltered);
-    var s = rcSummary(items);
+    var s = rcSummary(items, dateFiltered);
     rcChartsBuilt = false;
     rcLastChartItems = items;
     rcLastChartSummary = s;
@@ -1748,7 +2347,31 @@ function rcRenderDashboard(body) {
         if (agIcon) agIcon.setAttribute('data-lucide', 'eye-off');
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+    if (rcRepeatVisible) {
+        var rpIcon = document.getElementById('rcRepeatIcon');
+        if (rpIcon) rpIcon.setAttribute('data-lucide', 'eye-off');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
 }
+
+window.rcToggleRepeatCallers = function () {
+    var section = document.getElementById('rcRepeatSection');
+    var icon = document.getElementById('rcRepeatIcon');
+    var text = document.getElementById('rcRepeatText');
+    if (!section) return;
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        rcRepeatVisible = true;
+        if (icon) icon.setAttribute('data-lucide', 'eye-off');
+        if (text) text.textContent = 'Hide Repeat Callers';
+    } else {
+        section.style.display = 'none';
+        rcRepeatVisible = false;
+        if (icon) icon.setAttribute('data-lucide', 'phone-missed');
+        if (text) text.textContent = 'Show Repeat Callers';
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+};
 
 window.rcToggleAgents = function () {
     var section = document.getElementById('rcAgentsSection');
@@ -1907,6 +2530,29 @@ function rcBuildDashboardCharts(items, s) {
     var legend = { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 11, weight: '600' } } };
 
     rcBuildTrendChart(items);
+
+    var repeatRows = rcTop10RepeatCallers(items);
+    var rpc = document.getElementById('rcChartRepeat');
+    if (rpc) rcCharts.repeat = new Chart(rpc, {
+        type: 'bar',
+        data: {
+            labels: repeatRows.length ? repeatRows.map(function (r) { return r.msisdn; }) : ['No repeat callers'],
+            datasets: [{
+                label: 'Times called',
+                data: repeatRows.length ? repeatRows.map(function (r) { return r.count; }) : [0],
+                borderRadius: 8, barThickness: 18,
+                backgroundColor: function (ctx) {
+                    var v = ctx.raw;
+                    if (v >= 5) return '#ef4444';
+                    if (v >= 2) return '#f59e0b';
+                    return '#94a3b8';
+                }
+            }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: rcChartTooltip() },
+            scales: { x: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } }, y: { grid: { display: false } } } }
+    });
 
     var sc = document.getElementById('rcChartStatus');
     if (sc) {
@@ -2082,23 +2728,34 @@ async function rcDoAssign(pairs, isReassign) {
     if (!pairs.length) { rcToast('Select rows and an agent', 'warn'); return; }
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
-    var now = new Date().toISOString(), ok = 0, fail = 0;
-    for (var i = 0; i < pairs.length; i++) {
-        var p = pairs[i];
+
+    rcShowBusy(isReassign ? 'Reassigning…' : 'Assigning…', '0 / ' + pairs.length);
+    var agentUidCache = {};
+    var result = await rcRunPool(pairs, async function (p) {
         var agent = rcAllAgents.find(function (a) { return a.name === p.agentName; });
-        if (!agent) { fail++; continue; }
-        try {
+        if (!agent) throw new Error('Agent not found');
+        if (!agentUidCache[p.agentName]) {
             var uid = await rcResolveUserId(agent.email, agent.name);
-            if (!uid) { fail++; continue; }
-            var fields = { AssignedToId: uid, RCStatus: RC_STATUS.INPROGRESS };
-            if (isReassign) fields.ReassignDate = now;
-            else fields.AssignmentDate = now;
-            await rcUpdateItem(p.id, fields, digest);
-            ok++;
-        } catch (e) { console.error('[RC]', e); fail++; }
-    }
-    rcToast((isReassign ? 'Reassigned ' : 'Assigned ') + ok + (fail ? ', ' + fail + ' failed' : ''), fail ? 'warn' : 'success');
-    await rcFetchItems();
+            if (!uid) throw new Error('User id not found');
+            agentUidCache[p.agentName] = uid;
+        }
+        var now = new Date().toISOString();
+        var fields = rcSpFields({ AssignedToId: agentUidCache[p.agentName], RCStatus: RC_STATUS.INPROGRESS });
+        if (isReassign) fields[RC_SP.REASSIGN] = now;
+        else fields[RC_SP.ASSIGN] = now;
+        await rcUpdateItem(p.id, fields, digest);
+    }, {
+        concurrency: RC_SP_CONCURRENCY,
+        getDigest: function () { return digest; },
+        setDigest: function (d) { digest = d; },
+        onProgress: function (done, total) {
+            rcShowBusy(isReassign ? 'Reassigning…' : 'Assigning…', done + ' / ' + total, (done / total) * 100);
+        }
+    });
+    rcHideBusy();
+
+    rcToast((isReassign ? 'Reassigned ' : 'Assigned ') + result.ok + (result.fail ? ', ' + result.fail + ' failed' : ''), result.fail ? 'warn' : 'success');
+    await rcFetchItems(true);
     rcRenderTabBody();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -2125,9 +2782,11 @@ window.rcBulkReassign = function () {
 window.rcParseFile = function (ev) {
     var file = ev.target.files && ev.target.files[0], prev = document.getElementById('rcUploadPreview');
     if (!file || typeof XLSX === 'undefined') return;
+    if (prev) prev.innerHTML = rcSpinnerBlock('Reading file…', file.name);
     var reader = new FileReader();
     reader.onload = function (e) {
         try {
+            if (prev) prev.innerHTML = rcSpinnerBlock('Parsing Excel…', 'Processing rows');
             var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
             rcUploadRows = [];
             var sheet = wb.Sheets[wb.SheetNames[0]];
@@ -2148,9 +2807,15 @@ window.rcParseFile = function (ev) {
                 if (rec.MSISDN && rec.Call_DateTime) rcUploadRows.push(rec);
             }
             rcRenderUploadPreview();
-        } catch (err) { prev.innerHTML = rcErrBox(rcEsc(err.message)); }
+        } catch (err) {
+            if (prev) prev.innerHTML = rcErrBox(rcEsc(err.message));
+        }
+    };
+    reader.onerror = function () {
+        if (prev) prev.innerHTML = rcErrBox('Could not read the selected file.');
     };
     reader.readAsArrayBuffer(file);
+    ev.target.value = '';
 };
 
 function rcRenderUploadPreview() {
@@ -2167,28 +2832,74 @@ function rcRenderUploadPreview() {
         if (existing[k] || seen[k]) { dupE++; return; }
         seen[k] = true; toAdd.push(rec);
     });
+    var repeatFilter = rcFilterRepeatCallerRows(toAdd);
+    toAdd = repeatFilter.rows;
     rcUploadRows._toAdd = toAdd;
+    var skippedSingle = repeatFilter.skipped;
     var unmapped = 0;
     toAdd.forEach(function (rec) { if (rec.Agent_Name && !rcLookupCti(rec.Agent_Name)) unmapped++; });
-    prev.innerHTML = '<div style="font-size:.82rem;color:var(--t2);margin-bottom:.75rem;"><b>' + toAdd.length + '</b> new · <b>' + dupE + '</b> skipped (duplicate MSISDN+DateTime)' +
-        (unmapped ? ' · <b style="color:#f59e0b;">' + unmapped + '</b> CTI not in Account Mapping' : '') + '</div>' +
-        (toAdd.length ? '<button type="button" class="export-btn" id="rcConfirmUploadBtn" onclick="rcConfirmUpload()">Confirm Upload (' + toAdd.length + ')</button>' : '<div style="color:var(--t3);">Nothing new to upload.</div>') +
+    var batchCounts = rcBuildMsisdnCounts(toAdd);
+    var batchRepeat = Object.keys(batchCounts).filter(function (m) { return batchCounts[m] >= 2; }).length;
+    var merged = toAdd.map(function (r) { return { MSISDN: r.MSISDN }; }).concat(rcAllItems.map(function (it) { return { MSISDN: it.MSISDN }; }));
+    var mergedCounts = rcBuildMsisdnCounts(merged);
+    var afterRepeat = Object.keys(mergedCounts).filter(function (m) { return mergedCounts[m] >= 2; }).length;
+    prev.innerHTML = '<div style="font-size:.82rem;color:var(--t2);margin-bottom:.75rem;line-height:1.5;">' +
+        '<b>' + toAdd.length + '</b> repeat-caller rows to upload (2+ calls per MSISDN) · ' +
+        '<b>' + dupE + '</b> exact duplicates skipped' +
+        (skippedSingle ? ' · <b style="color:#64748b;">' + skippedSingle + '</b> single-call MSISDNs excluded' : '') +
+        (batchRepeat ? ' · <b style="color:#f59e0b;">' + batchRepeat + '</b> customers call 2+ times in this batch' : '') +
+        (afterRepeat ? ' · <b style="color:#ef4444;">' + afterRepeat + '</b> total repeat callers after upload' : '') +
+        (unmapped ? ' · <b style="color:#f59e0b;">' + unmapped + '</b> CTI not mapped' : '') + '</div>' +
+        (toAdd.length ? '<button type="button" class="export-btn" id="rcConfirmUploadBtn" onclick="rcConfirmUpload()">Confirm Upload (' + toAdd.length + ')</button>' : '<div style="color:var(--t3);">No repeat callers (2+) to upload. Single-call MSISDNs are not imported.</div>') +
         '<div id="rcUploadProgress" style="margin-top:.75rem;"></div>';
 }
 
 window.rcConfirmUpload = async function () {
     var toAdd = rcUploadRows._toAdd || [];
     if (!toAdd.length) return;
-    var digest, now = new Date().toISOString(), ok = 0;
-    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
-    for (var i = 0; i < toAdd.length; i++) {
-        var rec = toAdd[i], key = rcCallKey(rec);
-        var fields = { Title: key, RCStatus: RC_STATUS.PENDING, UploadDate: now };
-        RC_COLS.forEach(function (col) { fields[col.key] = rec[col.key] || ''; });
-        try { await rcCreateItem(fields, digest); ok++; } catch (e) { console.error(e); }
+
+    var btn = document.getElementById('rcConfirmUploadBtn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+    var digest, entityType, now = new Date().toISOString();
+    try {
+        digest = await rcGetDigest();
+        entityType = await rcGetEntityType();
+    } catch (e) {
+        rcToast('Digest error', 'error');
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        return;
     }
-    rcToast('Uploaded ' + ok + ' calls', 'success');
-    await rcFetchItems();
+
+    var payloads = toAdd.map(function (rec) {
+        var key = rcCallKey(rec);
+        var fields = rcSpFields({ Title: key, RCStatus: RC_STATUS.PENDING, UploadDate: now });
+        RC_COLS.forEach(function (col) {
+            if (col.key === 'Call_DateTime') {
+                fields[col.key] = rcExcelSerialToIso(rec[col.key]) || rec[col.key] || '';
+            } else {
+                fields[col.key] = rec[col.key] || '';
+            }
+        });
+        return fields;
+    });
+
+    rcShowBusy('Uploading to SharePoint…', '0 / ' + payloads.length, 0);
+    var result = await rcRunPool(payloads, function (fields) {
+        return rcCreateItem(fields, digest, entityType);
+    }, {
+        concurrency: RC_SP_CONCURRENCY,
+        getDigest: function () { return digest; },
+        setDigest: function (d) { digest = d; },
+        onProgress: function (done, total) {
+            rcShowBusy('Uploading to SharePoint…', done + ' / ' + total + ' calls', (done / total) * 100);
+        }
+    });
+    rcHideBusy();
+
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    rcToast('Uploaded ' + result.ok + ' calls' + (result.fail ? ' (' + result.fail + ' failed)' : ''), result.fail ? 'warn' : 'success');
+    await rcFetchItems(true);
     rcRenderTabBody();
 };
 
@@ -2226,14 +2937,16 @@ function rcRenderMyQueue(body) {
 }
 
 window.rcResolve = async function (id) {
+    rcShowBusy('Updating…', 'Marking resolved');
     var digest;
-    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+    try { digest = await rcGetDigest(); } catch (e) { rcHideBusy(); rcToast('Digest error', 'error'); return; }
     try {
-        await rcUpdateItem(id, { RCStatus: RC_STATUS.RESOLVED, CompletedDate: new Date().toISOString() }, digest);
+        await rcUpdateItem(id, rcSpFields({ RCStatus: RC_STATUS.RESOLVED, CompletedDate: new Date().toISOString() }), digest);
         rcToast('Marked resolved', 'success');
-        await rcFetchItems();
+        await rcFetchItems(true);
         rcRenderTabBody();
     } catch (e) { rcToast('Could not resolve', 'error'); }
+    finally { rcHideBusy(); }
 };
 window.rcComplete = window.rcResolve;
 
@@ -2249,12 +2962,60 @@ window.rcReopen = async function (id) {
 
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+    rcShowBusy('Reopening…', label);
     try {
-        await rcUpdateItem(id, { RCStatus: RC_STATUS.INPROGRESS, CompletedDate: null }, digest);
+        await rcUpdateItem(id, rcSpFields({ RCStatus: RC_STATUS.INPROGRESS, CompletedDate: null }), digest);
         rcToast('Activity reopened', 'success');
-        await rcFetchItems();
+        await rcFetchItems(true);
         rcRenderTabBody();
     } catch (e) { rcToast('Could not reopen', 'error'); }
+    finally { rcHideBusy(); }
+};
+
+window.rcDeleteRecord = async function (id) {
+    if (!rcCanDeleteAll()) { rcToast('Only Tehleel and Ubaid can delete records', 'warn'); return; }
+    var item = rcAllItems.find(function (it) { return it.ID === id; });
+    var label = item ? (rcCallKey(item) || ('ID ' + id)) : ('ID ' + id);
+    if (!confirm('Delete record ' + label + '?\n\nThis cannot be undone.')) return;
+
+    var digest;
+    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+    rcShowBusy('Deleting…', label);
+    try {
+        await rcDeleteItem(id, digest);
+        rcToast('Record deleted', 'success');
+        await rcFetchItems(true);
+        rcRenderTabBody();
+    } catch (e) { rcToast('Could not delete record', 'error'); }
+    finally { rcHideBusy(); }
+};
+
+window.rcDeleteAll = async function () {
+    if (!rcCanDeleteAll()) { rcToast('Only Tehleel and Ubaid can delete all records', 'warn'); return; }
+    var ids = rcAllItems.map(function (it) { return it.ID; }).filter(Boolean);
+    if (!ids.length) { rcToast('No records to delete', 'warn'); return; }
+    if (!confirm('Delete ALL ' + ids.length + ' records from Repeated Calls?\n\nThis permanently removes every row in the list.')) return;
+    if (!confirm('Final confirmation: delete ' + ids.length + ' records? This cannot be undone.')) return;
+
+    var digest;
+    try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
+
+    rcShowBusy('Deleting all records…', '0 / ' + ids.length, 0);
+    var result = await rcRunPool(ids, function (id) {
+        return rcDeleteItem(id, digest);
+    }, {
+        concurrency: RC_SP_CONCURRENCY,
+        getDigest: function () { return digest; },
+        setDigest: function (d) { digest = d; },
+        onProgress: function (done, total) {
+            rcShowBusy('Deleting all records…', done + ' / ' + total, (done / total) * 100);
+        }
+    });
+    rcHideBusy();
+
+    rcToast('Deleted ' + result.ok + ' record' + (result.ok !== 1 ? 's' : '') + (result.fail ? ' (' + result.fail + ' failed)' : ''), result.fail ? 'warn' : 'success');
+    await rcFetchItems(true);
+    rcRenderTabBody();
 };
 
 // ============================================================
@@ -2281,7 +3042,7 @@ function rcDummyItems() {
         var cmp = rcIsResolvedStatus(st) ? new Date(Date.now() - i * 86400000).toISOString() : null;
         var msisdn = '9715' + (1000000 + i);
         var dt = String(46259 + (i * 0.001));
-        out.push({
+        out.push(rcNormalizeItem({
             ID: i + 1,
             MSISDN: msisdn,
             Call_Date: '46259',
@@ -2301,14 +3062,14 @@ function rcDummyItems() {
             KB_ID: '',
             Segment_Value: 'Prem',
             LOB: lobs[i % 3],
-            RCStatus: st,
-            UploadDate: up,
-            AssignmentDate: asg,
-            ReassignDate: rea,
-            CompletedDate: cmp,
+            RC_Status: st,
+            Upload_Date: up,
+            Assignment_Date: asg,
+            Reassign_Date: rea,
+            Resolved_Date: cmp,
             AssignedToName: st === RC_STATUS.PENDING ? '' : agents[i % 3],
             AssignedToEmail: ''
-        });
+        }));
     }
     return out;
 }
