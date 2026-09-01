@@ -2474,7 +2474,7 @@ function loadData(){
 }function mapItem(it){
   const rawFC=(it.Forecast_Category0||'').trim();
   const rawProb=it.Closure_x0020_Probability||'—';
-  const rawStatus=it.Opportunity_x0020_Status||'—';
+  const rawStatus=(it.Opportunity_x0020_Status||'—').trim();
   const forecastCategory=glkResolveForecastCategory(rawFC,rawProb);
   let closureProb=rawProb;
   let status=rawStatus;
@@ -2482,6 +2482,7 @@ function loadData(){
   if(forecastCategory&&FORECAST_TO_STATUS[forecastCategory]) status=FORECAST_TO_STATUS[forecastCategory];
   return {
     id:it.Id,customerName:it.Title||'—',typeOfRequest:it.Type_x0020_of_x0020_Request||'—',
+    oppStatus:rawStatus||'—',
     typeOfContract:it.Type_x0020_of_x0020_Contract||'—',vertical:it.Segment||'—',
     accountDirector:it.Account_x0020_Director||'—',solutionManager:it.Solution_x0020_Manager||'—',
    headDirector:it.Head_x0020_Director||'(Blank)',productFamily:it.Product_x0020_Family||'—',
@@ -6370,6 +6371,7 @@ var MQ_BID_DETAIL_FIELDS=[
   {k:'myId',l:'My ID'},
   {k:'customerCode',l:'Customer Code'},
   {k:'customerName',l:'Customer'},
+  {k:'oppStatus',l:'Opportunity Status'},
   {k:'buildingName',l:'Building / MAPA'},
   {k:'vertical',l:'Vertical'},
   {k:'headDirector',l:'Head Director'},
@@ -6397,7 +6399,7 @@ var MQ_BID_DETAIL_FIELDS=[
   {k:'comments',l:'Comments',html:true}
 ];
 function mqFormatBidField(bid,fd){
-  var v=bid[fd.k];
+  var v=fd.k==='oppStatus'?mqNormOppStatus(bid):bid[fd.k];
   if(v==null||v==='') return '—';
   if(fd.date) return fmtDate(v);
   if(fd.money) return fmtLines(v);
@@ -6538,7 +6540,7 @@ function mqBuildRulesHtml(calc){
     html+='<strong>Green — Actuals</strong> — achieved to date from uploaded GLK Excel (QTD = quarter months; YTD = Jan→current month). Not from pipeline.<br>';
   }
   html+='<strong>Purple — Won</strong> (Gross Adds Won / Quarter to Go — Won on forward bridges)<br>';
-  html+='&nbsp;&nbsp;· Status = <strong>Won only</strong> — Billed is excluded<br>';
+  html+='&nbsp;&nbsp;· Opportunity Status = <strong>Won only</strong> (raw SharePoint field — Billed / Proposed / Opportunity excluded)<br>';
   html+='&nbsp;&nbsp;· Closure Prob = <strong>100%</strong><br>';
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
   html+='&nbsp;&nbsp;· Expected activation date <strong>required</strong> — must fall in the bridge window (QTD / QTG / YTG)<br>';
@@ -6548,8 +6550,7 @@ function mqBuildRulesHtml(calc){
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
   html+='&nbsp;&nbsp;· Same activation window as Won for this bridge type<br>';
   html+='&nbsp;&nbsp;· Value &gt; 0<br>';
-  html+='<strong>Worst Case:</strong> Status = <strong>Proposed</strong> only<br>';
-  html+='<strong>Best Case:</strong> Top 5 pool = <strong>Proposed + Opportunity</strong>; Others pool = any in-flight status ('+ipStatuses+')<br>';
+  html+='&nbsp;&nbsp;· In-flight gross uses raw Opportunity Status — <strong>Proposed</strong>'+(calc.isBest?' / <strong>Opportunity</strong> (Best Case)':' (Worst Case)')+' only · Won / Billed never included<br>';
   html+='&nbsp;&nbsp;· <strong>Grouped by customer name</strong> — all rows for the same customer are summed together<br>';
   html+='&nbsp;&nbsp;· <strong>Top 5</strong> = five largest customers by value (largest → smallest on chart) · <strong>Others</strong> = remaining customers combined<br><br>';
 
@@ -6648,8 +6649,42 @@ function mqBidDetailLines(bids,max){
 function calcPeriodBridgeLabel(){
   return mqPeriodShortName(GLK_MQ_CALC_LAST&&GLK_MQ_CALC_LAST.bridgePeriod);
 }
+function mqNormOppStatus(bid){
+  return String(bid&&bid.oppStatus!=null?bid.oppStatus:(bid?bid.status:'')).trim();
+}
 function mqIsWonOnlyBid(bid){
-  return String(bid.status||'').trim()==='Won';
+  return mqNormOppStatus(bid)==='Won';
+}
+function mqIsBilledBid(bid){
+  return mqNormOppStatus(bid)==='Billed';
+}
+function mqIsInflightGrossStatus(bid,isBest){
+  var s=mqNormOppStatus(bid);
+  if(s==='Won'||s==='Billed'||s==='Lost'||s==='Cancelled'||s==='No Bid') return false;
+  if(isBest) return s==='Proposed'||s==='Opportunity';
+  return s==='Proposed';
+}
+function mqBidRefValue(bid){
+  var ref=bid.bidRequest&&bid.bidRequest!=='—'?String(bid.bidRequest).trim():'';
+  if(ref) return ref;
+  if(bid.myId&&bid.myId!=='—') return String(bid.myId).trim();
+  return '';
+}
+function mqBidRefChip(ref){
+  if(!ref) return '—';
+  return '<code class="mq-copy-ref" style="user-select:all;-webkit-user-select:all;font-family:ui-monospace,monospace;background:var(--bg-secondary);padding:.12rem .4rem;border-radius:4px;border:1px solid var(--border);font-size:.68rem;">'+mqEscHtml(ref)+'</code>';
+}
+function mqBidRefCopyHtml(bid){
+  var ref=mqBidRefValue(bid);
+  var parts=[];
+  if(ref) parts.push('Bid Ref: '+mqBidRefChip(ref));
+  if(bid.myId&&bid.myId!=='—'&&String(bid.myId).trim()!==ref) parts.push('My ID: '+mqBidRefChip(String(bid.myId).trim()));
+  if(bid.customerCode&&bid.customerCode!=='—') parts.push('Cust Code: '+mqBidRefChip(String(bid.customerCode).trim()));
+  return parts.length?parts.join(' · '):'—';
+}
+function mqClubbedRefsHtml(bids){
+  return (bids||[]).map(function(bd){return mqBidRefValue(bd);}).filter(Boolean)
+    .map(function(ref){return mqBidRefChip(ref);}).join(' ');
 }
 function mqBidHasExpectedActivation(bid){
   return !!mqParseBidDate(bid.expectedActivation);
@@ -6657,7 +6692,7 @@ function mqBidHasExpectedActivation(bid){
 function mqMatchesGrossAddsWon(bid,year,quarter,getVal,activationFn){
   getVal=getVal||mqBidMetric;
   activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
-  return mqIsWonOnlyBid(bid)&&bid.closureProb==='100%'&&mqBidHasExpectedActivation(bid)&&
+  return mqIsWonOnlyBid(bid)&&!mqIsBilledBid(bid)&&bid.closureProb==='100%'&&mqBidHasExpectedActivation(bid)&&
     mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)&&activationFn(bid)&&getVal(bid)>0;
 }
 function mqSortGroupsByValueDesc(groups){
@@ -6677,9 +6712,10 @@ function mqDetailGroupsFromBar(b,isChurn){
   return mqSortGroupsByValueDesc(groups);
 }
 function mqBidRefLine(bid){
+  var ref=mqBidRefValue(bid);
   var parts=[];
-  if(bid.bidRequest&&bid.bidRequest!=='—') parts.push('Bid Ref: '+bid.bidRequest);
-  if(bid.myId&&bid.myId!=='—') parts.push('My ID: '+bid.myId);
+  if(ref) parts.push('Bid Ref: '+ref);
+  if(bid.myId&&bid.myId!=='—'&&String(bid.myId).trim()!==ref) parts.push('My ID: '+bid.myId);
   if(bid.customerCode&&bid.customerCode!=='—') parts.push('Cust Code: '+bid.customerCode);
   return parts.length?parts.join(' · '):'—';
 }
@@ -6689,7 +6725,7 @@ function mqGrossAdds100Detail(bids,year,quarter){
 }
 function mqGrossAddsForwardDetail(bids,getVal,activationFn){
   var matched=bids.filter(function(b){
-    return mqIsWonOnlyBid(b)&&b.closureProb==='100%'&&mqBidHasExpectedActivation(b)&&
+    return mqIsWonOnlyBid(b)&&!mqIsBilledBid(b)&&b.closureProb==='100%'&&mqBidHasExpectedActivation(b)&&
       mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
   });
   return {total:matched.reduce(function(s,b){return s+getVal(b);},0),bids:mqSortBidsByValueDesc(matched,false)};
@@ -6723,15 +6759,18 @@ function mqInflightGrossPools(base,year,quarter,isBest,getVal,activationFn){
   getVal=getVal||mqBidMetric;
   activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
   var common=function(b){
-    return mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
+    return mqIsInflightGrossStatus(b,isBest)&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
   };
   var topPool,othersPool;
   if(isBest){
-    topPool=base.filter(function(b){return common(b)&&(b.status==='Proposed'||b.status==='Opportunity');});
-    othersPool=base.filter(function(b){return common(b)&&STATUS_IP.indexOf(b.status)>=0;});
+    topPool=base.filter(function(b){return common(b)&&(mqNormOppStatus(b)==='Proposed'||mqNormOppStatus(b)==='Opportunity');});
+    othersPool=base.filter(function(b){
+      return mqIsInflightGrossStatus(b,true)&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0&&
+        mqNormOppStatus(b)!=='Proposed'&&mqNormOppStatus(b)!=='Opportunity';
+    });
     return mqTopNAndOthers(topPool,othersPool,getVal,5);
   }
-  topPool=base.filter(function(b){return common(b)&&b.status==='Proposed';});
+  topPool=base.filter(function(b){return common(b)&&mqNormOppStatus(b)==='Proposed';});
   othersPool=topPool.slice();
   return mqTopNAndOthers(topPool,othersPool,getVal,5);
 }
@@ -6745,16 +6784,19 @@ function mqInflightChurnPools(base,year,quarter,isBest,getVal,activationFn){
     return 0;
   };
   var common=function(b){
-    return mqContractInList(b,MQ_CHURN_CONTRACT_TYPES)&&activationFn(b);
+    return mqIsInflightGrossStatus(b,isBest)&&mqContractInList(b,MQ_CHURN_CONTRACT_TYPES)&&activationFn(b);
   };
   var hasChurn=function(b){ return churnVal(b)!==0; };
   var topPool,othersPool;
   if(isBest){
-    topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&(b.status==='Proposed'||b.status==='Opportunity');});
-    othersPool=base.filter(function(b){return common(b)&&hasChurn(b)&&STATUS_IP.indexOf(b.status)>=0;});
+    topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&(mqNormOppStatus(b)==='Proposed'||mqNormOppStatus(b)==='Opportunity');});
+    othersPool=base.filter(function(b){
+      return mqIsInflightGrossStatus(b,true)&&mqContractInList(b,MQ_CHURN_CONTRACT_TYPES)&&activationFn(b)&&hasChurn(b)&&
+        mqNormOppStatus(b)!=='Proposed'&&mqNormOppStatus(b)!=='Opportunity';
+    });
     return mqTopNAndOthers(topPool,othersPool,churnVal,5);
   }
-  topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&b.status==='Proposed';});
+  topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&mqNormOppStatus(b)==='Proposed';});
   othersPool=topPool.slice();
   return mqTopNAndOthers(topPool,othersPool,churnVal,5);
 }
@@ -7057,13 +7099,16 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
       h+='<span>'+(gi+1)+'. '+mqEscHtml(grp.name)+(clubbed?' <span style="color:var(--t3);font-weight:600;">('+grp.bids.length+' bids clubbed · exact customer name)</span>':'')+'</span>';
       h+='<span style="color:'+(isChurn?'#ef4444':'var(--acc)')+';">'+fmtLines(grp.value)+'</span></div>';
       if(clubbed){
+        h+='<div class="mq-detail-account-sub" style="margin-top:.2rem;">Bid references (select to copy):</div>';
+        h+='<div class="mq-detail-account-sub" style="padding-left:.25rem;margin-bottom:.25rem;">'+mqClubbedRefsHtml(grp.bids)+'</div>';
         h+='<div class="mq-detail-account-sub" style="margin-top:.2rem;">Clubbed accounts:</div>';
         grp.bids.forEach(function(bd,bi){
           var bv=mqBidRowDetailValue(bd,isChurn?'decrease':'increase');
-          h+='<div class="mq-detail-account-sub" style="padding-left:.55rem;">· '+mqEscHtml(mqBidRefLine(bd))+' — '+fmtLines(Math.abs(bv))+' · '+mqEscHtml(bd.status||'—')+' · Act: '+fmtDate(bd.expectedActivation)+'</div>';
+          h+='<div class="mq-detail-account-sub" style="padding-left:.55rem;">· '+mqBidRefCopyHtml(bd)+' — '+fmtLines(Math.abs(bv))+' · Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(bd))+'</strong> · Act: '+fmtDate(bd.expectedActivation)+'</div>';
         });
       }else{
-        h+='<div class="mq-detail-account-sub">'+mqEscHtml(mqBidRowSummaryLine(grp.bids[0]))+'</div>';
+        h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(grp.bids[0])+' · Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(grp.bids[0]))+'</strong></div>';
+        h+='<div class="mq-detail-account-sub">'+mqEscHtml((grp.bids[0].buildingName&&grp.bids[0].buildingName!=='—'?grp.bids[0].buildingName+' · ':'')+(grp.bids[0].vertical||'—')+' · AM: '+(grp.bids[0].amName||'—')+' · AD: '+(grp.bids[0].accountDirector||'—'))+'</div>';
       }
       if(!groupOpen){
         h+='<div style="font-size:.62rem;color:var(--t3);margin-top:.35rem;cursor:pointer;" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+')">Click for full pipeline row →</div>';
@@ -7077,7 +7122,7 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
           h+='<div class="mq-detail-account-hdr" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+','+bi+')" style="cursor:pointer;margin-bottom:.25rem;">';
           h+='<span>'+(clubbed?(bi+1)+'. within club · ':'')+mqEscHtml(bd.customerName||'—')+'</span>';
           h+='<span style="color:'+(isChurn?'#ef4444':'var(--acc)')+';">'+fmtLines(Math.abs(val))+'</span></div>';
-          h+='<div class="mq-detail-account-sub">'+mqEscHtml(mqBidRefLine(bd))+'</div>';
+          h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(bd)+' · Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(bd))+'</strong></div>';
           h+='<div class="mq-detail-account-sub">Product: '+mqEscHtml(bd.productFamily||'—')+' · '+mqEscHtml(bd.productCategory||'—')+' · Services: '+mqEscHtml(bd.services||'—')+'</div>';
           h+='<div class="mq-calc-box">';
           bdBreak.lines.forEach(function(line){ h+=line+'<br>'; });
