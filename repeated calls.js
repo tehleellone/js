@@ -1,5 +1,5 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.6.0
+// repeated-calls.js — Repeated Calls Module v1.7.1
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
 // SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
@@ -18,9 +18,12 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.6.0';
+window.RC_MODULE_VERSION = '1.7.1';
 
 var RC_DELETE_ALL_EMAILS = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
+var RC_MIN_REPEAT_CALLS = 3;
+var RC_UPLOAD_SITE = 'CC-SGS-Emtyaz';
+var RC_UPLOAD_CUSTOMER_TYPE = 'Enterprise';
 
 // Editable workflow fields (SharePoint list columns)
 var RC_WORKFLOW_FIELDS = [
@@ -36,7 +39,7 @@ var RC_WORKFLOW_FIELDS = [
 
 var RC_CHOICE_DEFAULTS = {
     Call_Driver: ['Billing', 'Technical', 'Complaint', 'Information', 'Service Request', 'Other'],
-    LOB: ['Mobile', 'Fixed', 'Enterprise', 'B2B', 'Other'],
+    LOB: ['Mobile', 'Fixed'],
     Call_Back_Status: ['Pending', 'Completed', 'Not Required', 'Scheduled', 'No Answer'],
     Resolution_Type: ['Resolved', 'Escalated', 'Callback', 'Transferred', 'No Action'],
     Pending_With: ['Support', 'Back Office', 'Technical', 'Billing', 'Customer'],
@@ -94,7 +97,7 @@ function rcExcelSerialToIso(serial) {
     return new Date(epoch + n * 86400000).toISOString();
 }
 
-var rcDashFilters   = { status: [], language: [], lob: [], segment: [], agent: [], search: '', repeatOnly: false };
+var rcDashFilters   = { status: [], language: [], lob: [], segment: [], agent: [], search: '' };
 var rcMsisdnCounts  = {};
 var rcRepeatVisible = false;
 var rcDateFilters   = { dateField: 'UploadDate', dateMode: 'any', from: '', to: '', specific: '', years: [], quarters: [], months: [], weeks: [] };
@@ -171,14 +174,26 @@ function rcMsisdnCallCount(msisdn) {
 }
 
 function rcIsRepeatMsisdn(msisdn) {
-    return rcMsisdnCallCount(msisdn) >= 2;
+    return rcMsisdnCallCount(msisdn) >= RC_MIN_REPEAT_CALLS;
+}
+
+function rcIsAssigned(it) {
+    if (!it) return false;
+    return !!(it.AssignedToName || it.AssignedToId || (it.Assigned_To && it.Assigned_To.Title));
+}
+
+function rcDisplayStatus(it) {
+    if (!it) return RC_STATUS.PENDING;
+    if (rcIsResolvedStatus(it.RCStatus)) return RC_STATUS.RESOLVED;
+    if (rcIsAssigned(it)) return RC_STATUS.INPROGRESS;
+    return RC_STATUS.PENDING;
 }
 
 function rcRepeatCallersList(items) {
     var map = rcBuildMsisdnCounts(items);
     var rows = [];
     Object.keys(map).forEach(function (m) {
-        if (map[m] < 2) return;
+        if (map[m] < RC_MIN_REPEAT_CALLS) return;
         var calls = items.filter(function (it) { return String(it.MSISDN || '').trim() === m; });
         var latest = calls[0] || {};
         rows.push({
@@ -235,7 +250,7 @@ function rcTop10CallersPanelHTML(items) {
 function rcCallCountCell(val) {
     var n = parseInt(val, 10) || 0;
     if (n >= 5) return '<span class="rc-call-count rc-call-count-high">' + n + '</span>';
-    if (n >= 2) return '<span class="rc-call-count rc-call-count-repeat">' + n + '</span>';
+    if (n >= RC_MIN_REPEAT_CALLS) return '<span class="rc-call-count rc-call-count-repeat">' + n + '</span>';
     return '<span class="rc-call-count">' + n + '</span>';
 }
 
@@ -305,17 +320,85 @@ function rcChoiceOptions(choiceKey, fieldKey) {
     return base.sort(function (a, b) { return String(a).localeCompare(String(b)); });
 }
 
-function rcFilterRepeatCallerRows(rows) {
-    var mergedCounts = rcBuildMsisdnCounts(
-        (rows || []).map(function (r) { return { MSISDN: r.MSISDN }; }).concat(rcAllItems)
-    );
-    var kept = [], skipped = 0;
-    (rows || []).forEach(function (rec) {
-        var m = String(rec.MSISDN || '').trim();
-        if ((mergedCounts[m] || 0) >= 2) kept.push(rec);
-        else skipped++;
+function rcNormUploadVal(s) {
+    return String(s || '').trim().toLowerCase();
+}
+
+function rcMatchesUploadSite(site) {
+    return rcNormUploadVal(site) === rcNormUploadVal(RC_UPLOAD_SITE);
+}
+
+function rcMatchesUploadCustomerType(customerType) {
+    return rcNormUploadVal(customerType) === rcNormUploadVal(RC_UPLOAD_CUSTOMER_TYPE);
+}
+
+function rcEditChoiceOptions(field) {
+    if (field.key === 'LOB') return rcUniqueValues(rcAllItems, 'LOB');
+    return rcChoiceOptions(field.choiceKey || field.key, field.key);
+}
+
+function rcWorkflowEditValue(item, field) {
+    var raw = item[field.key];
+    if (raw == null || raw === undefined || String(raw).trim() === '') return '';
+    var val = String(raw).trim();
+    if (rcDisplayStatus(item) === RC_STATUS.PENDING && field.key === 'Resolution_Status' && val.toLowerCase() === 'pending') {
+        return '';
+    }
+    return val;
+}
+
+function rcProcessUploadRows(rawRows) {
+    var existing = {};
+    rcAllItems.forEach(function (it) {
+        var k = rcCallKey({ MSISDN: it.MSISDN, Call_DateTime: it.Call_DateTime });
+        if (k) existing[k] = true;
     });
-    return { rows: kept, skipped: skipped };
+    var ignored = [], seen = {}, candidates = [];
+    (rawRows || []).forEach(function (rec) {
+        var k = rcCallKey(rec);
+        if (!k) return;
+        if (!rcMatchesUploadCustomerType(rec.Customer_Type)) {
+            ignored.push({ msisdn: rec.MSISDN, callDateTime: rec.Call_DateTime, site: rec.Site, customerType: rec.Customer_Type, reason: 'Customer Type is not Enterprise' });
+            return;
+        }
+        if (!rcMatchesUploadSite(rec.Site)) {
+            ignored.push({ msisdn: rec.MSISDN, callDateTime: rec.Call_DateTime, site: rec.Site, customerType: rec.Customer_Type, reason: 'Site is not CC-SGS-Emtyaz' });
+            return;
+        }
+        if (existing[k] || seen[k]) {
+            ignored.push({ msisdn: rec.MSISDN, callDateTime: rec.Call_DateTime, site: rec.Site, customerType: rec.Customer_Type, reason: 'Exact duplicate (same MSISDN + DateTime)' });
+            return;
+        }
+        seen[k] = true;
+        candidates.push(rec);
+    });
+    var mergedCounts = rcBuildMsisdnCounts(
+        candidates.map(function (r) { return { MSISDN: r.MSISDN }; }).concat(rcAllItems)
+    );
+    var toAdd = [];
+    candidates.forEach(function (rec) {
+        var m = String(rec.MSISDN || '').trim();
+        if ((mergedCounts[m] || 0) >= RC_MIN_REPEAT_CALLS) toAdd.push(rec);
+        else ignored.push({ msisdn: rec.MSISDN, callDateTime: rec.Call_DateTime, site: rec.Site, customerType: rec.Customer_Type, reason: 'MSISDN has fewer than 3 calls (requires 3+)' });
+    });
+    return { toAdd: toAdd, ignored: ignored };
+}
+
+function rcUploadIgnoredTableHTML(ignored) {
+    if (!ignored || !ignored.length) return '';
+    var show = ignored.slice(0, 100);
+    return '<div class="rc-panel" style="margin-top:.85rem;border-color:rgba(239,68,68,.2);">' +
+        '<div class="rc-panel-title" style="font-size:.88rem;">Ignored rows · ' + ignored.length + '</div>' +
+        '<p style="font-size:.74rem;color:var(--t3);margin:-.35rem 0 .65rem;">Only Enterprise + CC-SGS-Emtyaz + MSISDNs with 3+ calls are uploaded.</p>' +
+        '<div class="rc-repeat-table-wrap"><table class="rc-repeat-table"><thead><tr>' +
+        '<th>MSISDN</th><th>DateTime</th><th>Site</th><th>Customer Type</th><th>Reason</th>' +
+        '</tr></thead><tbody>' +
+        show.map(function (r) {
+            return '<tr><td>' + rcEsc(r.msisdn || '—') + '</td><td>' + rcEsc(r.callDateTime || '—') + '</td><td>' + rcEsc(r.site || '—') + '</td><td>' + rcEsc(r.customerType || '—') + '</td><td style="color:#dc2626;font-weight:600;">' + rcEsc(r.reason) + '</td></tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+        (ignored.length > show.length ? '<p style="font-size:.72rem;color:var(--t3);margin:.65rem 0 0;">…and ' + (ignored.length - show.length) + ' more ignored rows.</p>' : '') +
+        '</div>';
 }
 
 function rcEsc(s) {
@@ -1310,12 +1393,11 @@ function rcUniqueValues(items, field) {
 function rcApplyDashFilters(items) {
     var f = rcDashFilters;
     return items.filter(function (it) {
-        if (!rcMatchMulti(rcCanonicalStatus(it.RCStatus), f.status)) return false;
+        if (!rcMatchMulti(rcDisplayStatus(it), f.status)) return false;
         if (!rcMatchMulti(it.Language, f.language)) return false;
         if (!rcMatchMulti(it.LOB, f.lob)) return false;
         if (!rcMatchMulti(it.Segment_Value, f.segment)) return false;
         if (f.agent && f.agent.length && !rcMatchMulti(rcCanonicalAgentName(it.AssignedToName), f.agent)) return false;
-        if (f.repeatOnly && !rcIsRepeatMsisdn(it.MSISDN)) return false;
         if (f.search) {
             var q = f.search.toLowerCase();
             var blob = [it.MSISDN, it.Agent_Name, it.Site, it.LOB, it.Language, it.Segment_Value, it.AssignedToName, it.skill_group_enterprisename].join(' ').toLowerCase();
@@ -1336,8 +1418,6 @@ function rcReadDashFiltersFromDom() {
     rcDashFilters.segment  = rcGetMsValues('rcFilterSegmentDropdown');
     rcDashFilters.agent    = rcGetMsValues('rcFilterAgentDropdown');
     rcDashFilters.search   = (document.getElementById('rcFilterSearch') || {}).value || '';
-    var repeatEl = document.getElementById('rcFilterRepeatOnly');
-    rcDashFilters.repeatOnly = repeatEl ? !!repeatEl.checked : false;
     rcReadDateFiltersFromDom('rcFilter');
     rcSelectedAgent = rcDashFilters.agent.length === 1 ? rcDashFilters.agent[0] : null;
 }
@@ -1348,37 +1428,24 @@ window.rcApplyDashboardFilters = function () {
 };
 
 window.rcResetDashboardFilters = function () {
-    rcDashFilters = { status: [], language: [], lob: [], segment: [], agent: [], search: '', repeatOnly: false };
+    rcDashFilters = { status: [], language: [], lob: [], segment: [], agent: [], search: '' };
     rcResetDateFiltersState();
     rcSelectedAgent = null;
     rcRenderTabBody();
 };
 
-window.rcShowRepeatCallersOnly = function () {
-    rcDashFilters.repeatOnly = true;
-    var el = document.getElementById('rcFilterRepeatOnly');
-    if (el) el.checked = true;
-    rcRefreshDashboardContent();
-};
-
 window.rcShowTop10Callers = function () {
     rcRepeatVisible = true;
     rcChartsBuilt = true;
-    rcDashFilters.repeatOnly = false;
-    var repeatChk = document.getElementById('rcFilterRepeatOnly');
-    if (repeatChk) repeatChk.checked = false;
     rcRefreshDashboardContent();
     setTimeout(function () {
-        var target = document.getElementById('rcTop10Panel') || document.getElementById('rcChartRepeat');
+        var target = document.getElementById('rcRepeatSection');
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 250);
 };
 
 window.rcFilterByMsisdn = function (msisdn) {
     rcDashFilters.search = String(msisdn || '');
-    rcDashFilters.repeatOnly = false;
-    var el = document.getElementById('rcFilterRepeatOnly');
-    if (el) el.checked = false;
     var searchEl = document.getElementById('rcFilterSearch');
     if (searchEl) searchEl.value = rcDashFilters.search;
     rcRefreshDashboardContent();
@@ -1412,10 +1479,6 @@ function rcFilterBarHTML(items, prefix) {
             rcMsFilterHTML(prefix, 'Agent', 'Agents') +
             '<div class="fb-group"><div class="fb-group-label">Search</div>' +
             '<input type="text" class="fb-select" id="' + prefix + 'Search" placeholder="MSISDN, Agent, Site, LOB…" value="' + rcEsc(rcDashFilters.search) + '" oninput="rcApplyDashboardFilters()" style="cursor:text;"></div>' +
-            '<div class="fb-group" style="display:flex;align-items:flex-end;">' +
-            '<label style="display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:600;color:var(--t2);cursor:pointer;padding:.45rem 0;">' +
-            '<input type="checkbox" id="rcFilterRepeatOnly"' + (rcDashFilters.repeatOnly ? ' checked' : '') + ' onchange="rcApplyDashboardFilters()" style="width:16px;height:16px;">' +
-            'Repeat callers only (2+ calls)</label></div>' +
         '</div>' +
         rcDateFilterRowHTML(prefix, 'rcApplyDashboardFilters') +
         '</div>';
@@ -1483,15 +1546,16 @@ function rcSummary(items, countSource) {
     var s = { total: items.length, pending: 0, inprogress: 0, completed: 0, agingSum: 0, agingN: 0, ttcSum: 0, ttcN: 0, repeatCallers: 0, repeatCalls: 0 };
     var counts = rcBuildMsisdnCounts(countSource);
     Object.keys(counts).forEach(function (m) {
-        if (counts[m] >= 2) {
+        if (counts[m] >= RC_MIN_REPEAT_CALLS) {
             s.repeatCallers++;
             s.repeatCalls += counts[m];
         }
     });
     items.forEach(function (it) {
-        if (rcIsPendingStatus(it.RCStatus)) s.pending++;
-        else if (rcIsInProgressStatus(it.RCStatus)) s.inprogress++;
-        else if (rcIsResolvedStatus(it.RCStatus)) s.completed++;
+        var st = rcDisplayStatus(it);
+        if (st === RC_STATUS.PENDING) s.pending++;
+        else if (st === RC_STATUS.INPROGRESS) s.inprogress++;
+        else if (st === RC_STATUS.RESOLVED) s.completed++;
         var ag = rcAging(it); if (ag != null) { s.agingSum += ag; s.agingN++; }
         var ttc = rcTimeToComplete(it); if (ttc != null) { s.ttcSum += ttc; s.ttcN++; }
     });
@@ -1517,21 +1581,20 @@ function rcRepeatCallersPanelHTML(items) {
     var rows = rcRepeatCallersList(items);
     if (!rows.length) {
         return '<div class="rc-panel"><div class="rc-panel-title"><i data-lucide="phone-missed" style="width:18px;height:18px;color:var(--acc);"></i>Repeat Callers</div>' +
-            '<p style="color:var(--t3);font-size:.82rem;margin:0;">No MSISDN with 2+ calls in the current date/filter view.</p></div>';
+            '<p style="color:var(--t3);font-size:.82rem;margin:0;">No MSISDN with 3+ calls in the current date/filter view.</p></div>';
     }
-    return '<div class="rc-panel"><div class="rc-panel-title"><i data-lucide="phone-missed" style="width:18px;height:18px;color:#f59e0b;"></i>Repeat Callers · ' + rows.length + ' numbers</div>' +
-        '<p style="font-size:.76rem;color:var(--t3);margin:-.35rem 0 .75rem;">Same MSISDN calling multiple times. Click <b>View calls</b> or the dashboard tile to filter.</p>' +
+    var shown = rows.slice(0, 25);
+    return '<div class="rc-panel"><div class="rc-panel-title"><i data-lucide="phone-missed" style="width:18px;height:18px;color:#f59e0b;"></i>Repeat Callers · top ' + shown.length + (rows.length > shown.length ? ' of ' + rows.length : '') + '</div>' +
+        '<p style="font-size:.76rem;color:var(--t3);margin:-.35rem 0 .75rem;">MSISDNs with 3+ calls. Full detail is in the table below.</p>' +
         '<div class="rc-repeat-table-wrap"><table class="rc-repeat-table"><thead><tr>' +
-        '<th>MSISDN</th><th>Times Called</th><th>Customer Value</th><th>LOB</th><th>Language</th><th></th>' +
+        '<th>MSISDN</th><th>Times Called</th><th>Customer Value</th><th>LOB</th><th>Language</th>' +
         '</tr></thead><tbody>' +
-        rows.slice(0, 100).map(function (r) {
-            var safe = rcEsc(r.msisdn).replace(/'/g, "\\'");
+        shown.map(function (r) {
             return '<tr class="rc-repeat-row"><td style="font-weight:800;">' + rcEsc(r.msisdn) + '</td>' +
                 '<td>' + rcCallCountCell(r.count) + '</td>' +
                 '<td>' + rcEsc(r.customerValue) + '</td>' +
                 '<td>' + rcEsc(r.lob) + '</td>' +
-                '<td>' + rcEsc(r.language) + '</td>' +
-                '<td><button type="button" class="export-btn" style="padding:4px 10px;font-size:.68rem;" onclick="rcFilterByMsisdn(\'' + safe + '\')">View calls</button></td></tr>';
+                '<td>' + rcEsc(r.language) + '</td></tr>';
         }).join('') +
         '</tbody></table></div></div>';
 }
@@ -1595,6 +1658,7 @@ function rcAgentTilesHTML(items) {
 function rcMapRow(it) {
     if (!it) return null;
     function v(x) { return (x === null || x === undefined || x === '') ? '—' : String(x); }
+    function vBlank(x) { return (x === null || x === undefined || x === '') ? '' : String(x); }
     return {
         id: it.ID,
         site: v(it.Site),
@@ -1618,14 +1682,14 @@ function rcMapRow(it) {
         kbId: v(it.KB_ID),
         segmentValue: v(it.Segment_Value),
         lob: v(it.LOB),
-        accountNumber: v(it.Account_Number),
-        callDriver: v(it.Call_Driver),
-        issueInDetails: v(it.Issue_In_Details),
-        callBackStatus: v(it.Call_Back_Status),
-        resolutionType: v(it.Resolution_Type),
-        pendingWith: v(it.Pending_With),
-        resolutionStatus: v(it.Resolution_Status),
-        rcStatus: rcCanonicalStatus(it.RCStatus) || '—',
+        accountNumber: vBlank(it.Account_Number),
+        callDriver: vBlank(it.Call_Driver),
+        issueInDetails: vBlank(it.Issue_In_Details),
+        callBackStatus: vBlank(it.Call_Back_Status),
+        resolutionType: vBlank(it.Resolution_Type),
+        pendingWith: vBlank(it.Pending_With),
+        resolutionStatus: vBlank(it.Resolution_Status),
+        rcStatus: rcDisplayStatus(it) || '—',
         assignedTo: v(it.AssignedToName),
         uploadDate: it.UploadDate || null,
         assignmentDate: it.AssignmentDate || null,
@@ -1785,24 +1849,25 @@ function rcEnsureEditModal() {
 }
 
 function rcBuildEditFieldHTML(field, value) {
-    var val = value === '—' ? '' : (value || '');
+    var val = (value === '—' || value == null) ? '' : String(value).trim();
     var id = 'rcEdit_' + field.key;
+    var req = ' <span style="color:#ef4444;">*</span>';
     if (field.type === 'multiline') {
-        return '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + '</label>' +
-            '<textarea id="' + id + '" rows="4">' + rcEsc(val) + '</textarea></div>';
+        return '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + req + '</label>' +
+            '<textarea id="' + id + '" rows="4" required>' + rcEsc(val) + '</textarea></div>';
     }
     if (field.type === 'choice') {
-        var opts = rcChoiceOptions(field.choiceKey || field.key, field.key);
-        var html = '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + '</label>' +
-            '<select id="' + id + '"><option value="">— Select —</option>';
+        var opts = rcEditChoiceOptions(field);
+        var html = '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + req + '</label>' +
+            '<select id="' + id + '" required><option value="">— Select —</option>';
         opts.forEach(function (o) {
-            html += '<option value="' + rcEsc(o) + '"' + (String(o) === String(val) ? ' selected' : '') + '>' + rcEsc(o) + '</option>';
+            html += '<option value="' + rcEsc(o) + '"' + (val && String(o) === String(val) ? ' selected' : '') + '>' + rcEsc(o) + '</option>';
         });
         html += '</select></div>';
         return html;
     }
-    return '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + '</label>' +
-        '<input type="text" id="' + id + '" value="' + rcEsc(val) + '"></div>';
+    return '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + req + '</label>' +
+        '<input type="text" id="' + id + '" value="' + rcEsc(val) + '" required></div>';
 }
 
 var RC_WF_ROW_MAP = {
@@ -1821,11 +1886,10 @@ window.rcOpenEditModal = function (id) {
     if (!item) { rcToast('Record not found', 'warn'); return; }
     rcEnsureEditModal();
     rcEditModalId = id;
-    var row = rcMapRow(item);
     var form = document.getElementById('rcEditForm');
     if (!form) return;
     form.innerHTML = RC_WORKFLOW_FIELDS.map(function (f) {
-        return rcBuildEditFieldHTML(f, row[RC_WF_ROW_MAP[f.key] || f.key]);
+        return rcBuildEditFieldHTML(f, rcWorkflowEditValue(item, f));
     }).join('');
     document.getElementById('rcEditModalTitle').textContent = 'Edit · ' + (item.MSISDN || ('ID ' + id));
     document.getElementById('rcEditModal').style.display = 'flex';
@@ -1841,11 +1905,18 @@ window.rcSaveEditModal = async function () {
     if (!rcEditModalId) return;
     var btn = document.getElementById('rcEditSaveBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-    var fields = {};
+    var fields = {}, missing = [];
     RC_WORKFLOW_FIELDS.forEach(function (f) {
         var el = document.getElementById('rcEdit_' + f.key);
-        if (el) fields[f.key] = el.value || '';
+        var v = el ? String(el.value || '').trim() : '';
+        if (!v) missing.push(f.label);
+        else fields[f.key] = v;
     });
+    if (missing.length) {
+        rcToast('All fields are required: ' + missing.join(', '), 'warn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+        return;
+    }
     var digest;
     try { digest = await rcGetDigest(); } catch (e) {
         rcToast('Digest error', 'error');
@@ -1970,12 +2041,7 @@ function rcDataColumnDefs() {
         { field: 'callCount', headerName: 'Times Called', width: 110, minWidth: 100, type: 'numericColumn',
             cellRenderer: function (p) { return rcCallCountCell(p.value); },
             comparator: function (a, b) { return (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0); } },
-        { field: 'callDateTime', headerName: 'DateTime', width: 160, minWidth: 140 },
-        { field: 'site', headerName: 'Site', width: 130, minWidth: 110 },
         { field: 'callDate', headerName: 'Date', width: 100, minWidth: 90 },
-        { field: 'skillGroup', headerName: 'Skill Group', width: 180, minWidth: 140 },
-        { field: 'language', headerName: 'Language', width: 100, minWidth: 90 },
-        { field: 'customerType', headerName: 'Customer Type', width: 120, minWidth: 100 },
         { field: 'agentName', headerName: 'Call Agent', width: 140, minWidth: 120 },
         { field: 'agentCti', headerName: 'CTI', width: 90, minWidth: 80 },
         { field: 'talkTime', headerName: 'Talk Time', width: 100, minWidth: 90, type: 'numericColumn' },
@@ -1983,17 +2049,14 @@ function rcDataColumnDefs() {
         { field: 'wrapUpTime', headerName: 'Wrap Up', width: 90, minWidth: 80, type: 'numericColumn' },
         { field: 'customerValue', headerName: 'Customer Value', width: 120, minWidth: 100 },
         { field: 'handlingTime', headerName: 'Handling Time', width: 120, minWidth: 100, type: 'numericColumn' },
-        { field: 'market', headerName: 'Market', width: 180, minWidth: 140 },
-        { field: 'siebelId', headerName: 'SIEBEL ID', width: 110, minWidth: 90 },
-        { field: 'kbId', headerName: 'KB ID', width: 90, minWidth: 80 },
         { field: 'segmentValue', headerName: 'Segment', width: 90, minWidth: 80 },
         { field: 'lob', headerName: 'LOB', width: 140, minWidth: 110 },
         { field: 'accountNumber', headerName: 'Account #', width: 120, minWidth: 100 },
         { field: 'callDriver', headerName: 'Call Driver', width: 130, minWidth: 110 },
         { field: 'issueInDetails', headerName: 'Issue Details', width: 180, minWidth: 140, tooltipField: 'issueInDetails',
             valueFormatter: function (p) {
-                var s = p.value === '—' ? '' : String(p.value || '');
-                return s.length > 45 ? s.slice(0, 45) + '…' : (s || '—');
+                var s = String(p.value || '');
+                return s.length > 45 ? s.slice(0, 45) + '…' : s;
             } },
         { field: 'callBackStatus', headerName: 'Callback Status', width: 130, minWidth: 110 },
         { field: 'resolutionType', headerName: 'Resolution Type', width: 130, minWidth: 110 },
@@ -2175,9 +2238,7 @@ function rcUploadSectionHTML() {
         '</div>' : '';
     return '<div style="margin:1.25rem 0;padding:1rem;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);">' +
         '<h3 style="font-size:.92rem;font-weight:800;color:var(--t1);margin:0 0 .5rem;">Daily Upload</h3>' +
-        '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Upload the daily Repeated Calls Excel. <b>Agent_Name</b> is matched to Account Mapping via <b>CTI</b> (all teams). ' +
-        '<b>Exact duplicate rows</b> (same MSISDN + same DateTime already in the list or twice in the file) are skipped. ' +
-        'Only <b>repeat callers (2+ calls)</b> are uploaded — single-call MSISDNs are excluded so support only receives actual repeated numbers. New rows save as <b>Pending</b>.</p>' +
+        '<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem;">Upload the daily Repeated Calls Excel. Imports only <b>Enterprise</b> customers from site <b>CC-SGS-Emtyaz</b> with <b>3+ calls</b> per MSISDN. New rows save as <b>Pending</b>; status becomes <b>In Progress</b> when assigned.</p>' +
         '<label class="rc-upload-zone"><input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="rcParseFile(event)">Click or drop Excel file here</label>' +
         adminBar +
         '<div id="rcUploadPreview" style="margin-top:1rem;"></div></div>';
@@ -2185,39 +2246,27 @@ function rcUploadSectionHTML() {
 
 function rcDashboardMainHTML(dateFiltered, items, s) {
     return '<div class="top-stats">' +
-            rcTile('Total Calls', s.total, 'Filtered view', 'var(--acc)') +
-            rcTop10CallerTileHTML(dateFiltered) +
-            rcClickTile('Repeat Callers', s.repeatCallers, 'Unique MSISDN · 2+ calls', '#f59e0b', 'rcShowRepeatCallersOnly()') +
-            rcClickTile('Repeat Call Volume', s.repeatCalls, 'Total calls from repeaters', '#ef4444', 'rcShowRepeatCallersOnly()') +
-            rcTile('Pending', s.pending, 'Awaiting assign', rcStatusColor(RC_STATUS.PENDING)) +
-            rcTile('In Progress', s.inprogress, 'With agents', rcStatusColor(RC_STATUS.INPROGRESS)) +
+            rcTile('Repeat Call Volume', s.repeatCalls, 'Total calls from 3+ repeaters', '#ef4444') +
+            rcTile('Repeat Callers', s.repeatCallers, 'Unique MSISDN · 3+ calls', '#f59e0b') +
+            rcTile('Pending', s.pending, 'Not assigned', rcStatusColor(RC_STATUS.PENDING)) +
+            rcTile('In Progress', s.inprogress, 'Assigned to agents', rcStatusColor(RC_STATUS.INPROGRESS)) +
             rcTile('Resolved', s.completed, 'Done', rcStatusColor(RC_STATUS.RESOLVED)) +
         '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:1rem 0;">' +
             '<button type="button" id="rcToggleRepeatBtn" class="export-btn" onclick="rcToggleRepeatCallers()" style="padding:12px 20px;font-size:14px;">' +
                 '<i data-lucide="phone-missed" id="rcRepeatIcon" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>' +
                 '<span id="rcRepeatText">' + (rcRepeatVisible ? 'Hide Repeat Callers' : 'Show Repeat Callers') + '</span></button>' +
-            '<button type="button" id="rcToggleAgentsBtn" class="export-btn" onclick="rcToggleAgents()" style="padding:12px 20px;font-size:14px;">' +
-                '<i data-lucide="eye" id="rcAgentsIcon" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>' +
-                '<span id="rcAgentsText">' + (rcAgentsVisible ? 'Hide RC Agents' : 'Show RC Agents') + '</span></button>' +
             '<button type="button" id="rcToggleChartsBtn" class="export-btn" onclick="rcToggleCharts()" style="padding:12px 20px;font-size:14px;">' +
                 '<i data-lucide="eye" id="rcChartsIcon" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>' +
                 '<span id="rcChartsText">' + (rcChartsBuilt ? 'Hide Analytics Charts' : 'Show Analytics Charts') + '</span></button>' +
         '</div>' +
         '<div id="rcRepeatSection" style="display:' + (rcRepeatVisible ? 'block' : 'none') + ';">' +
-            '<div id="rcTop10Panel">' + rcTop10CallersPanelHTML(dateFiltered) + '</div>' +
             rcRepeatCallersPanelHTML(dateFiltered) +
-        '</div>' +
-        '<div id="rcAgentsSection" style="display:' + (rcAgentsVisible ? 'block' : 'none') + ';">' +
-            rcAgentTilesHTML(dateFiltered) +
         '</div>' +
         '<div id="rcChartsSection" class="rc-chart-grid" style="display:' + (rcChartsBuilt ? 'grid' : 'none') + ';margin-top:1rem;">' +
             rcTrendChartCardHTML() +
-            rcChartCard('Top 10 Who Called', 'rcChartRepeat', 'Most calls by MSISDN (2+ calls)', false) +
-            rcChartCard('Status Breakdown', 'rcChartStatus', 'Pipeline mix', true) +
+            rcChartCard('Status Breakdown', 'rcChartStatus', 'Pending / in progress / resolved', true) +
             rcChartCard('Agent Workload', 'rcChartAgent', 'Resolved vs in progress', true) +
-            rcChartCard('By LOB', 'rcChartCategory', 'Line of business', false) +
-            rcChartCard('By Language', 'rcChartLanguage', 'Call language mix', false) +
             rcChartCard('SLA Distribution', 'rcChartAging', 'Days assign → done/now', false) +
         '</div>' +
         rcUploadSectionHTML() +
@@ -2251,10 +2300,6 @@ function rcRefreshDashboardContent() {
     }
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    if (rcAgentsVisible) {
-        var agIcon = document.getElementById('rcAgentsIcon');
-        if (agIcon) agIcon.setAttribute('data-lucide', 'eye-off');
-    }
     if (rcRepeatVisible) {
         var rpIcon = document.getElementById('rcRepeatIcon');
         if (rpIcon) rpIcon.setAttribute('data-lucide', 'eye-off');
@@ -2263,7 +2308,7 @@ function rcRefreshDashboardContent() {
 }
 
 function rcRefreshAssignContent() {
-    var pendingAll = rcAllItems.filter(function (it) { return rcIsPendingStatus(it.RCStatus); });
+    var pendingAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.PENDING; });
     var pending = rcApplyQueueFilters(pendingAll, rcAssignFilters, false, rcAssignDateFilters);
     var main = document.getElementById('rcAssignMain');
     if (!main) {
@@ -2280,7 +2325,7 @@ function rcRefreshAssignContent() {
 }
 
 function rcRefreshAssignedContent() {
-    var assignedAll = rcAllItems.filter(function (it) { return rcIsInProgressStatus(it.RCStatus); });
+    var assignedAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
     var assigned = rcApplyQueueFilters(assignedAll, rcAssignedFilters, true, rcAssignedDateFilters);
     var main = document.getElementById('rcAssignedMain');
     if (!main) {
@@ -2299,7 +2344,7 @@ function rcRefreshAssignedContent() {
 function rcRefreshMyQueueContent() {
     var mine = rcApplyDateFilters(rcScopedItems(), rcDateFilters);
     var s = rcSummary(mine);
-    var inq = mine.filter(function (it) { return rcIsInProgressStatus(it.RCStatus); });
+    var inq = mine.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
     var main = document.getElementById('rcMyQueueMain');
     if (!main) {
         var body = document.getElementById('rcTabBody');
@@ -2342,11 +2387,6 @@ function rcRenderDashboard(body) {
     rcSafeUpdateDateFilterOptions('rcFilter', dateFiltered, 'rcApplyDashboardFilters');
     rcSyncDateModeUI('rcFilter');
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    if (rcAgentsVisible) {
-        var agIcon = document.getElementById('rcAgentsIcon');
-        if (agIcon) agIcon.setAttribute('data-lucide', 'eye-off');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
     if (rcRepeatVisible) {
         var rpIcon = document.getElementById('rcRepeatIcon');
         if (rpIcon) rpIcon.setAttribute('data-lucide', 'eye-off');
@@ -2531,29 +2571,6 @@ function rcBuildDashboardCharts(items, s) {
 
     rcBuildTrendChart(items);
 
-    var repeatRows = rcTop10RepeatCallers(items);
-    var rpc = document.getElementById('rcChartRepeat');
-    if (rpc) rcCharts.repeat = new Chart(rpc, {
-        type: 'bar',
-        data: {
-            labels: repeatRows.length ? repeatRows.map(function (r) { return r.msisdn; }) : ['No repeat callers'],
-            datasets: [{
-                label: 'Times called',
-                data: repeatRows.length ? repeatRows.map(function (r) { return r.count; }) : [0],
-                borderRadius: 8, barThickness: 18,
-                backgroundColor: function (ctx) {
-                    var v = ctx.raw;
-                    if (v >= 5) return '#ef4444';
-                    if (v >= 2) return '#f59e0b';
-                    return '#94a3b8';
-                }
-            }]
-        },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: rcChartTooltip() },
-            scales: { x: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } }, y: { grid: { display: false } } } }
-    });
-
     var sc = document.getElementById('rcChartStatus');
     if (sc) {
         var p = RC_CHART_PALETTE;
@@ -2580,7 +2597,7 @@ function rcBuildDashboardCharts(items, s) {
         if (!agent) return;
         if (!agentMap[agent]) agentMap[agent] = { completed: 0, inprogress: 0 };
         if (rcIsResolvedStatus(it.RCStatus)) agentMap[agent].completed++;
-        else if (rcIsInProgressStatus(it.RCStatus)) agentMap[agent].inprogress++;
+        else if (rcDisplayStatus(it) === RC_STATUS.INPROGRESS) agentMap[agent].inprogress++;
     });
     var names = Object.keys(agentMap).filter(function (n) {
         return agentMap[n].completed + agentMap[n].inprogress > 0;
@@ -2619,49 +2636,10 @@ function rcBuildDashboardCharts(items, s) {
         }
     });
 
-    var byCat = {};
-    items.forEach(function (it) { var k = it.LOB || 'Uncategorised'; byCat[k] = (byCat[k] || 0) + 1; });
-    var cats = Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; });
-    var cc = document.getElementById('rcChartCategory');
-    if (cc) rcCharts.category = new Chart(cc, {
-        type: 'bar',
-        data: {
-            labels: cats.length ? cats : ['No data'],
-            datasets: [{
-                data: cats.length ? cats.map(function (c) { return byCat[c]; }) : [0],
-                borderRadius: 8, barThickness: 18,
-                backgroundColor: function (ctx) {
-                    if (ctx.dataIndex == null || ctx.dataIndex < 0) return '#0284c7';
-                    var col = RC_CHART_PALETTE.categories[ctx.dataIndex % RC_CHART_PALETTE.categories.length];
-                    return rcHorizontalGradient(ctx.chart, col, rcCssVar('--acc2'));
-                }
-            }]
-        },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: rcChartTooltip() },
-            scales: { x: { beginAtZero: true, grid: { color: grid } }, y: { grid: { display: false } } } }
-    });
-
-    var byLang = {};
-    items.forEach(function (it) { var k = it.Language || 'Unknown'; byLang[k] = (byLang[k] || 0) + 1; });
-    var langs = Object.keys(byLang).sort(function (a, b) { return byLang[b] - byLang[a]; });
-    var lc = document.getElementById('rcChartLanguage');
-    if (lc) rcCharts.language = new Chart(lc, {
-        type: 'doughnut',
-        data: {
-            labels: langs.length ? langs : ['No data'],
-            datasets: [{
-                data: langs.length ? langs.map(function (l) { return byLang[l]; }) : [0],
-                backgroundColor: ['#0284c7', '#f59e0b', '#22c55e', '#8b5cf6', '#ef4444'],
-                borderWidth: 3, borderColor: rcCssVar('--bg-card'), hoverOffset: 8
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: legend, tooltip: rcChartTooltip() } }
-    });
-
     var slaKeys = ['0-1d', '1-2d', '2-3d', '3-5d', '5d+'], slaBuckets = {};
     slaKeys.forEach(function (k) { slaBuckets[k] = 0; });
     items.forEach(function (it) {
-        if (rcIsPendingStatus(it.RCStatus)) return;
+        if (rcDisplayStatus(it) === RC_STATUS.PENDING) return;
         var sla = rcSlaDays(it);
         var bk = rcSlaBucketKey(sla);
         if (bk && slaBuckets[bk] != null) slaBuckets[bk]++;
@@ -2692,7 +2670,7 @@ function rcBuildDashboardCharts(items, s) {
 // ============================================================
 function rcRenderAssignQueue(body) {
     if (!rcAllAgents.length) { body.innerHTML = rcErrBox('No agents with CTI found in Account Mapping.'); return; }
-    var pendingAll = rcAllItems.filter(function (it) { return rcIsPendingStatus(it.RCStatus); });
+    var pendingAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.PENDING; });
     var pending = rcApplyQueueFilters(pendingAll, rcAssignFilters, false, rcAssignDateFilters);
     body.innerHTML = rcQueueFilterBarHTML('assign', pendingAll) +
         '<div id="rcAssignMain">' +
@@ -2709,7 +2687,7 @@ function rcRenderAssignQueue(body) {
 
 function rcRenderAssignedQueue(body) {
     if (!rcAllAgents.length) { body.innerHTML = rcErrBox('No agents with CTI found in Account Mapping.'); return; }
-    var assignedAll = rcAllItems.filter(function (it) { return rcIsInProgressStatus(it.RCStatus); });
+    var assignedAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
     var assigned = rcApplyQueueFilters(assignedAll, rcAssignedFilters, true, rcAssignedDateFilters);
     body.innerHTML = rcQueueFilterBarHTML('assigned', assignedAll) +
         '<div id="rcAssignedMain">' +
@@ -2820,37 +2798,26 @@ window.rcParseFile = function (ev) {
 
 function rcRenderUploadPreview() {
     var prev = document.getElementById('rcUploadPreview');
-    var existing = {};
-    rcAllItems.forEach(function (it) {
-        var k = rcCallKey({ MSISDN: it.MSISDN, Call_DateTime: it.Call_DateTime });
-        if (k) existing[k] = true;
-    });
-    var seen = {}, toAdd = [], dupE = 0;
-    rcUploadRows.forEach(function (rec) {
-        var k = rcCallKey(rec);
-        if (!k) return;
-        if (existing[k] || seen[k]) { dupE++; return; }
-        seen[k] = true; toAdd.push(rec);
-    });
-    var repeatFilter = rcFilterRepeatCallerRows(toAdd);
-    toAdd = repeatFilter.rows;
+    var result = rcProcessUploadRows(rcUploadRows);
+    var toAdd = result.toAdd;
+    var ignored = result.ignored;
     rcUploadRows._toAdd = toAdd;
-    var skippedSingle = repeatFilter.skipped;
+    rcUploadRows._ignored = ignored;
     var unmapped = 0;
     toAdd.forEach(function (rec) { if (rec.Agent_Name && !rcLookupCti(rec.Agent_Name)) unmapped++; });
-    var batchCounts = rcBuildMsisdnCounts(toAdd);
-    var batchRepeat = Object.keys(batchCounts).filter(function (m) { return batchCounts[m] >= 2; }).length;
-    var merged = toAdd.map(function (r) { return { MSISDN: r.MSISDN }; }).concat(rcAllItems.map(function (it) { return { MSISDN: it.MSISDN }; }));
-    var mergedCounts = rcBuildMsisdnCounts(merged);
-    var afterRepeat = Object.keys(mergedCounts).filter(function (m) { return mergedCounts[m] >= 2; }).length;
+    var reasonCounts = {};
+    ignored.forEach(function (r) { reasonCounts[r.reason] = (reasonCounts[r.reason] || 0) + 1; });
+    var reasonSummary = Object.keys(reasonCounts).map(function (k) {
+        return '<b>' + reasonCounts[k] + '</b> · ' + rcEsc(k);
+    }).join('<br>');
     prev.innerHTML = '<div style="font-size:.82rem;color:var(--t2);margin-bottom:.75rem;line-height:1.5;">' +
-        '<b>' + toAdd.length + '</b> repeat-caller rows to upload (2+ calls per MSISDN) · ' +
-        '<b>' + dupE + '</b> exact duplicates skipped' +
-        (skippedSingle ? ' · <b style="color:#64748b;">' + skippedSingle + '</b> single-call MSISDNs excluded' : '') +
-        (batchRepeat ? ' · <b style="color:#f59e0b;">' + batchRepeat + '</b> customers call 2+ times in this batch' : '') +
-        (afterRepeat ? ' · <b style="color:#ef4444;">' + afterRepeat + '</b> total repeat callers after upload' : '') +
-        (unmapped ? ' · <b style="color:#f59e0b;">' + unmapped + '</b> CTI not mapped' : '') + '</div>' +
-        (toAdd.length ? '<button type="button" class="export-btn" id="rcConfirmUploadBtn" onclick="rcConfirmUpload()">Confirm Upload (' + toAdd.length + ')</button>' : '<div style="color:var(--t3);">No repeat callers (2+) to upload. Single-call MSISDNs are not imported.</div>') +
+        '<b>' + toAdd.length + '</b> rows ready to upload (Enterprise · CC-SGS-Emtyaz · 3+ calls)' +
+        (ignored.length ? '<br><span style="color:#dc2626;font-weight:700;">' + ignored.length + ' rows ignored</span>' : '') +
+        (unmapped ? '<br><b style="color:#f59e0b;">' + unmapped + '</b> CTI not mapped in upload batch' : '') +
+        (reasonSummary ? '<div style="margin-top:.5rem;font-size:.76rem;color:var(--t3);">' + reasonSummary + '</div>' : '') +
+        '</div>' +
+        (toAdd.length ? '<button type="button" class="export-btn" id="rcConfirmUploadBtn" onclick="rcConfirmUpload()">Confirm Upload (' + toAdd.length + ')</button>' : '<div style="color:var(--t3);">Nothing qualifies for upload. Check ignored rows below.</div>') +
+        rcUploadIgnoredTableHTML(ignored) +
         '<div id="rcUploadProgress" style="margin-top:.75rem;"></div>';
 }
 
@@ -2913,7 +2880,7 @@ function rcErrBox(msg) {
 function rcRenderMyQueue(body) {
     var mine = rcApplyDateFilters(rcScopedItems(), rcDateFilters);
     var s = rcSummary(mine);
-    var inq = mine.filter(function (it) { return rcIsInProgressStatus(it.RCStatus); });
+    var inq = mine.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
 
     body.innerHTML =
         rcDateFilterBarOnlyHTML('rcAgentF') +
