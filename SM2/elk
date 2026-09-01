@@ -6543,7 +6543,7 @@ function mqBuildRulesHtml(calc){
   html+='&nbsp;&nbsp;· Opportunity Status = <strong>Won only</strong> (raw SharePoint field — Billed / Proposed / Opportunity excluded)<br>';
   html+='&nbsp;&nbsp;· Expected activation date <strong>required</strong> — must fall in the bridge window (QTD / QTG / YTG)<br>';
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
-  html+='&nbsp;&nbsp;· Value &gt; 0 · <strong>Not grouped</strong> — one total bar (drill-down lists individual accounts, largest first)<br><br>';
+  html+='&nbsp;&nbsp;· Value &gt; 0 · <strong>Not grouped on chart</strong> — drill-down lists <strong>each bid row separately</strong> (same customer name = 2 rows if 2 bids pass filters)<br><br>';
 
   html+='<strong>Blue — In-flight Gross (Top 5 + Others)</strong><br>';
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
@@ -6663,27 +6663,71 @@ function mqIsInflightGrossStatus(bid,isBest){
   if(isBest) return s==='Proposed'||s==='Opportunity';
   return s==='Proposed';
 }
-function mqBidRefValue(bid){
+function mqBidRefPrimary(bid){
+  if(!bid) return '';
   var ref=bid.bidRequest&&bid.bidRequest!=='—'?String(bid.bidRequest).trim():'';
+  return ref;
+}
+function mqBidRefValue(bid){
+  var ref=mqBidRefPrimary(bid);
   if(ref) return ref;
   if(bid.myId&&bid.myId!=='—') return String(bid.myId).trim();
+  if(bid.id!=null) return 'SP-'+bid.id;
   return '';
 }
-function mqBidRefChip(ref){
+function mqBidRefChip(ref,full){
   if(!ref) return '—';
-  return '<code class="mq-copy-ref" style="user-select:all;-webkit-user-select:all;font-family:ui-monospace,monospace;background:var(--bg-secondary);padding:.12rem .4rem;border-radius:4px;border:1px solid var(--border);font-size:.68rem;">'+mqEscHtml(ref)+'</code>';
+  var base='user-select:all;-webkit-user-select:all;font-family:ui-monospace,monospace;background:var(--bg-secondary);padding:.12rem .4rem;border-radius:4px;border:1px solid var(--border);font-size:.68rem;color:var(--t1);';
+  var style=full?(base+'display:block;word-break:break-all;white-space:pre-wrap;margin-top:.15rem;'):base;
+  return '<code class="mq-copy-ref" style="'+style+'">'+mqEscHtml(ref)+'</code>';
 }
-function mqBidRefCopyHtml(bid){
-  var ref=mqBidRefValue(bid);
+function mqBidRefCopyHtml(bid,full){
+  var ref=mqBidRefPrimary(bid);
   var parts=[];
-  if(ref) parts.push('Bid Ref: '+mqBidRefChip(ref));
-  if(bid.myId&&bid.myId!=='—'&&String(bid.myId).trim()!==ref) parts.push('My ID: '+mqBidRefChip(String(bid.myId).trim()));
-  if(bid.customerCode&&bid.customerCode!=='—') parts.push('Cust Code: '+mqBidRefChip(String(bid.customerCode).trim()));
-  return parts.length?parts.join(' · '):'—';
+  if(ref){
+    parts.push('<div><span style="font-size:.62rem;color:var(--t3);">Bid Reference (full):</span>'+mqBidRefChip(ref,!!full)+'</div>');
+  }else{
+    parts.push('<div><span style="font-size:.62rem;color:var(--t3);">Bid Reference:</span> <span style="color:#f59e0b;">Not in SharePoint BidRequest field</span></div>');
+  }
+  if(bid.myId&&bid.myId!=='—'&&String(bid.myId).trim()!==ref){
+    parts.push('<div style="margin-top:.15rem;"><span style="font-size:.62rem;color:var(--t3);">My ID:</span> '+mqBidRefChip(String(bid.myId).trim(),!!full)+'</div>');
+  }
+  if(bid.id!=null){
+    parts.push('<div style="margin-top:.15rem;"><span style="font-size:.62rem;color:var(--t3);">SharePoint record ID:</span> '+mqBidRefChip('SP-'+bid.id,false)+'</div>');
+  }
+  if(bid.customerCode&&bid.customerCode!=='—'){
+    parts.push('<div style="margin-top:.15rem;"><span style="font-size:.62rem;color:var(--t3);">Customer Code:</span> '+mqBidRefChip(String(bid.customerCode).trim(),false)+'</div>');
+  }
+  return parts.join('');
 }
 function mqClubbedRefsHtml(bids){
-  return (bids||[]).map(function(bd){return mqBidRefValue(bd);}).filter(Boolean)
-    .map(function(ref){return mqBidRefChip(ref);}).join(' ');
+  return (bids||[]).map(function(bd,i){
+    var ref=mqBidRefValue(bd);
+    return ref?('<span style="margin-right:.35rem;">'+(i+1)+'. '+mqBidRefChip(ref,true)+'</span>'):'';
+  }).filter(Boolean).join('');
+}
+function mqWonRejectReason(bid,year,quarter,getVal,activationFn){
+  getVal=getVal||mqBidMetric;
+  activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
+  if(!mqIsWonOnlyBid(bid)) return 'Opportunity Status is "'+mqNormOppStatus(bid)+'" (need Won)';
+  if(mqIsBilledBid(bid)) return 'Opportunity Status is Billed';
+  if(!mqBidHasExpectedActivation(bid)) return 'Missing expected activation date';
+  if(!mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)) return 'Contract type "'+(bid.typeOfContract||'—')+'" not in gross list';
+  if(!activationFn(bid)) return 'Expected activation '+fmtDate(bid.expectedActivation)+' outside bridge window (Q'+quarter+' '+year+', current month → quarter-end only)';
+  if(getVal(bid)<=0) return (mqProductFamily==='fixed'?'MRC':'GA Lines')+' is zero or blank';
+  return '';
+}
+function mqDetailGroupsFromBar(b,isChurn){
+  var getVal=function(bd){return mqBidRowDetailValue(bd,isChurn?'decrease':'increase');};
+  if(b.section==='won'){
+    var solo=(b.bids||[]).map(function(bd){
+      return {name:bd.customerName||'—',value:getVal(bd),bids:[bd],solo:true};
+    });
+    return mqSortGroupsByValueDesc(solo);
+  }
+  var groups=mqGroupPoolByCustomer(b.bids||[],getVal);
+  groups.forEach(function(g){g.bids=mqSortBidsByValueDesc(g.bids,isChurn);});
+  return mqSortGroupsByValueDesc(groups);
 }
 function mqBidHasExpectedActivation(bid){
   return !!mqParseBidDate(bid.expectedActivation);
@@ -6703,12 +6747,6 @@ function mqSortBidsByValueDesc(bids,isChurn){
     var vb=Math.abs(mqBidRowDetailValue(b,isChurn?'decrease':'increase'));
     return vb-va;
   });
-}
-function mqDetailGroupsFromBar(b,isChurn){
-  var getVal=function(bd){return mqBidRowDetailValue(bd,isChurn?'decrease':'increase');};
-  var groups=mqGroupPoolByCustomer(b.bids||[],getVal);
-  groups.forEach(function(g){g.bids=mqSortBidsByValueDesc(g.bids,isChurn);});
-  return mqSortGroupsByValueDesc(groups);
 }
 function mqBidRefLine(bid){
   var ref=mqBidRefValue(bid);
@@ -7089,10 +7127,10 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
   if(b.bids&&b.bids.length){
     var groups=mqDetailGroupsFromBar(b,isChurn);
     var totalBids=b.bids.length;
-    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Accounts ('+totalBids+') — sorted largest to smallest · click row for full detail</div>';
+    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Accounts ('+totalBids+') — sorted largest to smallest · click row for full detail'+(b.section==='won'?' · <span style="color:var(--t3);font-weight:600;">each bid listed separately on Won bar</span>':'')+'</div>';
     groups.forEach(function(grp,gi){
       var groupOpen=GLK_MQ_DETAIL_GROUP_IDX===gi;
-      var clubbed=grp.bids.length>1;
+      var clubbed=!grp.solo&&grp.bids.length>1;
       h+='<div class="mq-detail-account'+(groupOpen?' open':'')+'">';
       h+='<div class="mq-detail-account-hdr" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+')" style="cursor:pointer;">';
       h+='<span>'+(gi+1)+'. '+mqEscHtml(grp.name)+(clubbed?' <span style="color:var(--t3);font-weight:600;">('+grp.bids.length+' bids clubbed · exact customer name)</span>':'')+'</span>';
@@ -7106,7 +7144,8 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
           h+='<div class="mq-detail-account-sub" style="padding-left:.55rem;">· '+mqBidRefCopyHtml(bd)+' — '+fmtLines(Math.abs(bv))+' · Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(bd))+'</strong> · Act: '+fmtDate(bd.expectedActivation)+'</div>';
         });
       }else{
-        h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(grp.bids[0])+' · Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(grp.bids[0]))+'</strong></div>';
+        h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(grp.bids[0],true)+'</div>';
+        h+='<div class="mq-detail-account-sub">Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(grp.bids[0]))+'</strong> · Act: '+fmtDate(grp.bids[0].expectedActivation)+'</div>';
         h+='<div class="mq-detail-account-sub">'+mqEscHtml((grp.bids[0].buildingName&&grp.bids[0].buildingName!=='—'?grp.bids[0].buildingName+' · ':'')+(grp.bids[0].vertical||'—')+' · AM: '+(grp.bids[0].amName||'—')+' · AD: '+(grp.bids[0].accountDirector||'—'))+'</div>';
       }
       if(!groupOpen){
@@ -7121,7 +7160,8 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
           h+='<div class="mq-detail-account-hdr" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+','+bi+')" style="cursor:pointer;margin-bottom:.25rem;">';
           h+='<span>'+(clubbed?(bi+1)+'. within club · ':'')+mqEscHtml(bd.customerName||'—')+'</span>';
           h+='<span style="color:'+(isChurn?'#ef4444':'var(--acc)')+';">'+fmtLines(Math.abs(val))+'</span></div>';
-          h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(bd)+' · Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(bd))+'</strong></div>';
+          h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(bd,true)+'</div>';
+          h+='<div class="mq-detail-account-sub">Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(bd))+'</strong> · Act: '+fmtDate(bd.expectedActivation)+' · Contract: '+mqEscHtml(bd.typeOfContract||'—')+'</div>';
           h+='<div class="mq-detail-account-sub">Product: '+mqEscHtml(bd.productFamily||'—')+' · '+mqEscHtml(bd.productCategory||'—')+' · Services: '+mqEscHtml(bd.services||'—')+'</div>';
           h+='<div class="mq-calc-box">';
           bdBreak.lines.forEach(function(line){ h+=line+'<br>'; });
