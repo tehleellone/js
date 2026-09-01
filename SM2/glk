@@ -1136,6 +1136,16 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
                 <span class="mq-control-hint">Verticals from GLK Excel — filters pipeline on every bridge type (QTD, Quarter to Go, Year to Go).</span>
               </div>
             </div>
+            <div class="mq-bridge-search" id="mqBridgeSearchWrap" style="margin-top:.65rem;padding:.55rem .65rem;background:var(--bg-card);border:1px solid var(--border);border-radius:9px;">
+              <div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;">
+                <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:var(--t3);fill:none;stroke-width:2;flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="search" id="mqBridgeSearchInp" placeholder="Search account, bid ref, customer code…" onkeydown="if(event.key==='Enter')mqRunBridgeSearch()" style="flex:1;min-width:180px;border:1px solid var(--border);border-radius:7px;padding:.35rem .55rem;font-size:.72rem;background:var(--bg-secondary);color:var(--t1);">
+                <button type="button" class="export-btn" onclick="mqRunBridgeSearch()" style="font-size:.68rem;padding:.28rem .55rem;">Find in bridge</button>
+                <button type="button" class="export-btn" onclick="mqClearBridgeSearch()" style="font-size:.68rem;padding:.28rem .55rem;background:transparent;color:var(--t3);">Clear</button>
+              </div>
+              <div style="font-size:.64rem;color:var(--t3);margin-top:.3rem;">Shows where each row lands: Won · Top 5 / Others in-flight · Top 5 / Others churn · or why excluded.</div>
+            </div>
+            <div id="mqBridgeSearchResults" style="display:none;margin-top:.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:9px;max-height:280px;overflow-y:auto;"></div>
           </div>
 
         </div>
@@ -1166,7 +1176,7 @@ body[data-theme="dark"] .badge-warning,body[data-theme="duralux-dark"] .badge-wa
             </div>
           </div>
           <div id="mqBridgeLegend"></div>
-          <div id="mqBarDetailHint">Click a bar → account list &amp; calculation · click an account → full row · click bar again to close</div>
+          <div id="mqBarDetailHint">Click a bar → accounts sorted by value (largest first) · clubbed customers show all bid refs · click row for full detail</div>
           <div id="mqBarDetailPanel" style="display:none;margin-top:.55rem;padding:.75rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--t2);line-height:1.55;overflow-y:auto;"></div>
           <div id="mqBridgeInfoPanel" style="display:none;margin-top:.65rem;padding:.85rem 1rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--t2);line-height:1.65;max-height:420px;overflow-y:auto;"></div>
           <div id="mobileQtdControlsWrap"></div>
@@ -1302,6 +1312,7 @@ let mqProductFamily='mobile';
 let mqCase='worst';
 let mqReportLevels=[];
 let GLK_MQ_DETAIL_IDX=-1;
+let GLK_MQ_DETAIL_GROUP_IDX=-1;
 let GLK_MQ_DETAIL_BID_IDX=-1;
 let mqPeriod='qtd';
 let mqDateRules=[];
@@ -2473,7 +2484,7 @@ function loadData(){
 }function mapItem(it){
   const rawFC=(it.Forecast_Category0||'').trim();
   const rawProb=it.Closure_x0020_Probability||'—';
-  const rawStatus=it.Opportunity_x0020_Status||'—';
+  const rawStatus=(it.Opportunity_x0020_Status||'—').trim();
   const forecastCategory=glkResolveForecastCategory(rawFC,rawProb);
   let closureProb=rawProb;
   let status=rawStatus;
@@ -2481,6 +2492,7 @@ function loadData(){
   if(forecastCategory&&FORECAST_TO_STATUS[forecastCategory]) status=FORECAST_TO_STATUS[forecastCategory];
   return {
     id:it.Id,customerName:it.Title||'—',typeOfRequest:it.Type_x0020_of_x0020_Request||'—',
+    oppStatus:rawStatus||'—',
     typeOfContract:it.Type_x0020_of_x0020_Contract||'—',vertical:it.Segment||'—',
     accountDirector:it.Account_x0020_Director||'—',solutionManager:it.Solution_x0020_Manager||'—',
    headDirector:it.Head_x0020_Director||'(Blank)',productFamily:it.Product_x0020_Family||'—',
@@ -4988,7 +5000,8 @@ function mqSyncActiveReport(){
   GLK_MOBILE_REPORT=mqGetActiveReport();
 }
 function mqBidMetric(b){
-  return mqProductFamily==='fixed'?num(b.mrc):num(b.gaLines);
+  if(mqProductFamily==='fixed') return num(b.mrc);
+  return num(b.gaLines);
 }
 function mqMetricUnit(){
   return mqProductFamily==='fixed'?'MRC':'GA Lines';
@@ -6182,13 +6195,20 @@ function mqParseBidDate(iso){
   if(typeof iso==='string'){
     var dm=/\/Date\((-?\d+)\)\//.exec(iso);
     if(dm){ var d=new Date(+dm[1]); return isNaN(d)?null:mqDateOnly(d); }
-    if(/^\d{4}-\d{2}-\d{2}/.test(iso)){
-      var p=iso.slice(0,10).split('-');
-      return new Date(+p[0],+p[1]-1,+p[2]);
-    }
   }
   var d=new Date(iso);
   return isNaN(d)?null:mqDateOnly(d);
+}
+/** Bridge drill-down date — same parser as activation filters (avoids UTC vs local mismatch). */
+function mqFmtBidDate(iso){
+  var d=mqParseBidDate(iso);
+  if(!d) return '—';
+  return d.toLocaleDateString('en-GB');
+}
+function mqActivationMonthLabel(iso){
+  var d=mqParseBidDate(iso);
+  if(!d) return '—';
+  return MONTH_NAMES[d.getMonth()]+' '+d.getFullYear();
 }
 function mqFractionalMonthsBetween(startDate,endDate){
   if(!startDate||!endDate) return 0;
@@ -6232,9 +6252,11 @@ function mqYearEndDate(year){
   return new Date(year,11,31);
 }
 function mqBidQtgMrc(bid,year,quarter){
+  if(!mqActivationQtdForward(bid)) return 0;
   var act=mqParseBidDate(bid.expectedActivation);
   if(!act) return 0;
-  var qEnd=mqQuarterEndDate(year,quarter);
+  var live=mqLiveYearQuarter();
+  var qEnd=mqQuarterEndDate(live.year,live.quarter);
   if(act>qEnd) return 0;
   return mqAggregatedRevenueMrc(act,qEnd,num(bid.mrc));
 }
@@ -6249,10 +6271,11 @@ function mqBidForwardOtc(bid){
   return num(bid.otc);
 }
 function mqBidQtgValue(bid,year,quarter){
-  if(!mqActivationQtdForward(bid,year,quarter)) return 0;
+  if(!mqActivationQtdForward(bid)) return 0;
   var act=mqParseBidDate(bid.expectedActivation);
   if(!act) return 0;
-  var qEnd=mqQuarterEndDate(year,quarter);
+  var live=mqLiveYearQuarter();
+  var qEnd=mqQuarterEndDate(live.year,live.quarter);
   if(act>qEnd) return 0;
   return mqAggregatedRevenueMrc(act,qEnd,num(bid.mrc))+mqBidForwardOtc(bid);
 }
@@ -6345,7 +6368,7 @@ function mqBidCalcBreakdown(bid,opts){
   var periodName=mqPeriodLongName(calc.bridgePeriod);
   var lines=[
     '<strong>'+periodName+(isChurn?' — Churn (MRC only, no OTC)':'')+'</strong> for this row',
-    'Activation: <strong>'+fmtDate(bid.expectedActivation)+'</strong> → Period end: <strong>'+mqPeriodEndLabel(calc)+'</strong>',
+    'Activation: <strong>'+mqFmtBidDate(bid.expectedActivation)+'</strong> ('+mqActivationMonthLabel(bid.expectedActivation)+') → Period end: <strong>'+mqPeriodEndLabel(calc)+'</strong>',
     'Days (inclusive): <strong>'+days+'</strong> ÷ Days in activation month: <strong>'+dim+'</strong>',
     'MRC part: ('+days+' ÷ '+dim+') × '+fmtLines(mrc)+' = <strong>'+fmtLines(mrcPart)+'</strong>'
   ];
@@ -6365,7 +6388,11 @@ function mqBidRowDetailValue(bid,barType){
   return mqBidBridgeValue(bid);
 }
 var MQ_BID_DETAIL_FIELDS=[
+  {k:'bidRequest',l:'Bid Reference'},
+  {k:'myId',l:'My ID'},
+  {k:'customerCode',l:'Customer Code'},
   {k:'customerName',l:'Customer'},
+  {k:'oppStatus',l:'Opportunity Status'},
   {k:'buildingName',l:'Building / MAPA'},
   {k:'vertical',l:'Vertical'},
   {k:'headDirector',l:'Head Director'},
@@ -6393,15 +6420,15 @@ var MQ_BID_DETAIL_FIELDS=[
   {k:'comments',l:'Comments',html:true}
 ];
 function mqFormatBidField(bid,fd){
-  var v=bid[fd.k];
+  var v=fd.k==='oppStatus'?mqRawOppStatus(bid)||'—':bid[fd.k];
   if(v==null||v==='') return '—';
-  if(fd.date) return fmtDate(v);
+  if(fd.date) return mqFmtBidDate(v);
   if(fd.money) return fmtLines(v);
   if(fd.html||fd.k==='comments') return mqStripHtml(v)||'—';
   return String(v);
 }
 function mqBidRowSummaryLine(bid){
-  return (bid.customerName||'—')+' · '+(bid.buildingName&&bid.buildingName!=='—'?bid.buildingName+' · ':'')+
+  return mqBidRefLine(bid)+' · '+(bid.customerName||'—')+' · '+(bid.buildingName&&bid.buildingName!=='—'?bid.buildingName+' · ':'')+
     (bid.vertical||'—')+' · AM: '+(bid.amName||'—')+' · AD: '+(bid.accountDirector||'—');
 }
 function mqActivationYtgForward(bid,year){
@@ -6421,17 +6448,31 @@ var MQ_CHURN_CONTRACT_TYPES=['churn','downgrade'];
 function mqContractInList(bid,list){
   return list.indexOf(mqNormContractType(bid.typeOfContract))>=0;
 }
-/** Expected activation in report quarter, from current month through quarter-end (skip past months in quarter). */
-function mqActivationQtdForward(bid,year,quarter){
-  var act=mqParseBidDate(bid.expectedActivation);
-  if(!act) return false;
-  if(act.getFullYear()!==year) return false;
-  var q=Math.floor(act.getMonth()/3)+1;
-  if(q!==quarter) return false;
+function mqLiveYearQuarter(){
   var now=new Date();
-  var nowQ=Math.floor(now.getMonth()/3)+1;
-  if(year===now.getFullYear()&&quarter===nowQ&&act.getMonth()<now.getMonth()) return false;
-  return true;
+  return {year:now.getFullYear(),quarter:Math.floor(now.getMonth()/3)+1};
+}
+/** Expected activation in live calendar quarter, current month through quarter-end. */
+function mqActivationQtdForward(bid){
+  return !mqActivationRejectReason(bid);
+}
+function mqActivationRejectReason(bid){
+  var act=mqParseBidDate(bid.expectedActivation);
+  if(!act) return 'Missing or invalid expected activation date';
+  var live=mqLiveYearQuarter();
+  var now=new Date();
+  var liveMonth=now.getMonth();
+  if(act.getFullYear()!==live.year){
+    return 'Activation '+mqActivationMonthLabel(bid.expectedActivation)+' — wrong year (need '+live.year+')';
+  }
+  var actQ=Math.floor(act.getMonth()/3)+1;
+  if(actQ!==live.quarter){
+    return 'Activation '+mqActivationMonthLabel(bid.expectedActivation)+' — outside live Q'+live.quarter+' '+live.year+' (next/prior quarter excluded)';
+  }
+  if(act.getMonth()<liveMonth){
+    return 'Activation '+mqActivationMonthLabel(bid.expectedActivation)+' — earlier month in quarter excluded (need '+MONTH_NAMES[liveMonth]+' → quarter-end)';
+  }
+  return '';
 }
 window.mqToggleBridgeInfo=function(){
   var p=el('mqBridgeInfoPanel'); if(!p) return;
@@ -6489,8 +6530,8 @@ function mqBuildRulesHtml(calc){
     html+='<strong>QTD Bridge</strong> (Quarter to Date) compares <em>current-quarter</em> Excel actuals + target against pipeline still to land this quarter.<br>';
     html+='<strong>Actuals</strong> — sum of month columns in the current quarter from the live daily sheet (e.g. Jul + Aug in Q3).<br>';
     html+='<strong>Target</strong> — current-quarter column from live sheet (e.g. Q3\'2026). Fixed: per vertical. Mobile: per vertical on QTD.<br>';
-    html+='<strong>Pipeline window</strong> — expected activation in the <strong>current quarter</strong>, from <strong>current month → quarter-end</strong> (past months in the quarter are excluded).<br>';
-    html+='<strong>Example (Q3, August live month):</strong> Actuals = Jul + Aug from Excel · Target = Q3 column · Won = Won deals activating Aug–Sep.';
+    html+='<strong>Pipeline window</strong> — expected activation in the <strong>live calendar quarter</strong> (today\'s Q), from <strong>current month → quarter-end</strong>. Past months in the quarter are excluded. Uses today\'s date — not the Excel target quarter.<br>';
+    html+='<strong>Example (Q3, September live month):</strong> Actuals = Jul + Aug + Sep from Excel · Target = Q3 column · Won/Churn = deals activating Sep only (not Jul/Aug, not Oct).';
   }else if(calc.bridgePeriod==='ytd'){
     html+='<strong>YTD Bridge</strong> (Year to Date) compares <em>year-to-date</em> Excel actuals against target, with <strong>Quarter to Go</strong> pipeline for the rest of the current quarter.<br>';
     html+='<strong>Actuals YTD</strong> — <strong>Jan through prior month</strong> summed from the history/reference sheet + <strong>current month only</strong> from the live daily sheet (never mixed).<br>';
@@ -6534,24 +6575,27 @@ function mqBuildRulesHtml(calc){
     html+='<strong>Green — Actuals</strong> — achieved to date from uploaded GLK Excel (QTD = quarter months; YTD = Jan→current month). Not from pipeline.<br>';
   }
   html+='<strong>Purple — Won</strong> (Gross Adds Won / Quarter to Go — Won on forward bridges)<br>';
-  html+='&nbsp;&nbsp;· Status = <strong>Won</strong> (Billed is excluded)<br>';
-  html+='&nbsp;&nbsp;· Closure Prob = <strong>100%</strong><br>';
-  html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
-  html+='&nbsp;&nbsp;· Expected activation passes the bridge window (QTD / QTG / YTG — see above)<br>';
-  html+='&nbsp;&nbsp;· Value &gt; 0 · <strong>Not grouped</strong> — one total bar (drill-down lists individual accounts)<br><br>';
+  html+='&nbsp;&nbsp;· <strong>Product family</strong> — Mobile rows on Mobile bridge; Fixed on Fixed<br>';
+  html+='&nbsp;&nbsp;· <strong>Report level</strong> — when vertical(s) selected, row vertical must match<br>';
+  html+='&nbsp;&nbsp;· <strong>Opportunity Status</strong> — SharePoint field = <strong>Won</strong> or <strong>Closed Won</strong> (Billed / Proposed / Opportunity excluded; forecast category ignored)<br>';
+  html+='&nbsp;&nbsp;· <strong>Expected activation</strong> — required; live calendar quarter, current month → quarter-end<br>';
+  html+='&nbsp;&nbsp;· <strong>Type of contract</strong> ∈ <strong>'+grossTypes+'</strong><br>';
+  html+='&nbsp;&nbsp;· <strong>Value &gt; 0</strong> — Mobile: GA Lines · Fixed: MRC<br>';
+  html+='&nbsp;&nbsp;· <strong>Not grouped</strong> — each bid row listed separately in drill-down<br>';
+  html+='&nbsp;&nbsp;· <strong>Not used:</strong> closure probability, forecast category, derived grid status<br><br>';
 
   html+='<strong>Blue — In-flight Gross (Top 5 + Others)</strong><br>';
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
   html+='&nbsp;&nbsp;· Same activation window as Won for this bridge type<br>';
   html+='&nbsp;&nbsp;· Value &gt; 0<br>';
-  html+='<strong>Worst Case:</strong> Status = <strong>Proposed</strong> only<br>';
-  html+='<strong>Best Case:</strong> Top 5 pool = <strong>Proposed + Opportunity</strong>; Others pool = any in-flight status ('+ipStatuses+')<br>';
+  html+='&nbsp;&nbsp;· In-flight gross uses raw Opportunity Status — <strong>Proposed</strong>'+(calc.isBest?' / <strong>Opportunity</strong> (Best Case)':' (Worst Case)')+' only · Won / Billed never included<br>';
   html+='&nbsp;&nbsp;· <strong>Grouped by customer name</strong> — all rows for the same customer are summed together<br>';
-  html+='&nbsp;&nbsp;· <strong>Top 5</strong> = five largest customers by absolute value · <strong>Others</strong> = remaining customers combined<br><br>';
+  html+='&nbsp;&nbsp;· <strong>Top 5</strong> = five largest customers by value (largest → smallest on chart) · <strong>Others</strong> = remaining customers combined<br><br>';
 
   html+='<strong>Orange — Churn / Downgrade (Top 5 + Others)</strong><br>';
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+churnTypes+'</strong><br>';
-  html+='&nbsp;&nbsp;· Same activation window · shown as <strong>negative</strong><br>';
+  html+='&nbsp;&nbsp;· Same live-calendar activation window as Won (current month → quarter-end) · shown as <strong>negative</strong><br>';
+  html+='&nbsp;&nbsp;· Deals activating next quarter (e.g. Oct while still in Sep Q3) are <strong>excluded</strong><br>';
   html+='&nbsp;&nbsp;· Same Worst/Best status rules and <strong>customer grouping</strong> as in-flight gross<br>';
   if(isFixed&&(calc.bridgePeriod==='qtg'||calc.bridgePeriod==='ytg'||calc.bridgePeriod==='ytd')){
     html+='&nbsp;&nbsp;· Fixed forward/YTD churn uses <strong>MRC only</strong> (no OTC), with aggregated revenue formula where applicable<br>';
@@ -6584,7 +6628,7 @@ function mqBuildRulesHtml(calc){
 
   html+='<div class="mq-info-section"><h4>Color key</h4>';
   html+='<span style="color:'+MQ_CLR_ACTUALS+';">■</span> Green — Excel Actuals (QTD or YTD)<br>';
-  html+='<span style="color:'+MQ_CLR_WON+';">■</span> Purple — Won / secured (100%)<br>';
+  html+='<span style="color:'+MQ_CLR_WON+';">■</span> Purple — Won (Opp. Status Won + expected activation)<br>';
   html+='<span style="color:'+MQ_CLR_INFLIGHT[0]+';">■</span> Blue — In-flight Gross (grouped Top 5 + Others)<br>';
   html+='<span style="color:'+MQ_CLR_CHURN[0]+';">■</span> Orange — Churn / Downgrade (grouped Top 5 + Others)<br>';
   html+='<span style="color:'+MQ_CLR_NET+';">■</span> Indigo — Net Forecast / Total<br>';
@@ -6644,17 +6688,164 @@ function mqBidDetailLines(bids,max){
 function calcPeriodBridgeLabel(){
   return mqPeriodShortName(GLK_MQ_CALC_LAST&&GLK_MQ_CALC_LAST.bridgePeriod);
 }
-function mqGrossAdds100Detail(bids,year,quarter){
-  var matched=bids.filter(function(b){
-    return b.status==='Won'&&b.closureProb==='100%'&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&mqActivationQtdForward(b,year,quarter)&&mqBidMetric(b)>0;
+function mqRawOppStatus(bid){
+  if(!bid||bid.oppStatus==null) return '';
+  var s=String(bid.oppStatus).trim();
+  return (s==='—'||s==='')?'':s;
+}
+function mqNormOppStatus(bid){
+  return mqRawOppStatus(bid)||String(bid&&bid.status?bid.status:'').trim();
+}
+function mqIsWonOnlyBid(bid){
+  var s=mqRawOppStatus(bid).toLowerCase();
+  return s==='won'||s==='closed won';
+}
+function mqIsWonCandidate(bid){
+  return mqIsWonOnlyBid(bid);
+}
+function mqIsBilledBid(bid){
+  return mqRawOppStatus(bid).toLowerCase()==='billed';
+}
+function mqIsInflightGrossStatus(bid,isBest){
+  var s=mqRawOppStatus(bid).toLowerCase();
+  if(!s) s=String(bid.status||'').trim().toLowerCase();
+  if(s==='won'||s==='closed won'||s==='billed'||s==='lost'||s==='cancelled'||s==='no bid') return false;
+  if(isBest) return s==='proposed'||s==='opportunity';
+  return s==='proposed';
+}
+function mqBidRefPrimary(bid){
+  if(!bid) return '';
+  var ref=bid.bidRequest&&bid.bidRequest!=='—'?String(bid.bidRequest).trim():'';
+  return ref;
+}
+function mqBidRefValue(bid){
+  var ref=mqBidRefPrimary(bid);
+  if(ref) return ref;
+  if(bid.myId&&bid.myId!=='—') return String(bid.myId).trim();
+  if(bid.id!=null) return 'SP-'+bid.id;
+  return '';
+}
+function mqBidRefChip(ref,full){
+  if(!ref) return '—';
+  var base='user-select:all;-webkit-user-select:all;font-family:ui-monospace,monospace;background:var(--bg-secondary);padding:.12rem .4rem;border-radius:4px;border:1px solid var(--border);font-size:.68rem;color:var(--t1);';
+  var style=full?(base+'display:block;word-break:break-all;white-space:pre-wrap;margin-top:.15rem;'):base;
+  return '<code class="mq-copy-ref" style="'+style+'">'+mqEscHtml(ref)+'</code>';
+}
+function mqBidRefCopyHtml(bid,full){
+  var ref=mqBidRefPrimary(bid);
+  var parts=[];
+  if(ref){
+    parts.push('<div><span style="font-size:.62rem;color:var(--t3);">Bid Reference (full):</span>'+mqBidRefChip(ref,!!full)+'</div>');
+  }else{
+    parts.push('<div><span style="font-size:.62rem;color:var(--t3);">Bid Reference:</span> <span style="color:#f59e0b;">Not in SharePoint BidRequest field</span></div>');
+  }
+  if(bid.myId&&bid.myId!=='—'&&String(bid.myId).trim()!==ref){
+    parts.push('<div style="margin-top:.15rem;"><span style="font-size:.62rem;color:var(--t3);">My ID:</span> '+mqBidRefChip(String(bid.myId).trim(),!!full)+'</div>');
+  }
+  if(bid.id!=null){
+    parts.push('<div style="margin-top:.15rem;"><span style="font-size:.62rem;color:var(--t3);">SharePoint record ID:</span> '+mqBidRefChip('SP-'+bid.id,false)+'</div>');
+  }
+  if(bid.customerCode&&bid.customerCode!=='—'){
+    parts.push('<div style="margin-top:.15rem;"><span style="font-size:.62rem;color:var(--t3);">Customer Code:</span> '+mqBidRefChip(String(bid.customerCode).trim(),false)+'</div>');
+  }
+  return parts.join('');
+}
+function mqClubbedRefsHtml(bids){
+  return (bids||[]).map(function(bd,i){
+    var ref=mqBidRefValue(bd);
+    return ref?('<span style="margin-right:.35rem;">'+(i+1)+'. '+mqBidRefChip(ref,true)+'</span>'):'';
+  }).filter(Boolean).join('');
+}
+function mqWonRejectReason(bid,year,quarter,getVal,activationFn){
+  getVal=getVal||mqBidMetric;
+  activationFn=activationFn||mqActivationQtdForward;
+  if(!mqIsWonOnlyBid(bid)){
+    var raw=mqRawOppStatus(bid);
+    return 'Opportunity Status is "'+(raw||'—')+'" (need Won on SharePoint field — forecast category ignored)';
+  }
+  if(mqIsBilledBid(bid)) return 'Opportunity Status is Billed';
+  if(!mqBidHasExpectedActivation(bid)) return 'Missing expected activation date';
+  if(!mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)) return 'Contract type "'+(bid.typeOfContract||'—')+'" not in gross list ('+MQ_GROSS_CONTRACT_TYPES.join(', ')+')';
+  if(!activationFn(bid)){
+    var actReason=mqActivationRejectReason(bid);
+    if(actReason) return actReason;
+    var live=mqLiveYearQuarter();
+    return 'Expected activation outside window — need Q'+live.quarter+' '+live.year+', current month through quarter-end';
+  }
+  if(getVal(bid)<=0){
+    if(mqProductFamily==='mobile'){
+      return 'GA Lines is zero or blank (value='+num(bid.gaLines)+')';
+    }
+    return 'MRC is zero or blank';
+  }
+  return '';
+}
+function mqCollectGrossAddsWon(bids,year,quarter,getVal,activationFn){
+  getVal=getVal||mqBidMetric;
+  activationFn=activationFn||mqActivationQtdForward;
+  var matched=[], excluded=[];
+  (bids||[]).forEach(function(b){
+    if(mqMatchesGrossAddsWon(b,year,quarter,getVal,activationFn)) matched.push(b);
+    else if(mqIsWonCandidate(b)) excluded.push({bid:b,reason:mqWonRejectReason(b,year,quarter,getVal,activationFn)||'Excluded'});
   });
-  return {total:matched.reduce(function(s,b){return s+mqBidMetric(b);},0),bids:matched};
+  return {matched:matched, excluded:excluded};
+}
+function mqDetailGroupsFromBar(b,isChurn){
+  var getVal=function(bd){return mqBidRowDetailValue(bd,isChurn?'decrease':'increase');};
+  if(b.section==='won'){
+    var solo=(b.bids||[]).map(function(bd){
+      return {name:bd.customerName||'—',value:getVal(bd),bids:[bd],solo:true};
+    });
+    return mqSortGroupsByValueDesc(solo);
+  }
+  var groups=mqGroupPoolByCustomer(b.bids||[],getVal);
+  groups.forEach(function(g){g.bids=mqSortBidsByValueDesc(g.bids,isChurn);});
+  return mqSortGroupsByValueDesc(groups);
+}
+function mqBidHasExpectedActivation(bid){
+  return !!mqParseBidDate(bid.expectedActivation);
+}
+function mqMatchesGrossAddsWon(bid,year,quarter,getVal,activationFn){
+  getVal=getVal||mqBidMetric;
+  activationFn=activationFn||mqActivationQtdForward;
+  return mqIsWonOnlyBid(bid)&&!mqIsBilledBid(bid)&&mqBidHasExpectedActivation(bid)&&
+    mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)&&activationFn(bid)&&getVal(bid)>0;
+}
+function mqSortGroupsByValueDesc(groups){
+  return groups.slice().sort(function(a,b){return Math.abs(b.value)-Math.abs(a.value);});
+}
+function mqSortBidsByValueDesc(bids,isChurn){
+  return bids.slice().sort(function(a,b){
+    var va=Math.abs(mqBidRowDetailValue(a,isChurn?'decrease':'increase'));
+    var vb=Math.abs(mqBidRowDetailValue(b,isChurn?'decrease':'increase'));
+    return vb-va;
+  });
+}
+function mqBidRefLine(bid){
+  var ref=mqBidRefValue(bid);
+  var parts=[];
+  if(ref) parts.push('Bid Ref: '+ref);
+  if(bid.myId&&bid.myId!=='—'&&String(bid.myId).trim()!==ref) parts.push('My ID: '+bid.myId);
+  if(bid.customerCode&&bid.customerCode!=='—') parts.push('Cust Code: '+bid.customerCode);
+  return parts.length?parts.join(' · '):'—';
+}
+function mqGrossAdds100Detail(bids,year,quarter){
+  var r=mqCollectGrossAddsWon(bids,year,quarter);
+  return {
+    total:r.matched.reduce(function(s,b){return s+mqBidMetric(b);},0),
+    bids:mqSortBidsByValueDesc(r.matched,false),
+    excluded:r.excluded
+  };
 }
 function mqGrossAddsForwardDetail(bids,getVal,activationFn){
-  var matched=bids.filter(function(b){
-    return b.status==='Won'&&b.closureProb==='100%'&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
-  });
-  return {total:matched.reduce(function(s,b){return s+getVal(b);},0),bids:matched};
+  var year=GLK_MQ_CALC_LAST?GLK_MQ_CALC_LAST.year:new Date().getFullYear();
+  var quarter=GLK_MQ_CALC_LAST?GLK_MQ_CALC_LAST.quarter:Math.floor(new Date().getMonth()/3)+1;
+  var r=mqCollectGrossAddsWon(bids,year,quarter,getVal,activationFn);
+  return {
+    total:r.matched.reduce(function(s,b){return s+getVal(b);},0),
+    bids:mqSortBidsByValueDesc(r.matched,false),
+    excluded:r.excluded
+  };
 }
 function mqGroupPoolByCustomer(pool,getVal){
   var custMap={};
@@ -6670,7 +6861,7 @@ function mqTopNAndOthers(topPool,othersPool,getVal,topN){
   var topGrouped=mqGroupPoolByCustomer(topPool,getVal);
   var ranked=topGrouped.filter(function(p){return p.value!==0;})
     .sort(function(a,b){return Math.abs(b.value)-Math.abs(a.value);}).slice(0,topN);
-  var top=ranked.slice().sort(function(a,b){return a.value-b.value;});
+  var top=ranked.slice().sort(function(a,b){return Math.abs(b.value)-Math.abs(a.value);});
   var topNames={}; top.forEach(function(p){topNames[p.name]=true;});
   var othersGrouped=mqGroupPoolByCustomer(othersPool,getVal).filter(function(p){return !topNames[p.name];});
   var othersBids=[], othersSum=0;
@@ -6683,23 +6874,26 @@ function mqTopNAndOthers(topPool,othersPool,getVal,topN){
 }
 function mqInflightGrossPools(base,year,quarter,isBest,getVal,activationFn){
   getVal=getVal||mqBidMetric;
-  activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
+  activationFn=activationFn||mqActivationQtdForward;
   var common=function(b){
-    return mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
+    return mqIsInflightGrossStatus(b,isBest)&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
   };
   var topPool,othersPool;
   if(isBest){
-    topPool=base.filter(function(b){return common(b)&&(b.status==='Proposed'||b.status==='Opportunity');});
-    othersPool=base.filter(function(b){return common(b)&&STATUS_IP.indexOf(b.status)>=0;});
+    topPool=base.filter(function(b){return common(b)&&(mqNormOppStatus(b)==='Proposed'||mqNormOppStatus(b)==='Opportunity');});
+    othersPool=base.filter(function(b){
+      return mqIsInflightGrossStatus(b,true)&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0&&
+        mqNormOppStatus(b)!=='Proposed'&&mqNormOppStatus(b)!=='Opportunity';
+    });
     return mqTopNAndOthers(topPool,othersPool,getVal,5);
   }
-  topPool=base.filter(function(b){return common(b)&&b.status==='Proposed';});
+  topPool=base.filter(function(b){return common(b)&&mqNormOppStatus(b)==='Proposed';});
   othersPool=topPool.slice();
   return mqTopNAndOthers(topPool,othersPool,getVal,5);
 }
 function mqInflightChurnPools(base,year,quarter,isBest,getVal,activationFn){
   getVal=getVal||mqBidMetric;
-  activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
+  activationFn=activationFn||mqActivationQtdForward;
   var churnVal=function(b){
     var v=getVal(b);
     if(v<0) return v;
@@ -6707,19 +6901,186 @@ function mqInflightChurnPools(base,year,quarter,isBest,getVal,activationFn){
     return 0;
   };
   var common=function(b){
-    return mqContractInList(b,MQ_CHURN_CONTRACT_TYPES)&&activationFn(b);
+    return mqIsInflightGrossStatus(b,isBest)&&mqContractInList(b,MQ_CHURN_CONTRACT_TYPES)&&activationFn(b);
   };
   var hasChurn=function(b){ return churnVal(b)!==0; };
   var topPool,othersPool;
   if(isBest){
-    topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&(b.status==='Proposed'||b.status==='Opportunity');});
-    othersPool=base.filter(function(b){return common(b)&&hasChurn(b)&&STATUS_IP.indexOf(b.status)>=0;});
+    topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&(mqNormOppStatus(b)==='Proposed'||mqNormOppStatus(b)==='Opportunity');});
+    othersPool=base.filter(function(b){
+      return mqIsInflightGrossStatus(b,true)&&mqContractInList(b,MQ_CHURN_CONTRACT_TYPES)&&activationFn(b)&&hasChurn(b)&&
+        mqNormOppStatus(b)!=='Proposed'&&mqNormOppStatus(b)!=='Opportunity';
+    });
     return mqTopNAndOthers(topPool,othersPool,churnVal,5);
   }
-  topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&b.status==='Proposed';});
+  topPool=base.filter(function(b){return common(b)&&hasChurn(b)&&mqNormOppStatus(b)==='Proposed';});
   othersPool=topPool.slice();
   return mqTopNAndOthers(topPool,othersPool,churnVal,5);
 }
+function mqBridgeBidValue(bid,calc,isChurn){
+  calc=calc||GLK_MQ_CALC_LAST||{};
+  var getVal=isChurn?(calc.bridgeGetChurnVal||mqBidMetric):(calc.bridgeGetVal||mqBidMetric);
+  var v=getVal(bid);
+  if(isChurn&&v>0) v=-v;
+  return v;
+}
+function mqInflightGrossRejectReason(bid,calc){
+  calc=calc||GLK_MQ_CALC_LAST||{};
+  var isBest=!!calc.isBest;
+  var getVal=calc.bridgeGetVal||mqBidMetric;
+  var activationFn=calc.bridgeActivationFn||mqActivationQtdForward;
+  if(!mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)) return 'Contract type "'+(bid.typeOfContract||'—')+'" not in gross list';
+  if(!mqIsInflightGrossStatus(bid,isBest)){
+    return 'Opportunity Status "'+(mqRawOppStatus(bid)||mqNormOppStatus(bid)||'—')+'" — need Proposed'+(isBest?' or Opportunity (Best Case)':' (Worst Case)');
+  }
+  var actR=mqActivationRejectReason(bid);
+  if(actR) return actR;
+  if(!activationFn(bid)) return 'Outside activation window';
+  if(getVal(bid)<=0) return mqProductFamily==='mobile'?'GA Lines is zero or blank':'MRC / forward value is zero or blank';
+  return 'Not in Top 5 (ranked below cut) — check Others In-flight or excluded by grouping';
+}
+function mqInflightChurnRejectReason(bid,calc){
+  calc=calc||GLK_MQ_CALC_LAST||{};
+  var isBest=!!calc.isBest;
+  var getVal=calc.bridgeGetChurnVal||mqBidMetric;
+  var activationFn=calc.bridgeActivationFn||mqActivationQtdForward;
+  if(!mqContractInList(bid,MQ_CHURN_CONTRACT_TYPES)) return 'Contract type "'+(bid.typeOfContract||'—')+'" not Churn/Downgrade';
+  if(!mqIsInflightGrossStatus(bid,isBest)){
+    return 'Opportunity Status "'+(mqRawOppStatus(bid)||mqNormOppStatus(bid)||'—')+'" — churn needs Proposed'+(isBest?' or Opportunity':' only');
+  }
+  var actR=mqActivationRejectReason(bid);
+  if(actR) return actR;
+  if(!activationFn(bid)) return 'Outside activation window';
+  var v=getVal(bid);
+  if(v===0) return mqProductFamily==='mobile'?'GA Lines / churn value is zero':'MRC / churn value is zero';
+  return 'Not in Top 5 Churn (ranked below cut) — may be in Others Churn if value is non-zero';
+}
+function mqBidInPool(bids,bid){
+  return (bids||[]).some(function(b){return b.id===bid.id;});
+}
+function mqClassifyBidForBridge(bid,calc){
+  calc=calc||GLK_MQ_CALC_LAST;
+  if(!calc) return {bid:bid,placement:'Not included',reason:'Bridge not calculated yet',value:0};
+  var out={bid:bid,placement:'Not included',reason:'',value:0,section:'',detail:''};
+  if(!mqBidMatchesPf(bid)){
+    out.reason='Wrong product family ('+(bid.productFamily||'—')+') — switch to '+(mqProductFamily==='fixed'?'Fixed':'Mobile');
+    return out;
+  }
+  var levels=calc.activeReportLevels||[];
+  if(levels.length&&!mqBidMatchesReportLevels(bid,levels)){
+    out.reason='Vertical "'+(bid.vertical||'—')+'" not in selected report level ('+levels.join(', ')+')';
+    return out;
+  }
+  if(mqBidInPool(calc.gross100Bids,bid)){
+    out.placement='Gross Adds (Won)'; out.section='won';
+    out.value=mqBridgeBidValue(bid,calc,false);
+    out.detail='Opp Status: '+(mqRawOppStatus(bid)||'—')+' · Act: '+mqFmtBidDate(bid.expectedActivation);
+    return out;
+  }
+  var exW=(calc.wonExcluded||[]).find(function(x){return x.bid.id===bid.id;});
+  if(exW){
+    out.placement='Won — excluded'; out.section='won';
+    out.reason=exW.reason||'Failed Won filter';
+    out.detail='Opp Status: '+(mqRawOppStatus(bid)||'—')+' · Act: '+mqFmtBidDate(bid.expectedActivation);
+    return out;
+  }
+  if(mqIsWonOnlyBid(bid)||mqRawOppStatus(bid).toLowerCase()==='won'){
+    out.placement='Won — excluded'; out.section='won';
+    out.reason=mqWonRejectReason(bid,calc.year,calc.quarter,calc.bridgeGetVal||mqBidMetric,calc.bridgeActivationFn);
+    out.detail='Opp Status: '+(mqRawOppStatus(bid)||'—')+' · Act: '+mqFmtBidDate(bid.expectedActivation);
+    return out;
+  }
+  var cp=calc.churnPool||{};
+  var gi, g;
+  for(gi=0;gi<(cp.top||[]).length;gi++){
+    g=cp.top[gi];
+    if(mqBidInPool(g.bids,bid)){
+      out.placement='Top 5 Churn'; out.section='churn'; out.detail='#'+(gi+1)+' '+g.name;
+      out.value=mqBridgeBidValue(bid,calc,true);
+      return out;
+    }
+  }
+  if(mqBidInPool(cp.othersBids,bid)){
+    out.placement='Others Churn'; out.section='churn';
+    out.value=mqBridgeBidValue(bid,calc,true);
+    out.detail='Grouped under Others Churn';
+    return out;
+  }
+  if(mqContractInList(bid,MQ_CHURN_CONTRACT_TYPES)){
+    out.placement='Churn — not included'; out.section='churn';
+    out.reason=mqInflightChurnRejectReason(bid,calc);
+    out.detail='Act: '+mqFmtBidDate(bid.expectedActivation)+' ('+mqActivationMonthLabel(bid.expectedActivation)+') · Opp: '+(mqRawOppStatus(bid)||'—');
+    return out;
+  }
+  var gp=calc.grossPool||{};
+  for(gi=0;gi<(gp.top||[]).length;gi++){
+    g=gp.top[gi];
+    if(mqBidInPool(g.bids,bid)){
+      out.placement='Top 5 In-flight Gross'; out.section='inflight';
+      out.detail='#'+(gi+1)+' '+g.name+(g.bids.length>1?' ('+g.bids.length+' bids clubbed)':'');
+      out.value=mqBridgeBidValue(bid,calc,false);
+      return out;
+    }
+  }
+  if(mqBidInPool(gp.othersBids,bid)){
+    out.placement='Others In-flight Gross'; out.section='inflight';
+    out.value=mqBridgeBidValue(bid,calc,false);
+    out.detail='Grouped under Others In-flight';
+    return out;
+  }
+  if(mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)){
+    out.placement='In-flight — not included'; out.section='inflight';
+    out.reason=mqInflightGrossRejectReason(bid,calc);
+    out.detail='Act: '+mqFmtBidDate(bid.expectedActivation)+' ('+mqActivationMonthLabel(bid.expectedActivation)+') · Opp: '+(mqRawOppStatus(bid)||'—');
+    return out;
+  }
+  out.reason='Contract type "'+(bid.typeOfContract||'—')+'" is not gross-add or churn/downgrade';
+  out.detail='Act: '+mqFmtBidDate(bid.expectedActivation);
+  return out;
+}
+function mqSearchBridgeAccounts(query){
+  var q=String(query||'').trim().toLowerCase();
+  if(!q||!GLK_MQ_CALC_LAST) return [];
+  return ALL_BIDS.filter(function(b){
+    return (b.customerName||'').toLowerCase().indexOf(q)>=0||
+      mqBidRefValue(b).toLowerCase().indexOf(q)>=0||
+      String(b.customerCode||'').toLowerCase().indexOf(q)>=0||
+      String(b.myId||'').toLowerCase().indexOf(q)>=0;
+  }).map(function(b){return mqClassifyBidForBridge(b,GLK_MQ_CALC_LAST);});
+}
+function mqRenderBridgeSearchResults(items){
+  var box=el('mqBridgeSearchResults'); if(!box) return;
+  if(!items||!items.length){
+    box.style.display='block';
+    box.innerHTML='<div style="padding:.55rem .65rem;color:var(--t3);font-size:.72rem;">No matching accounts in pipeline.</div>';
+    return;
+  }
+  var colors={won:'#7c3aed',inflight:'#2563eb',churn:'#ea580c'};
+  var html='<div style="padding:.45rem .65rem .35rem;font-weight:700;font-size:.72rem;color:var(--t2);">'+items.length+' match(es)</div>';
+  items.forEach(function(r,bi){
+    var inc=r.placement.indexOf('not included')>=0||r.placement.indexOf('excluded')>=0;
+    var col=inc?'#64748b':(colors[r.section]||'var(--acc)');
+    html+='<div class="mq-search-row" style="padding:.45rem .65rem;border-top:1px solid var(--border);font-size:.71rem;line-height:1.45;">';
+    html+='<div style="display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">';
+    html+='<strong>'+mqEscHtml(r.bid.customerName||'—')+'</strong>';
+    html+='<span style="font-weight:700;color:'+col+';">'+mqEscHtml(r.placement)+'</span></div>';
+    html+='<div style="color:var(--t3);margin-top:.15rem;">'+mqBidRefChip(mqBidRefValue(r.bid),false)+' · '+mqEscHtml(r.bid.productFamily||'—')+' · '+mqEscHtml(r.bid.vertical||'—')+'</div>';
+    if(r.detail) html+='<div style="margin-top:.15rem;">'+mqEscHtml(r.detail)+'</div>';
+    if(r.reason) html+='<div style="margin-top:.15rem;color:#b45309;">Why: '+mqEscHtml(r.reason)+'</div>';
+    if(r.value&&!inc) html+='<div style="margin-top:.15rem;">Bridge value: <strong>'+fmtLines(Math.abs(r.value))+'</strong> '+mqMetricShort()+(r.section==='churn'?' (churn)':'')+'</div>';
+    html+='</div>';
+  });
+  box.innerHTML=html;
+  box.style.display='block';
+}
+window.mqRunBridgeSearch=function(){
+  var inp=el('mqBridgeSearchInp');
+  mqRenderBridgeSearchResults(mqSearchBridgeAccounts(inp?inp.value:''));
+};
+window.mqClearBridgeSearch=function(){
+  var inp=el('mqBridgeSearchInp'); if(inp) inp.value='';
+  var box=el('mqBridgeSearchResults'); if(box){ box.style.display='none'; box.innerHTML=''; }
+};
 function glkMobileQtdCalc(){
   var report=mqGetActiveReport();
   var isBest=mqCase==='best';
@@ -6747,10 +7108,10 @@ function glkMobileQtdCalc(){
   if(activeLevels.length) base=base.filter(function(b){return mqBidMatchesReportLevels(b,activeLevels);});
   var getVal=mqBidMetric;
   var getChurnVal=mqBidMetric;
-  var activationFn=function(b){return mqActivationQtdForward(b,year,quarter);};
+  var activationFn=mqActivationQtdForward;
   var g100;
   if(mqIsYtdBridge()){
-    activationFn=function(b){return mqActivationQtdForward(b,year,quarter);};
+    activationFn=mqActivationQtdForward;
     if(mqProductFamily==='fixed'){
       getVal=function(b){return mqBidQtgValue(b,year,quarter);};
       getChurnVal=function(b){return mqBidQtgMrc(b,year,quarter);};
@@ -6763,7 +7124,7 @@ function glkMobileQtdCalc(){
   }else if(mqPeriod==='qtg'){
     getVal=function(b){return mqBidQtgValue(b,year,quarter);};
     getChurnVal=function(b){return mqBidQtgMrc(b,year,quarter);};
-    activationFn=function(b){return mqActivationQtdForward(b,year,quarter);};
+    activationFn=mqActivationQtdForward;
     g100=mqGrossAddsForwardDetail(base,getVal,activationFn);
   }else if(mqPeriod==='ytg'){
     getVal=function(b){return mqBidYtgValue(b,year);};
@@ -6784,7 +7145,8 @@ function glkMobileQtdCalc(){
     report:report,year:year,quarter:quarter,isBest:isBest,isForward:isForward,
     bridgePeriod:mqPeriod,
     actualsQtd:actualsQtd,target:target,actualsByVertical:actualsByVertical,
-    gross100:g100.total,gross100Bids:g100.bids,grossPool:grossPool,churnPool:churnPool,
+    gross100:g100.total,gross100Bids:g100.bids,wonExcluded:g100.excluded||[],grossPool:grossPool,churnPool:churnPool,
+    bridgeGetVal:getVal,bridgeGetChurnVal:getChurnVal,bridgeActivationFn:activationFn,
     inflightGross:inflightGross,inflightChurn:inflightChurn,hasChurn:hasChurn,
     forecast:forecast,diff:diff,gap:isForward?0:(diff>0?diff:0),growth:isForward?0:(diff<0?Math.abs(diff):0),
     vertical:isForward?(activeLevels.length?scope.label:'All verticals (pipeline)'):scope.label,
@@ -6794,6 +7156,8 @@ function glkMobileQtdCalc(){
   };
   calc.rulesHtml=mqBuildRulesHtml(calc);
   GLK_MQ_CALC_LAST=calc;
+  var sInp=el('mqBridgeSearchInp');
+  if(sInp&&sInp.value.trim()) mqRenderBridgeSearchResults(mqSearchBridgeAccounts(sInp.value));
   return calc;
 }
 function mqShortXLabel(b,idx,bars){
@@ -6992,6 +7356,7 @@ function glkMobileQtdAxisPlugin(bars,bottomPad){
 function mqBuildBarDetailHtml(b,metaLabel,barIdx){
   if(!b) return '';
   var calc=GLK_MQ_CALC_LAST||{};
+  var isChurn=b.type==='decrease';
   var h='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem;margin-bottom:.45rem;">';
   h+='<strong style="color:var(--acc);font-size:.78rem;">'+(metaLabel||b.custName||b.groupLabel||'Bar')+'</strong>';
   h+='<button type="button" onclick="mqCloseBarDetail()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:.85rem;padding:0 .25rem;">✕</button></div>';
@@ -7001,43 +7366,100 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
   if(b.groupLabel) h+='<div style="margin-bottom:.35rem;color:var(--t3);">Group: '+mqEscHtml(b.groupLabel)+'</div>';
   if(b.vertBreakdown&&b.vertBreakdown.length){
     h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Vertical split</div><ul style="margin:0 0 .45rem 1rem;padding:0;">';
-    b.vertBreakdown.forEach(function(v){ h+='<li>'+mqEscHtml(v.name)+': '+fmtLines(v.value)+'</li>'; });
+    b.vertBreakdown.slice().sort(function(a,bv){return Math.abs(bv.value)-Math.abs(a.value);}).forEach(function(v){
+      h+='<li>'+mqEscHtml(v.name)+': '+fmtLines(v.value)+'</li>';
+    });
     h+='</ul>';
   }
   if(b.bids&&b.bids.length){
-    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Accounts ('+b.bids.length+') — click a row for full detail</div>';
-    b.bids.forEach(function(bd,i){
-      var open=GLK_MQ_DETAIL_BID_IDX===i;
-      var isChurn=b.type==='decrease';
-      var val=mqBidRowDetailValue(bd,isChurn?'decrease':'increase');
-      var bdBreak=mqBidCalcBreakdown(bd,{churn:isChurn});
-      h+='<div class="mq-detail-account'+(open?' open':'')+'" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+i+')">';
-      h+='<div class="mq-detail-account-hdr"><span>'+(i+1)+'. '+mqEscHtml(bd.customerName||'—')+'</span><span style="color:'+(isChurn?'#ef4444':'var(--acc)')+';">'+fmtLines(val)+'</span></div>';
-      h+='<div class="mq-detail-account-sub">'+mqEscHtml(mqBidRowSummaryLine(bd))+'</div>';
-      h+='<div class="mq-detail-account-sub">Product: '+mqEscHtml(bd.productFamily||'—')+' · '+mqEscHtml(bd.productCategory||'—')+' · Services: '+mqEscHtml(bd.services||'—')+'</div>';
-      h+='<div class="mq-calc-box">';
-      bdBreak.lines.forEach(function(line){ h+=line+'<br>'; });
-      h+='</div>';
-      if(open){
-        h+='<div class="mq-full-row"><dl style="margin:0;">';
-        MQ_BID_DETAIL_FIELDS.forEach(function(fd){
-          h+='<dt>'+fd.l+'</dt><dd>'+mqEscHtml(mqFormatBidField(bd,fd))+'</dd>';
+    var groups=mqDetailGroupsFromBar(b,isChurn);
+    var totalBids=b.bids.length;
+    h+='<div style="margin:.35rem 0 .2rem;font-weight:600;">Accounts ('+totalBids+') — sorted largest to smallest · click row for full detail'+(b.section==='won'?' · <span style="color:var(--t3);font-weight:600;">each bid listed separately on Won bar</span>':'')+'</div>';
+    groups.forEach(function(grp,gi){
+      var groupOpen=GLK_MQ_DETAIL_GROUP_IDX===gi;
+      var clubbed=!grp.solo&&grp.bids.length>1;
+      h+='<div class="mq-detail-account'+(groupOpen?' open':'')+'">';
+      h+='<div class="mq-detail-account-hdr" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+')" style="cursor:pointer;">';
+      h+='<span>'+(gi+1)+'. '+mqEscHtml(grp.name)+(clubbed?' <span style="color:var(--t3);font-weight:600;">('+grp.bids.length+' bids clubbed · exact customer name)</span>':'')+'</span>';
+      h+='<span style="color:'+(isChurn?'#ef4444':'var(--acc)')+';">'+fmtLines(grp.value)+'</span></div>';
+      if(clubbed){
+        h+='<div class="mq-detail-account-sub" style="margin-top:.2rem;">Bid references (select to copy):</div>';
+        h+='<div class="mq-detail-account-sub" style="padding-left:.25rem;margin-bottom:.25rem;">'+mqClubbedRefsHtml(grp.bids)+'</div>';
+        h+='<div class="mq-detail-account-sub" style="margin-top:.2rem;">Clubbed accounts:</div>';
+        grp.bids.forEach(function(bd,bi){
+          var bv=mqBidRowDetailValue(bd,isChurn?'decrease':'increase');
+          h+='<div class="mq-detail-account-sub" style="padding-left:.55rem;">· '+mqBidRefCopyHtml(bd)+' — '+fmtLines(Math.abs(bv))+' · Opp Status: <strong>'+mqEscHtml(mqRawOppStatus(bd)||'—')+'</strong> · Act: '+mqFmtBidDate(bd.expectedActivation)+' ('+mqActivationMonthLabel(bd.expectedActivation)+')</div>';
         });
-        h+='</dl></div>';
       }else{
-        h+='<div style="font-size:.62rem;color:var(--t3);margin-top:.35rem;">Click again for full pipeline row →</div>';
+        h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(grp.bids[0],true)+'</div>';
+        h+='<div class="mq-detail-account-sub">Opp Status: <strong>'+mqEscHtml(mqRawOppStatus(grp.bids[0])||'—')+'</strong> · Act: '+mqFmtBidDate(grp.bids[0].expectedActivation)+' ('+mqActivationMonthLabel(grp.bids[0].expectedActivation)+')</div>';
+        h+='<div class="mq-detail-account-sub">'+mqEscHtml((grp.bids[0].buildingName&&grp.bids[0].buildingName!=='—'?grp.bids[0].buildingName+' · ':'')+(grp.bids[0].vertical||'—')+' · AM: '+(grp.bids[0].amName||'—')+' · AD: '+(grp.bids[0].accountDirector||'—'))+'</div>';
+      }
+      if(!groupOpen){
+        h+='<div style="font-size:.62rem;color:var(--t3);margin-top:.35rem;cursor:pointer;" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+')">Click for full pipeline row →</div>';
+      }
+      if(groupOpen){
+        grp.bids.forEach(function(bd,bi){
+          var bidOpen=GLK_MQ_DETAIL_BID_IDX===bi;
+          var val=mqBidRowDetailValue(bd,isChurn?'decrease':'increase');
+          var bdBreak=mqBidCalcBreakdown(bd,{churn:isChurn});
+          h+='<div style="margin-top:.45rem;padding:.45rem .55rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);">';
+          h+='<div class="mq-detail-account-hdr" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+','+bi+')" style="cursor:pointer;margin-bottom:.25rem;">';
+          h+='<span>'+(clubbed?(bi+1)+'. within club · ':'')+mqEscHtml(bd.customerName||'—')+'</span>';
+          h+='<span style="color:'+(isChurn?'#ef4444':'var(--acc)')+';">'+fmtLines(Math.abs(val))+'</span></div>';
+          h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(bd,true)+'</div>';
+          h+='<div class="mq-detail-account-sub">Opp Status: <strong>'+mqEscHtml(mqRawOppStatus(bd)||'—')+'</strong> · Act: '+mqFmtBidDate(bd.expectedActivation)+' ('+mqActivationMonthLabel(bd.expectedActivation)+') · Contract: '+mqEscHtml(bd.typeOfContract||'—')+'</div>';
+          h+='<div class="mq-detail-account-sub">Product: '+mqEscHtml(bd.productFamily||'—')+' · '+mqEscHtml(bd.productCategory||'—')+' · Services: '+mqEscHtml(bd.services||'—')+'</div>';
+          h+='<div class="mq-calc-box">';
+          bdBreak.lines.forEach(function(line){ h+=line+'<br>'; });
+          h+='</div>';
+          if(bidOpen){
+            h+='<div class="mq-full-row"><dl style="margin:0;">';
+            MQ_BID_DETAIL_FIELDS.forEach(function(fd){
+              h+='<dt>'+fd.l+'</dt><dd>'+mqEscHtml(mqFormatBidField(bd,fd))+'</dd>';
+            });
+            h+='</dl></div>';
+          }else{
+            h+='<div style="font-size:.62rem;color:var(--t3);margin-top:.35rem;cursor:pointer;" onclick="event.stopPropagation();mqToggleBarDetailBid('+barIdx+','+gi+','+bi+')">Click again for all fields →</div>';
+          }
+          h+='</div>';
+        });
       }
       h+='</div>';
     });
   }else if(!b.vertBreakdown||!b.vertBreakdown.length){
     h+='<div style="color:var(--t3);font-style:italic;">No account-level detail for this bar.</div>';
   }
+  if(b.section==='won'&&calc.wonExcluded&&calc.wonExcluded.length){
+    h+='<div style="margin-top:.75rem;padding:.65rem .75rem;border:1px dashed rgba(245,158,11,.65);border-radius:8px;background:rgba(245,158,11,.06);">';
+    h+='<div style="font-weight:700;color:#92400e;margin-bottom:.4rem;">Won in pipeline but excluded from this bar ('+calc.wonExcluded.length+')</div>';
+    h+='<div style="font-size:.64rem;color:#92400e;margin-bottom:.45rem;">These rows look like Won but failed a filter below — this is why accounts go missing (not clubbing).</div>';
+    calc.wonExcluded.slice().sort(function(a,b){
+      return Math.abs(mqBidMetric(b.bid))-Math.abs(mqBidMetric(a.bid));
+    }).forEach(function(x,i){
+      h+='<div style="margin-bottom:.5rem;padding-bottom:.45rem;border-bottom:1px solid rgba(245,158,11,.25);">';
+      h+='<div style="font-weight:600;">'+(i+1)+'. '+mqEscHtml(x.bid.customerName||'—')+' · '+fmtLines(mqBidMetric(x.bid))+' lines</div>';
+      h+=mqBidRefCopyHtml(x.bid,true);
+      h+='<div style="margin-top:.25rem;color:#b45309;font-weight:600;">Why excluded: '+mqEscHtml(x.reason)+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
   return h;
 }
-window.mqToggleBarDetailBid=function(barIdx,bidIdx){
+window.mqToggleBarDetailBid=function(barIdx,groupIdx,bidIdx){
+  groupIdx=groupIdx==null?0:groupIdx;
+  bidIdx=bidIdx==null?-1:bidIdx;
   if(GLK_MQ_DETAIL_IDX!==barIdx){
     GLK_MQ_DETAIL_IDX=barIdx;
+    GLK_MQ_DETAIL_GROUP_IDX=groupIdx;
     GLK_MQ_DETAIL_BID_IDX=bidIdx;
+  }else if(GLK_MQ_DETAIL_GROUP_IDX!==groupIdx){
+    GLK_MQ_DETAIL_GROUP_IDX=groupIdx;
+    GLK_MQ_DETAIL_BID_IDX=bidIdx;
+  }else if(bidIdx<0){
+    GLK_MQ_DETAIL_GROUP_IDX=(GLK_MQ_DETAIL_GROUP_IDX===groupIdx?-1:groupIdx);
+    GLK_MQ_DETAIL_BID_IDX=-1;
   }else{
     GLK_MQ_DETAIL_BID_IDX=(GLK_MQ_DETAIL_BID_IDX===bidIdx?-1:bidIdx);
   }
@@ -7055,6 +7477,7 @@ function mqRefreshBarDetailPanel(){
 }
 window.mqCloseBarDetail=function(){
   GLK_MQ_DETAIL_IDX=-1;
+  GLK_MQ_DETAIL_GROUP_IDX=-1;
   GLK_MQ_DETAIL_BID_IDX=-1;
   var p=el('mqBarDetailPanel'); if(p) p.style.display='none';
   if(GLK_MQ_LAST_BARS) mqSyncChartLabels(CHARTS.mobileQtd,GLK_MQ_LAST_BARS);
@@ -7064,6 +7487,7 @@ function mqToggleBarDetail(idx,bars,barMeta){
   var p=el('mqBarDetailPanel'); if(!p) return;
   if(GLK_MQ_DETAIL_IDX===idx){ mqCloseBarDetail(); return; }
   GLK_MQ_DETAIL_IDX=idx;
+  GLK_MQ_DETAIL_GROUP_IDX=-1;
   GLK_MQ_DETAIL_BID_IDX=-1;
   GLK_MQ_LAST_BARS=bars;
   GLK_MQ_LAST_BAR_META=barMeta;
