@@ -4990,7 +4990,8 @@ function mqSyncActiveReport(){
   GLK_MOBILE_REPORT=mqGetActiveReport();
 }
 function mqBidMetric(b){
-  return mqProductFamily==='fixed'?num(b.mrc):num(b.gaLines);
+  if(mqProductFamily==='fixed') return num(b.mrc);
+  return num(b.gaLines);
 }
 function mqMetricUnit(){
   return mqProductFamily==='fixed'?'MRC':'GA Lines';
@@ -6234,9 +6235,11 @@ function mqYearEndDate(year){
   return new Date(year,11,31);
 }
 function mqBidQtgMrc(bid,year,quarter){
+  if(!mqActivationQtdForward(bid)) return 0;
   var act=mqParseBidDate(bid.expectedActivation);
   if(!act) return 0;
-  var qEnd=mqQuarterEndDate(year,quarter);
+  var live=mqLiveYearQuarter();
+  var qEnd=mqQuarterEndDate(live.year,live.quarter);
   if(act>qEnd) return 0;
   return mqAggregatedRevenueMrc(act,qEnd,num(bid.mrc));
 }
@@ -6251,10 +6254,11 @@ function mqBidForwardOtc(bid){
   return num(bid.otc);
 }
 function mqBidQtgValue(bid,year,quarter){
-  if(!mqActivationQtdForward(bid,year,quarter)) return 0;
+  if(!mqActivationQtdForward(bid)) return 0;
   var act=mqParseBidDate(bid.expectedActivation);
   if(!act) return 0;
-  var qEnd=mqQuarterEndDate(year,quarter);
+  var live=mqLiveYearQuarter();
+  var qEnd=mqQuarterEndDate(live.year,live.quarter);
   if(act>qEnd) return 0;
   return mqAggregatedRevenueMrc(act,qEnd,num(bid.mrc))+mqBidForwardOtc(bid);
 }
@@ -6427,16 +6431,20 @@ var MQ_CHURN_CONTRACT_TYPES=['churn','downgrade'];
 function mqContractInList(bid,list){
   return list.indexOf(mqNormContractType(bid.typeOfContract))>=0;
 }
-/** Expected activation in report quarter, from current month through quarter-end (skip past months in quarter). */
-function mqActivationQtdForward(bid,year,quarter){
+function mqLiveYearQuarter(){
+  var now=new Date();
+  return {year:now.getFullYear(),quarter:Math.floor(now.getMonth()/3)+1};
+}
+/** Expected activation in live calendar quarter, current month through quarter-end. */
+function mqActivationQtdForward(bid){
   var act=mqParseBidDate(bid.expectedActivation);
   if(!act) return false;
-  if(act.getFullYear()!==year) return false;
-  var q=Math.floor(act.getMonth()/3)+1;
-  if(q!==quarter) return false;
+  var live=mqLiveYearQuarter();
+  if(act.getFullYear()!==live.year) return false;
+  var actQ=Math.floor(act.getMonth()/3)+1;
+  if(actQ!==live.quarter) return false;
   var now=new Date();
-  var nowQ=Math.floor(now.getMonth()/3)+1;
-  if(year===now.getFullYear()&&quarter===nowQ&&act.getMonth()<now.getMonth()) return false;
+  if(act.getMonth()<now.getMonth()) return false;
   return true;
 }
 window.mqToggleBridgeInfo=function(){
@@ -6495,8 +6503,8 @@ function mqBuildRulesHtml(calc){
     html+='<strong>QTD Bridge</strong> (Quarter to Date) compares <em>current-quarter</em> Excel actuals + target against pipeline still to land this quarter.<br>';
     html+='<strong>Actuals</strong> — sum of month columns in the current quarter from the live daily sheet (e.g. Jul + Aug in Q3).<br>';
     html+='<strong>Target</strong> — current-quarter column from live sheet (e.g. Q3\'2026). Fixed: per vertical. Mobile: per vertical on QTD.<br>';
-    html+='<strong>Pipeline window</strong> — expected activation in the <strong>current quarter</strong>, from <strong>current month → quarter-end</strong> (past months in the quarter are excluded).<br>';
-    html+='<strong>Example (Q3, August live month):</strong> Actuals = Jul + Aug from Excel · Target = Q3 column · Won = Won deals activating Aug–Sep.';
+    html+='<strong>Pipeline window</strong> — expected activation in the <strong>live calendar quarter</strong> (today\'s Q), from <strong>current month → quarter-end</strong>. Past months in the quarter are excluded. Uses today\'s date — not the Excel target quarter.<br>';
+    html+='<strong>Example (Q3, September live month):</strong> Actuals = Jul + Aug + Sep from Excel · Target = Q3 column · Won/Churn = deals activating Sep only (not Jul/Aug, not Oct).';
   }else if(calc.bridgePeriod==='ytd'){
     html+='<strong>YTD Bridge</strong> (Year to Date) compares <em>year-to-date</em> Excel actuals against target, with <strong>Quarter to Go</strong> pipeline for the rest of the current quarter.<br>';
     html+='<strong>Actuals YTD</strong> — <strong>Jan through prior month</strong> summed from the history/reference sheet + <strong>current month only</strong> from the live daily sheet (never mixed).<br>';
@@ -6540,10 +6548,14 @@ function mqBuildRulesHtml(calc){
     html+='<strong>Green — Actuals</strong> — achieved to date from uploaded GLK Excel (QTD = quarter months; YTD = Jan→current month). Not from pipeline.<br>';
   }
   html+='<strong>Purple — Won</strong> (Gross Adds Won / Quarter to Go — Won on forward bridges)<br>';
-  html+='&nbsp;&nbsp;· Opportunity Status = <strong>Won only</strong> (raw SharePoint field — Billed / Proposed / Opportunity excluded)<br>';
-  html+='&nbsp;&nbsp;· Expected activation date <strong>required</strong> — must fall in the bridge window (QTD / QTG / YTG)<br>';
-  html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
-  html+='&nbsp;&nbsp;· Value &gt; 0 · <strong>Not grouped on chart</strong> — drill-down lists <strong>each bid row separately</strong> (same customer name = 2 rows if 2 bids pass filters)<br><br>';
+  html+='&nbsp;&nbsp;· <strong>Product family</strong> — Mobile rows on Mobile bridge; Fixed on Fixed<br>';
+  html+='&nbsp;&nbsp;· <strong>Report level</strong> — when vertical(s) selected, row vertical must match<br>';
+  html+='&nbsp;&nbsp;· <strong>Opportunity Status</strong> — SharePoint field = <strong>Won</strong> only (Billed / Proposed / Opportunity excluded; forecast category ignored)<br>';
+  html+='&nbsp;&nbsp;· <strong>Expected activation</strong> — required; live calendar quarter, current month → quarter-end<br>';
+  html+='&nbsp;&nbsp;· <strong>Type of contract</strong> ∈ <strong>'+grossTypes+'</strong><br>';
+  html+='&nbsp;&nbsp;· <strong>Value &gt; 0</strong> — Mobile: GA Lines · Fixed: MRC<br>';
+  html+='&nbsp;&nbsp;· <strong>Not grouped</strong> — each bid row listed separately in drill-down<br>';
+  html+='&nbsp;&nbsp;· <strong>Not used:</strong> closure probability, forecast category, derived grid status<br><br>';
 
   html+='<strong>Blue — In-flight Gross (Top 5 + Others)</strong><br>';
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
@@ -6555,7 +6567,8 @@ function mqBuildRulesHtml(calc){
 
   html+='<strong>Orange — Churn / Downgrade (Top 5 + Others)</strong><br>';
   html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+churnTypes+'</strong><br>';
-  html+='&nbsp;&nbsp;· Same activation window · shown as <strong>negative</strong><br>';
+  html+='&nbsp;&nbsp;· Same live-calendar activation window as Won (current month → quarter-end) · shown as <strong>negative</strong><br>';
+  html+='&nbsp;&nbsp;· Deals activating next quarter (e.g. Oct while still in Sep Q3) are <strong>excluded</strong><br>';
   html+='&nbsp;&nbsp;· Same Worst/Best status rules and <strong>customer grouping</strong> as in-flight gross<br>';
   if(isFixed&&(calc.bridgePeriod==='qtg'||calc.bridgePeriod==='ytg'||calc.bridgePeriod==='ytd')){
     html+='&nbsp;&nbsp;· Fixed forward/YTD churn uses <strong>MRC only</strong> (no OTC), with aggregated revenue formula where applicable<br>';
@@ -6648,20 +6661,29 @@ function mqBidDetailLines(bids,max){
 function calcPeriodBridgeLabel(){
   return mqPeriodShortName(GLK_MQ_CALC_LAST&&GLK_MQ_CALC_LAST.bridgePeriod);
 }
+function mqRawOppStatus(bid){
+  if(!bid||bid.oppStatus==null) return '';
+  var s=String(bid.oppStatus).trim();
+  return (s==='—'||s==='')?'':s;
+}
 function mqNormOppStatus(bid){
-  return String(bid&&bid.oppStatus!=null?bid.oppStatus:(bid?bid.status:'')).trim();
+  return mqRawOppStatus(bid)||String(bid&&bid.status?bid.status:'').trim();
 }
 function mqIsWonOnlyBid(bid){
-  return mqNormOppStatus(bid)==='Won';
+  return mqRawOppStatus(bid).toLowerCase()==='won';
+}
+function mqIsWonCandidate(bid){
+  return mqIsWonOnlyBid(bid);
 }
 function mqIsBilledBid(bid){
-  return mqNormOppStatus(bid)==='Billed';
+  return mqRawOppStatus(bid).toLowerCase()==='billed';
 }
 function mqIsInflightGrossStatus(bid,isBest){
-  var s=mqNormOppStatus(bid);
-  if(s==='Won'||s==='Billed'||s==='Lost'||s==='Cancelled'||s==='No Bid') return false;
-  if(isBest) return s==='Proposed'||s==='Opportunity';
-  return s==='Proposed';
+  var s=mqRawOppStatus(bid).toLowerCase();
+  if(!s) s=String(bid.status||'').trim().toLowerCase();
+  if(s==='won'||s==='billed'||s==='lost'||s==='cancelled'||s==='no bid') return false;
+  if(isBest) return s==='proposed'||s==='opportunity';
+  return s==='proposed';
 }
 function mqBidRefPrimary(bid){
   if(!bid) return '';
@@ -6708,14 +6730,35 @@ function mqClubbedRefsHtml(bids){
 }
 function mqWonRejectReason(bid,year,quarter,getVal,activationFn){
   getVal=getVal||mqBidMetric;
-  activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
-  if(!mqIsWonOnlyBid(bid)) return 'Opportunity Status is "'+mqNormOppStatus(bid)+'" (need Won)';
+  activationFn=activationFn||mqActivationQtdForward;
+  if(!mqIsWonOnlyBid(bid)){
+    var raw=mqRawOppStatus(bid);
+    return 'Opportunity Status is "'+(raw||'—')+'" (need Won on SharePoint field — forecast category ignored)';
+  }
   if(mqIsBilledBid(bid)) return 'Opportunity Status is Billed';
   if(!mqBidHasExpectedActivation(bid)) return 'Missing expected activation date';
-  if(!mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)) return 'Contract type "'+(bid.typeOfContract||'—')+'" not in gross list';
-  if(!activationFn(bid)) return 'Expected activation '+fmtDate(bid.expectedActivation)+' outside bridge window (Q'+quarter+' '+year+', current month → quarter-end only)';
-  if(getVal(bid)<=0) return (mqProductFamily==='fixed'?'MRC':'GA Lines')+' is zero or blank';
+  if(!mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)) return 'Contract type "'+(bid.typeOfContract||'—')+'" not in gross list ('+MQ_GROSS_CONTRACT_TYPES.join(', ')+')';
+  if(!activationFn(bid)){
+    var live=mqLiveYearQuarter();
+    return 'Expected activation '+fmtDate(bid.expectedActivation)+' outside window — need Q'+live.quarter+' '+live.year+', current month ('+MONTH_NAMES[new Date().getMonth()]+') through quarter-end';
+  }
+  if(getVal(bid)<=0){
+    if(mqProductFamily==='mobile'){
+      return 'GA Lines is zero or blank (value='+num(bid.gaLines)+')';
+    }
+    return 'MRC is zero or blank';
+  }
   return '';
+}
+function mqCollectGrossAddsWon(bids,year,quarter,getVal,activationFn){
+  getVal=getVal||mqBidMetric;
+  activationFn=activationFn||mqActivationQtdForward;
+  var matched=[], excluded=[];
+  (bids||[]).forEach(function(b){
+    if(mqMatchesGrossAddsWon(b,year,quarter,getVal,activationFn)) matched.push(b);
+    else if(mqIsWonCandidate(b)) excluded.push({bid:b,reason:mqWonRejectReason(b,year,quarter,getVal,activationFn)||'Excluded'});
+  });
+  return {matched:matched, excluded:excluded};
 }
 function mqDetailGroupsFromBar(b,isChurn){
   var getVal=function(bd){return mqBidRowDetailValue(bd,isChurn?'decrease':'increase');};
@@ -6734,7 +6777,7 @@ function mqBidHasExpectedActivation(bid){
 }
 function mqMatchesGrossAddsWon(bid,year,quarter,getVal,activationFn){
   getVal=getVal||mqBidMetric;
-  activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
+  activationFn=activationFn||mqActivationQtdForward;
   return mqIsWonOnlyBid(bid)&&!mqIsBilledBid(bid)&&mqBidHasExpectedActivation(bid)&&
     mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)&&activationFn(bid)&&getVal(bid)>0;
 }
@@ -6757,15 +6800,22 @@ function mqBidRefLine(bid){
   return parts.length?parts.join(' · '):'—';
 }
 function mqGrossAdds100Detail(bids,year,quarter){
-  var matched=bids.filter(function(b){return mqMatchesGrossAddsWon(b,year,quarter);});
-  return {total:matched.reduce(function(s,b){return s+mqBidMetric(b);},0),bids:mqSortBidsByValueDesc(matched,false)};
+  var r=mqCollectGrossAddsWon(bids,year,quarter);
+  return {
+    total:r.matched.reduce(function(s,b){return s+mqBidMetric(b);},0),
+    bids:mqSortBidsByValueDesc(r.matched,false),
+    excluded:r.excluded
+  };
 }
 function mqGrossAddsForwardDetail(bids,getVal,activationFn){
-  var matched=bids.filter(function(b){
-    return mqIsWonOnlyBid(b)&&!mqIsBilledBid(b)&&mqBidHasExpectedActivation(b)&&
-      mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
-  });
-  return {total:matched.reduce(function(s,b){return s+getVal(b);},0),bids:mqSortBidsByValueDesc(matched,false)};
+  var year=GLK_MQ_CALC_LAST?GLK_MQ_CALC_LAST.year:new Date().getFullYear();
+  var quarter=GLK_MQ_CALC_LAST?GLK_MQ_CALC_LAST.quarter:Math.floor(new Date().getMonth()/3)+1;
+  var r=mqCollectGrossAddsWon(bids,year,quarter,getVal,activationFn);
+  return {
+    total:r.matched.reduce(function(s,b){return s+getVal(b);},0),
+    bids:mqSortBidsByValueDesc(r.matched,false),
+    excluded:r.excluded
+  };
 }
 function mqGroupPoolByCustomer(pool,getVal){
   var custMap={};
@@ -6794,7 +6844,7 @@ function mqTopNAndOthers(topPool,othersPool,getVal,topN){
 }
 function mqInflightGrossPools(base,year,quarter,isBest,getVal,activationFn){
   getVal=getVal||mqBidMetric;
-  activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
+  activationFn=activationFn||mqActivationQtdForward;
   var common=function(b){
     return mqIsInflightGrossStatus(b,isBest)&&mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
   };
@@ -6813,7 +6863,7 @@ function mqInflightGrossPools(base,year,quarter,isBest,getVal,activationFn){
 }
 function mqInflightChurnPools(base,year,quarter,isBest,getVal,activationFn){
   getVal=getVal||mqBidMetric;
-  activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
+  activationFn=activationFn||mqActivationQtdForward;
   var churnVal=function(b){
     var v=getVal(b);
     if(v<0) return v;
@@ -6864,10 +6914,10 @@ function glkMobileQtdCalc(){
   if(activeLevels.length) base=base.filter(function(b){return mqBidMatchesReportLevels(b,activeLevels);});
   var getVal=mqBidMetric;
   var getChurnVal=mqBidMetric;
-  var activationFn=function(b){return mqActivationQtdForward(b,year,quarter);};
+  var activationFn=mqActivationQtdForward;
   var g100;
   if(mqIsYtdBridge()){
-    activationFn=function(b){return mqActivationQtdForward(b,year,quarter);};
+    activationFn=mqActivationQtdForward;
     if(mqProductFamily==='fixed'){
       getVal=function(b){return mqBidQtgValue(b,year,quarter);};
       getChurnVal=function(b){return mqBidQtgMrc(b,year,quarter);};
@@ -6880,7 +6930,7 @@ function glkMobileQtdCalc(){
   }else if(mqPeriod==='qtg'){
     getVal=function(b){return mqBidQtgValue(b,year,quarter);};
     getChurnVal=function(b){return mqBidQtgMrc(b,year,quarter);};
-    activationFn=function(b){return mqActivationQtdForward(b,year,quarter);};
+    activationFn=mqActivationQtdForward;
     g100=mqGrossAddsForwardDetail(base,getVal,activationFn);
   }else if(mqPeriod==='ytg'){
     getVal=function(b){return mqBidYtgValue(b,year);};
@@ -6901,7 +6951,7 @@ function glkMobileQtdCalc(){
     report:report,year:year,quarter:quarter,isBest:isBest,isForward:isForward,
     bridgePeriod:mqPeriod,
     actualsQtd:actualsQtd,target:target,actualsByVertical:actualsByVertical,
-    gross100:g100.total,gross100Bids:g100.bids,grossPool:grossPool,churnPool:churnPool,
+    gross100:g100.total,gross100Bids:g100.bids,wonExcluded:g100.excluded||[],grossPool:grossPool,churnPool:churnPool,
     inflightGross:inflightGross,inflightChurn:inflightChurn,hasChurn:hasChurn,
     forecast:forecast,diff:diff,gap:isForward?0:(diff>0?diff:0),growth:isForward?0:(diff<0?Math.abs(diff):0),
     vertical:isForward?(activeLevels.length?scope.label:'All verticals (pipeline)'):scope.label,
@@ -7141,7 +7191,7 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
         h+='<div class="mq-detail-account-sub" style="margin-top:.2rem;">Clubbed accounts:</div>';
         grp.bids.forEach(function(bd,bi){
           var bv=mqBidRowDetailValue(bd,isChurn?'decrease':'increase');
-          h+='<div class="mq-detail-account-sub" style="padding-left:.55rem;">· '+mqBidRefCopyHtml(bd)+' — '+fmtLines(Math.abs(bv))+' · Opp Status: <strong>'+mqEscHtml(mqNormOppStatus(bd))+'</strong> · Act: '+fmtDate(bd.expectedActivation)+'</div>';
+          h+='<div class="mq-detail-account-sub" style="padding-left:.55rem;">· '+mqBidRefCopyHtml(bd)+' — '+fmtLines(Math.abs(bv))+' · Opp Status: <strong>'+mqEscHtml(mqRawOppStatus(bd)||'—')+'</strong> · Act: '+fmtDate(bd.expectedActivation)+'</div>';
         });
       }else{
         h+='<div class="mq-detail-account-sub">'+mqBidRefCopyHtml(grp.bids[0],true)+'</div>';
@@ -7182,6 +7232,21 @@ function mqBuildBarDetailHtml(b,metaLabel,barIdx){
     });
   }else if(!b.vertBreakdown||!b.vertBreakdown.length){
     h+='<div style="color:var(--t3);font-style:italic;">No account-level detail for this bar.</div>';
+  }
+  if(b.section==='won'&&calc.wonExcluded&&calc.wonExcluded.length){
+    h+='<div style="margin-top:.75rem;padding:.65rem .75rem;border:1px dashed rgba(245,158,11,.65);border-radius:8px;background:rgba(245,158,11,.06);">';
+    h+='<div style="font-weight:700;color:#92400e;margin-bottom:.4rem;">Won in pipeline but excluded from this bar ('+calc.wonExcluded.length+')</div>';
+    h+='<div style="font-size:.64rem;color:#92400e;margin-bottom:.45rem;">These rows look like Won but failed a filter below — this is why accounts go missing (not clubbing).</div>';
+    calc.wonExcluded.slice().sort(function(a,b){
+      return Math.abs(mqBidMetric(b.bid))-Math.abs(mqBidMetric(a.bid));
+    }).forEach(function(x,i){
+      h+='<div style="margin-bottom:.5rem;padding-bottom:.45rem;border-bottom:1px solid rgba(245,158,11,.25);">';
+      h+='<div style="font-weight:600;">'+(i+1)+'. '+mqEscHtml(x.bid.customerName||'—')+' · '+fmtLines(mqBidMetric(x.bid))+' lines</div>';
+      h+=mqBidRefCopyHtml(x.bid,true);
+      h+='<div style="margin-top:.25rem;color:#b45309;font-weight:600;">Why excluded: '+mqEscHtml(x.reason)+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
   }
   return h;
 }
