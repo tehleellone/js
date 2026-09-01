@@ -6541,9 +6541,8 @@ function mqBuildRulesHtml(calc){
   }
   html+='<strong>Purple — Won</strong> (Gross Adds Won / Quarter to Go — Won on forward bridges)<br>';
   html+='&nbsp;&nbsp;· Opportunity Status = <strong>Won only</strong> (raw SharePoint field — Billed / Proposed / Opportunity excluded)<br>';
-  html+='&nbsp;&nbsp;· Closure Prob = <strong>100%</strong><br>';
-  html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
   html+='&nbsp;&nbsp;· Expected activation date <strong>required</strong> — must fall in the bridge window (QTD / QTG / YTG)<br>';
+  html+='&nbsp;&nbsp;· Type of contract ∈ <strong>'+grossTypes+'</strong><br>';
   html+='&nbsp;&nbsp;· Value &gt; 0 · <strong>Not grouped</strong> — one total bar (drill-down lists individual accounts, largest first)<br><br>';
 
   html+='<strong>Blue — In-flight Gross (Top 5 + Others)</strong><br>';
@@ -6589,7 +6588,7 @@ function mqBuildRulesHtml(calc){
 
   html+='<div class="mq-info-section"><h4>Color key</h4>';
   html+='<span style="color:'+MQ_CLR_ACTUALS+';">■</span> Green — Excel Actuals (QTD or YTD)<br>';
-  html+='<span style="color:'+MQ_CLR_WON+';">■</span> Purple — Won / secured (100%)<br>';
+  html+='<span style="color:'+MQ_CLR_WON+';">■</span> Purple — Won (Opp. Status Won + expected activation)<br>';
   html+='<span style="color:'+MQ_CLR_INFLIGHT[0]+';">■</span> Blue — In-flight Gross (grouped Top 5 + Others)<br>';
   html+='<span style="color:'+MQ_CLR_CHURN[0]+';">■</span> Orange — Churn / Downgrade (grouped Top 5 + Others)<br>';
   html+='<span style="color:'+MQ_CLR_NET+';">■</span> Indigo — Net Forecast / Total<br>';
@@ -6692,7 +6691,7 @@ function mqBidHasExpectedActivation(bid){
 function mqMatchesGrossAddsWon(bid,year,quarter,getVal,activationFn){
   getVal=getVal||mqBidMetric;
   activationFn=activationFn||function(b){return mqActivationQtdForward(b,year,quarter);};
-  return mqIsWonOnlyBid(bid)&&!mqIsBilledBid(bid)&&bid.closureProb==='100%'&&mqBidHasExpectedActivation(bid)&&
+  return mqIsWonOnlyBid(bid)&&!mqIsBilledBid(bid)&&mqBidHasExpectedActivation(bid)&&
     mqContractInList(bid,MQ_GROSS_CONTRACT_TYPES)&&activationFn(bid)&&getVal(bid)>0;
 }
 function mqSortGroupsByValueDesc(groups){
@@ -6725,7 +6724,7 @@ function mqGrossAdds100Detail(bids,year,quarter){
 }
 function mqGrossAddsForwardDetail(bids,getVal,activationFn){
   var matched=bids.filter(function(b){
-    return mqIsWonOnlyBid(b)&&!mqIsBilledBid(b)&&b.closureProb==='100%'&&mqBidHasExpectedActivation(b)&&
+    return mqIsWonOnlyBid(b)&&!mqIsBilledBid(b)&&mqBidHasExpectedActivation(b)&&
       mqContractInList(b,MQ_GROSS_CONTRACT_TYPES)&&activationFn(b)&&getVal(b)>0;
   });
   return {total:matched.reduce(function(s,b){return s+getVal(b);},0),bids:mqSortBidsByValueDesc(matched,false)};
