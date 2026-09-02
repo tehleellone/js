@@ -1,5 +1,5 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.7.3
+// repeated-calls.js — Repeated Calls Module v1.7.5
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
 // SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
@@ -18,7 +18,7 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.7.3';
+window.RC_MODULE_VERSION = '1.7.5';
 
 var RC_DELETE_ALL_EMAILS = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
 var RC_MIN_REPEAT_CALLS = 3;
@@ -168,6 +168,88 @@ function rcMsisdnCallCount(msisdn) {
 
 function rcIsRepeatMsisdn(msisdn) {
     return rcMsisdnCallCount(msisdn) >= RC_MIN_REPEAT_CALLS;
+}
+
+function rcMsisdnKey(itOrMsisdn) {
+    if (itOrMsisdn && typeof itOrMsisdn === 'object') return String(itOrMsisdn.MSISDN != null ? itOrMsisdn.MSISDN : '').trim();
+    return String(itOrMsisdn != null ? itOrMsisdn : '').trim();
+}
+
+function rcIsNewerCall(it, cur) {
+    var da = it && it.Call_DateTime ? new Date(it.Call_DateTime).getTime() : 0;
+    var db = cur && cur.Call_DateTime ? new Date(cur.Call_DateTime).getTime() : 0;
+    if (da !== db) return da > db;
+    return (parseInt(it && it.ID, 10) || 0) > (parseInt(cur && cur.ID, 10) || 0);
+}
+
+function rcMsisdnHasInProgressAssignment(msisdn) {
+    var m = rcMsisdnKey(msisdn);
+    if (!m) return false;
+    return rcAllItems.some(function (it) {
+        return rcMsisdnKey(it) === m && rcDisplayStatus(it) === RC_STATUS.INPROGRESS;
+    });
+}
+
+function rcItemsForMsisdnStatus(msisdn, status) {
+    var m = rcMsisdnKey(msisdn);
+    if (!m) return [];
+    return rcAllItems.filter(function (it) {
+        return rcMsisdnKey(it) === m && rcDisplayStatus(it) === status;
+    });
+}
+
+function rcPickLatestItem(items) {
+    if (!items || !items.length) return null;
+    return items.reduce(function (best, it) { return !best || rcIsNewerCall(it, best) ? it : best; }, null);
+}
+
+function rcDedupeUniqueCallers(items) {
+    var byMsisdn = {};
+    (items || []).forEach(function (it) {
+        var m = rcMsisdnKey(it);
+        if (!m) return;
+        if (!byMsisdn[m] || rcIsNewerCall(it, byMsisdn[m])) byMsisdn[m] = it;
+    });
+    return Object.keys(byMsisdn).map(function (m) { return byMsisdn[m]; });
+}
+
+function rcAssignQueueItems() {
+    var pending = rcAllItems.filter(function (it) {
+        return rcDisplayStatus(it) === RC_STATUS.PENDING;
+    });
+    return rcDedupeUniqueCallers(pending).filter(function (it) {
+        return !rcMsisdnHasInProgressAssignment(it.MSISDN);
+    });
+}
+
+function rcAssignedQueueItems() {
+    var assigned = rcAllItems.filter(function (it) {
+        return rcDisplayStatus(it) === RC_STATUS.INPROGRESS;
+    });
+    return rcDedupeUniqueCallers(assigned);
+}
+
+function rcExpandAssignPairs(pairs, isReassign) {
+    var status = isReassign ? RC_STATUS.INPROGRESS : RC_STATUS.PENDING;
+    var expanded = [];
+    var seenIds = {};
+    (pairs || []).forEach(function (p) {
+        var item = rcAllItems.find(function (it) { return it.ID === p.id; });
+        var siblings = item ? rcItemsForMsisdnStatus(item.MSISDN, status) : [];
+        if (!siblings.length && item) siblings = [item];
+        siblings.forEach(function (it) {
+            if (seenIds[it.ID]) return;
+            seenIds[it.ID] = true;
+            expanded.push({ id: it.ID, agentName: p.agentName });
+        });
+    });
+    return expanded;
+}
+
+function rcExpandResolveIds(id) {
+    var item = rcAllItems.find(function (it) { return it.ID === id; });
+    if (!item) return [id];
+    return rcItemsForMsisdnStatus(item.MSISDN, RC_STATUS.INPROGRESS).map(function (it) { return it.ID; });
 }
 
 function rcIsAssigned(it) {
@@ -395,7 +477,7 @@ function rcProcessUploadRows(rawRows) {
     candidates.forEach(function (rec) {
         var m = String(rec.MSISDN || '').trim();
         if ((mergedCounts[m] || 0) >= RC_MIN_REPEAT_CALLS) toAdd.push(rec);
-        else ignored.push({ msisdn: rec.MSISDN, callDateTime: rec.Call_DateTime, site: rec.Site, customerType: rec.Customer_Type, reason: 'MSISDN has fewer than 3 calls (requires 3+)' });
+        else ignored.push({ msisdn: rec.MSISDN, callDateTime: rec.Call_DateTime, site: rec.Site, customerType: rec.Customer_Type, reason: 'MSISDN has fewer than 3 calls (3 or more required)' });
     });
     return { toAdd: toAdd, ignored: ignored };
 }
@@ -405,7 +487,7 @@ function rcUploadIgnoredTableHTML(ignored) {
     var show = ignored.slice(0, 100);
     return '<div class="rc-panel" style="margin-top:.85rem;border-color:rgba(239,68,68,.2);">' +
         '<div class="rc-panel-title" style="font-size:.88rem;">Ignored rows · ' + ignored.length + '</div>' +
-        '<p style="font-size:.74rem;color:var(--t3);margin:-.35rem 0 .65rem;">Only Enterprise + CC-SGS-Emtyaz + MSISDNs with 3+ calls are uploaded.</p>' +
+        '<p style="font-size:.74rem;color:var(--t3);margin:-.35rem 0 .65rem;">Only Enterprise + CC-SGS-Emtyaz + MSISDNs with 3 or more calls are uploaded.</p>' +
         '<div class="rc-repeat-table-wrap"><table class="rc-repeat-table"><thead><tr>' +
         '<th>MSISDN</th><th>DateTime</th><th>Site</th><th>Customer Type</th><th>Reason</th>' +
         '</tr></thead><tbody>' +
@@ -2239,7 +2321,9 @@ function rcBulkBarHTML(type) {
         '<select id="rcBulkAgent" class="fb-select" style="max-width:200px;">' + rcAgentOptionsHTML('') + '</select>' +
         '<button type="button" class="export-btn" onclick="rcBulk' + (isAssign ? 'Assign' : 'Reassign') + '()" style="padding:8px 18px;">' +
             (isAssign ? 'Assign Selected' : 'Reassign Selected') + '</button>' +
-        '<span class="rc-bulk-hint">Tick checkboxes on the left, pick an agent, then run bulk action.</span>' +
+        '<span class="rc-bulk-hint">' + (isAssign
+            ? 'One row = one unique caller. Assigning updates all pending calls for that MSISDN.'
+            : 'One row = one unique caller. Reassigning updates all in-progress calls for that MSISDN.') + '</span>' +
         '<span id="' + countId + '" class="rc-bulk-count">0 selected</span></div>';
 }
 
@@ -2332,7 +2416,7 @@ function rcRefreshDashboardContent() {
 }
 
 function rcRefreshAssignContent() {
-    var pendingAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.PENDING; });
+    var pendingAll = rcAssignQueueItems();
     var pending = rcApplyQueueFilters(pendingAll, rcAssignFilters, false, rcAssignDateFilters);
     var main = document.getElementById('rcAssignMain');
     if (!main) {
@@ -2341,7 +2425,7 @@ function rcRefreshAssignContent() {
         return;
     }
     main.innerHTML = rcBulkBarHTML('assign') +
-        rcGridSectionHTML('Assign Queue — Pending', 'rcAssignGrid', 'rcAssignCount', 'rcAssignSearch', 'rcExportAssignCsv()', pending.length);
+        rcGridSectionHTML('Assign Queue — Unique callers', 'rcAssignGrid', 'rcAssignCount', 'rcAssignSearch', 'rcExportAssignCsv()', pending.length);
     rcRenderGrid('assign', 'rcAssignGrid', 'rcAssignCount', pending, 'assign');
     rcSafeUpdateDateFilterOptions('rcAssignF', pendingAll, 'rcApplyAssignFilters');
     rcSyncDateModeUI('rcAssignF');
@@ -2349,7 +2433,7 @@ function rcRefreshAssignContent() {
 }
 
 function rcRefreshAssignedContent() {
-    var assignedAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
+    var assignedAll = rcAssignedQueueItems();
     var assigned = rcApplyQueueFilters(assignedAll, rcAssignedFilters, true, rcAssignedDateFilters);
     var main = document.getElementById('rcAssignedMain');
     if (!main) {
@@ -2358,7 +2442,7 @@ function rcRefreshAssignedContent() {
         return;
     }
     main.innerHTML = rcBulkBarHTML('reassign') +
-        rcGridSectionHTML('Assigned Queue — In Progress', 'rcAssignedGrid', 'rcAssignedCount', 'rcAssignedSearch', 'rcExportAssignedCsv()', assigned.length);
+        rcGridSectionHTML('Assigned Queue — Unique callers', 'rcAssignedGrid', 'rcAssignedCount', 'rcAssignedSearch', 'rcExportAssignedCsv()', assigned.length);
     rcRenderGrid('assigned', 'rcAssignedGrid', 'rcAssignedCount', assigned, 'assigned');
     rcSafeUpdateDateFilterOptions('rcAssignedF', assignedAll, 'rcApplyAssignedFilters');
     rcSyncDateModeUI('rcAssignedF');
@@ -2368,7 +2452,7 @@ function rcRefreshAssignedContent() {
 function rcRefreshMyQueueContent() {
     var mine = rcApplyDateFilters(rcScopedItems(), rcDateFilters);
     var s = rcSummary(mine);
-    var inq = mine.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
+    var inq = rcDedupeUniqueCallers(mine.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; }));
     var main = document.getElementById('rcMyQueueMain');
     if (!main) {
         var body = document.getElementById('rcTabBody');
@@ -2382,7 +2466,7 @@ function rcRefreshMyQueueContent() {
             rcTile('Total Assigned', mine.length, 'All time', 'var(--acc)') +
             rcTile('Avg SLA', s.avgTtc + ' d', 'Assign/Reassign → done', 'var(--acc2)') +
         '</div>' +
-        rcGridSectionHTML('My Queue — In Progress', 'rcAgentQueueGrid', 'rcAgentQueueCount', 'rcAgentSearch', 'rcExportAgentQueueCsv()', inq.length) +
+        rcGridSectionHTML('My Queue — Unique callers', 'rcAgentQueueGrid', 'rcAgentQueueCount', 'rcAgentSearch', 'rcExportAgentQueueCsv()', inq.length) +
         rcGridSectionHTML('My Records', 'rcAgentGrid', 'rcAgentRecCount', 'rcAgentRecSearch', 'rcExportAgentRecordsCsv()', mine.length);
     rcRenderGrid('agentQueue', 'rcAgentQueueGrid', 'rcAgentQueueCount', inq, 'agentqueue');
     rcRenderGrid('agentRecords', 'rcAgentGrid', 'rcAgentRecCount', mine, 'records');
@@ -2694,12 +2778,12 @@ function rcBuildDashboardCharts(items, s) {
 // ============================================================
 function rcRenderAssignQueue(body) {
     if (!rcAllAgents.length) { body.innerHTML = rcErrBox('No agents with CTI found in Account Mapping.'); return; }
-    var pendingAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.PENDING; });
+    var pendingAll = rcAssignQueueItems();
     var pending = rcApplyQueueFilters(pendingAll, rcAssignFilters, false, rcAssignDateFilters);
     body.innerHTML = rcQueueFilterBarHTML('assign', pendingAll) +
         '<div id="rcAssignMain">' +
         rcBulkBarHTML('assign') +
-        rcGridSectionHTML('Assign Queue — Pending', 'rcAssignGrid', 'rcAssignCount', 'rcAssignSearch', 'rcExportAssignCsv()', pending.length) +
+        rcGridSectionHTML('Assign Queue — Unique callers', 'rcAssignGrid', 'rcAssignCount', 'rcAssignSearch', 'rcExportAssignCsv()', pending.length) +
         '</div>';
     rcRenderGrid('assign', 'rcAssignGrid', 'rcAssignCount', pending, 'assign');
     rcBindMsOutsideClick();
@@ -2711,12 +2795,12 @@ function rcRenderAssignQueue(body) {
 
 function rcRenderAssignedQueue(body) {
     if (!rcAllAgents.length) { body.innerHTML = rcErrBox('No agents with CTI found in Account Mapping.'); return; }
-    var assignedAll = rcAllItems.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
+    var assignedAll = rcAssignedQueueItems();
     var assigned = rcApplyQueueFilters(assignedAll, rcAssignedFilters, true, rcAssignedDateFilters);
     body.innerHTML = rcQueueFilterBarHTML('assigned', assignedAll) +
         '<div id="rcAssignedMain">' +
         rcBulkBarHTML('reassign') +
-        rcGridSectionHTML('Assigned Queue — In Progress', 'rcAssignedGrid', 'rcAssignedCount', 'rcAssignedSearch', 'rcExportAssignedCsv()', assigned.length) +
+        rcGridSectionHTML('Assigned Queue — Unique callers', 'rcAssignedGrid', 'rcAssignedCount', 'rcAssignedSearch', 'rcExportAssignedCsv()', assigned.length) +
         '</div>';
     rcRenderGrid('assigned', 'rcAssignedGrid', 'rcAssignedCount', assigned, 'assigned');
     rcBindMsOutsideClick();
@@ -2727,6 +2811,7 @@ function rcRenderAssignedQueue(body) {
 }
 
 async function rcDoAssign(pairs, isReassign) {
+    pairs = rcExpandAssignPairs(pairs, isReassign);
     if (!pairs.length) { rcToast('Select rows and an agent', 'warn'); return; }
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcToast('Digest error', 'error'); return; }
@@ -2904,7 +2989,7 @@ function rcErrBox(msg) {
 function rcRenderMyQueue(body) {
     var mine = rcApplyDateFilters(rcScopedItems(), rcDateFilters);
     var s = rcSummary(mine);
-    var inq = mine.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; });
+    var inq = rcDedupeUniqueCallers(mine.filter(function (it) { return rcDisplayStatus(it) === RC_STATUS.INPROGRESS; }));
 
     body.innerHTML =
         rcDateFilterBarOnlyHTML('rcAgentF') +
@@ -2915,7 +3000,7 @@ function rcRenderMyQueue(body) {
             rcTile('Total Assigned', mine.length, 'All time', 'var(--acc)') +
             rcTile('Avg SLA', s.avgTtc + ' d', 'Assign/Reassign → done', 'var(--acc2)') +
         '</div>' +
-        rcGridSectionHTML('My Queue — In Progress', 'rcAgentQueueGrid', 'rcAgentQueueCount', 'rcAgentSearch', 'rcExportAgentQueueCsv()', inq.length) +
+        rcGridSectionHTML('My Queue — Unique callers', 'rcAgentQueueGrid', 'rcAgentQueueCount', 'rcAgentSearch', 'rcExportAgentQueueCsv()', inq.length) +
         rcGridSectionHTML('My Records', 'rcAgentGrid', 'rcAgentRecCount', 'rcAgentRecSearch', 'rcExportAgentRecordsCsv()', mine.length) +
         '</div>';
 
@@ -2928,12 +3013,16 @@ function rcRenderMyQueue(body) {
 }
 
 window.rcResolve = async function (id) {
+    var ids = rcExpandResolveIds(id);
     rcShowBusy('Updating…', 'Marking resolved');
     var digest;
     try { digest = await rcGetDigest(); } catch (e) { rcHideBusy(); rcToast('Digest error', 'error'); return; }
     try {
-        await rcUpdateItem(id, rcSpFields({ RCStatus: RC_STATUS.RESOLVED, CompletedDate: new Date().toISOString() }), digest);
-        rcToast('Marked resolved', 'success');
+        var now = new Date().toISOString();
+        for (var i = 0; i < ids.length; i++) {
+            await rcUpdateItem(ids[i], rcSpFields({ RCStatus: RC_STATUS.RESOLVED, CompletedDate: now }), digest);
+        }
+        rcToast('Marked resolved' + (ids.length > 1 ? ' (' + ids.length + ' calls for this caller)' : ''), 'success');
         await rcFetchItems(true);
         rcRenderTabBody();
     } catch (e) { rcToast('Could not resolve', 'error'); }
