@@ -1,5 +1,5 @@
 // ============================================================
-// repeated-calls.js — Repeated Calls Module v1.7.1
+// repeated-calls.js — Repeated Calls Module v1.7.3
 // List: Repeated_Calls | Agents: Account Mapping (CTI match, all teams)
 // SP fields: RC_Status, Upload_Date, Assignment_Date, Reassign_Date, Resolved_Date, Assigned_To
 // ============================================================
@@ -18,33 +18,26 @@ var rcCharts        = {};
 var rcGrids         = { dash: null, assign: null, assigned: null, agentQueue: null, agentRecords: null };
 var rcUploadRows    = [];
 var rcSelectedAgent = null;
-window.RC_MODULE_VERSION = '1.7.1';
+window.RC_MODULE_VERSION = '1.7.3';
 
 var RC_DELETE_ALL_EMAILS = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
 var RC_MIN_REPEAT_CALLS = 3;
 var RC_UPLOAD_SITE = 'CC-SGS-Emtyaz';
 var RC_UPLOAD_CUSTOMER_TYPE = 'Enterprise';
 
+var rcSpChoices = {};
+var rcSpChoicesLoaded = false;
+
 // Editable workflow fields (SharePoint list columns)
 var RC_WORKFLOW_FIELDS = [
     { key: 'Account_Number', label: 'Account Number', type: 'text' },
-    { key: 'Call_Driver', label: 'Call Driver', type: 'choice', choiceKey: 'Call_Driver' },
+    { key: 'Call_Driver', label: 'Call Driver', type: 'choice' },
     { key: 'Issue_In_Details', label: 'Issue In Details', type: 'multiline' },
-    { key: 'LOB', label: 'LOB', type: 'choice', choiceKey: 'LOB' },
-    { key: 'Call_Back_Status', label: 'Call Back Status', type: 'choice', choiceKey: 'Call_Back_Status' },
-    { key: 'Resolution_Type', label: 'Resolution Type', type: 'choice', choiceKey: 'Resolution_Type' },
-    { key: 'Pending_With', label: 'Pending With', type: 'choice', choiceKey: 'Pending_With' },
-    { key: 'Resolution_Status', label: 'Resolution Status', type: 'choice', choiceKey: 'Resolution_Status' }
+    { key: 'LOB', label: 'LOB', type: 'choice' },
+    { key: 'Call_Back_Status', label: 'Call Back Status', type: 'choice' },
+    { key: 'Pending_With', label: 'Pending With', type: 'choice' },
+    { key: 'Resolution_Status', label: 'Resolution Status', type: 'choice' }
 ];
-
-var RC_CHOICE_DEFAULTS = {
-    Call_Driver: ['Billing', 'Technical', 'Complaint', 'Information', 'Service Request', 'Other'],
-    LOB: ['Mobile', 'Fixed'],
-    Call_Back_Status: ['Pending', 'Completed', 'Not Required', 'Scheduled', 'No Answer'],
-    Resolution_Type: ['Resolved', 'Escalated', 'Callback', 'Transferred', 'No Action'],
-    Pending_With: ['Support', 'Back Office', 'Technical', 'Billing', 'Customer'],
-    Resolution_Status: ['Open', 'In Progress', 'Resolved', 'Closed', 'Pending']
-};
 
 var RC_SP_CONCURRENCY = 10;
 
@@ -120,7 +113,7 @@ var RC_DATE_FIELD_OPTS = [
     { key: 'Call_DateTime', label: 'Call DateTime' }
 ];
 
-var RC_WF_COLS = ['Account_Number', 'Call_Driver', 'Issue_In_Details', 'Call_Back_Status', 'Resolution_Type', 'Pending_With', 'Resolution_Status'];
+var RC_WF_COLS = ['Account_Number', 'Call_Driver', 'Issue_In_Details', 'Call_Back_Status', 'Pending_With', 'Resolution_Status'];
 
 var RC_COLS = [
     { key: 'Site', header: 'Site' },
@@ -309,15 +302,43 @@ function rcCanDeleteAll() {
     return RC_DELETE_ALL_EMAILS.indexOf(em) >= 0;
 }
 
-function rcChoiceOptions(choiceKey, fieldKey) {
-    var base = (RC_CHOICE_DEFAULTS[choiceKey] || []).slice();
-    var seen = {};
-    base.forEach(function (v) { seen[String(v).toLowerCase()] = true; });
-    rcUniqueValues(rcAllItems, fieldKey || choiceKey).forEach(function (v) {
-        var k = String(v).toLowerCase();
-        if (!seen[k]) { seen[k] = true; base.push(v); }
+function rcStripHtml(html) {
+    if (html == null || html === '') return '';
+    var s = String(html).trim();
+    if (!/[<>]/.test(s)) return s;
+    var el = document.createElement('div');
+    el.innerHTML = s;
+    return (el.textContent || el.innerText || '').replace(/\u00a0/g, ' ').trim();
+}
+
+async function rcFetchSpChoices() {
+    if (RC_DUMMY_MODE) { rcSpChoicesLoaded = true; return; }
+    var choiceFields = RC_WORKFLOW_FIELDS.filter(function (f) { return f.type === 'choice' && f.key !== 'LOB'; }).map(function (f) { return f.key; });
+    if (!choiceFields.length) { rcSpChoicesLoaded = true; return; }
+    var filter = choiceFields.map(function (n) { return "InternalName eq '" + rcOdata(n) + "'"; }).join(' or ');
+    var url = SP_URL + "/_api/web/lists/getbytitle('" + RC_LIST + "')/fields?$select=InternalName,Choices,TypeAsString&$filter=" + filter;
+    var r = await fetch(url, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+    if (!r.ok) throw new Error('Failed to load SharePoint field choices (' + r.status + ')');
+    var data = await r.json();
+    rcSpChoices = {};
+    (data.d.results || []).forEach(function (f) {
+        var choices = (f.Choices && f.Choices.results) ? f.Choices.results.slice() : [];
+        if (choices.length) rcSpChoices[f.InternalName] = choices;
     });
-    return base.sort(function (a, b) { return String(a).localeCompare(String(b)); });
+    rcSpChoicesLoaded = true;
+}
+
+function rcEditChoiceOptions(field, currentVal) {
+    // LOB values come from the Excel upload — dropdown shows what's already in the list, not SP choice config
+    if (field.key === 'LOB') {
+        var lobs = rcUniqueValues(rcAllItems, 'LOB');
+        if (currentVal && lobs.indexOf(currentVal) < 0) lobs.unshift(currentVal);
+        return lobs;
+    }
+    var fromSp = rcSpChoices[field.key];
+    var opts = fromSp && fromSp.length ? fromSp.slice() : [];
+    if (currentVal && opts.indexOf(currentVal) < 0) opts.unshift(currentVal);
+    return opts;
 }
 
 function rcNormUploadVal(s) {
@@ -332,15 +353,10 @@ function rcMatchesUploadCustomerType(customerType) {
     return rcNormUploadVal(customerType) === rcNormUploadVal(RC_UPLOAD_CUSTOMER_TYPE);
 }
 
-function rcEditChoiceOptions(field) {
-    if (field.key === 'LOB') return rcUniqueValues(rcAllItems, 'LOB');
-    return rcChoiceOptions(field.choiceKey || field.key, field.key);
-}
-
 function rcWorkflowEditValue(item, field) {
     var raw = item[field.key];
     if (raw == null || raw === undefined || String(raw).trim() === '') return '';
-    var val = String(raw).trim();
+    var val = field.type === 'multiline' ? rcStripHtml(raw) : String(raw).trim();
     if (rcDisplayStatus(item) === RC_STATUS.PENDING && field.key === 'Resolution_Status' && val.toLowerCase() === 'pending') {
         return '';
     }
@@ -1013,6 +1029,9 @@ function rcInjectStyles() {
         '.rc-badge-inprogress{background:rgba(245,158,11,.15);color:#d97706}' +
         '.rc-badge-completed{background:rgba(34,197,94,.15);color:#16a34a}' +
         '[id^="rcGrid"] .ag-checkbox-input-wrapper,[id^="rcAssign"] .ag-checkbox-input-wrapper,[id^="rcAssigned"] .ag-checkbox-input-wrapper,[id^="rcAgent"] .ag-checkbox-input-wrapper{opacity:1!important;width:16px;height:16px}' +
+        '[id^="rcGrid"] .ag-cell,[id^="rcAssign"] .ag-cell,[id^="rcAssigned"] .ag-cell,[id^="rcAgent"] .ag-cell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:46px;padding-left:11px;padding-right:11px}' +
+        '[id^="rcGrid"] .ag-header-cell,[id^="rcAssign"] .ag-header-cell,[id^="rcAssigned"] .ag-header-cell,[id^="rcAgent"] .ag-header-cell{overflow:hidden}' +
+        '[id^="rcGrid"] .ag-header-cell-text,[id^="rcAssign"] .ag-header-cell-text,[id^="rcAssigned"] .ag-header-cell-text,[id^="rcAgent"] .ag-header-cell-text{overflow:hidden;text-overflow:ellipsis}' +
         '.rc-grid-action{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;width:100%;min-width:0}' +
         '.rc-grid-action .fb-select{font-size:.72rem;padding:4px 6px;flex:1;min-width:90px;max-width:140px}' +
         '.rc-grid-action .rc-action-btn{padding:4px 10px;font-size:.68rem;border:none;border-radius:6px;background:var(--grad);color:#fff;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}' +
@@ -1272,7 +1291,7 @@ window.rcInit = async function () {
             }
 
             await Promise.race([
-                Promise.all([rcFetchItems(false), rcFetchAgents()]),
+                Promise.all([rcFetchItems(false), rcFetchAgents(), rcFetchSpChoices()]),
                 new Promise(function (_, rej) { setTimeout(function () { rej(new Error('Request timed out after 60s — list may be very large')); }, 60000); })
             ]);
 
@@ -1684,9 +1703,8 @@ function rcMapRow(it) {
         lob: v(it.LOB),
         accountNumber: vBlank(it.Account_Number),
         callDriver: vBlank(it.Call_Driver),
-        issueInDetails: vBlank(it.Issue_In_Details),
+        issueInDetails: vBlank(rcStripHtml(it.Issue_In_Details)),
         callBackStatus: vBlank(it.Call_Back_Status),
-        resolutionType: vBlank(it.Resolution_Type),
         pendingWith: vBlank(it.Pending_With),
         resolutionStatus: vBlank(it.Resolution_Status),
         rcStatus: rcDisplayStatus(it) || '—',
@@ -1853,11 +1871,12 @@ function rcBuildEditFieldHTML(field, value) {
     var id = 'rcEdit_' + field.key;
     var req = ' <span style="color:#ef4444;">*</span>';
     if (field.type === 'multiline') {
+        var plain = rcStripHtml(val);
         return '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + req + '</label>' +
-            '<textarea id="' + id + '" rows="4" required>' + rcEsc(val) + '</textarea></div>';
+            '<textarea id="' + id + '" rows="4" required>' + rcEsc(plain) + '</textarea></div>';
     }
     if (field.type === 'choice') {
-        var opts = rcEditChoiceOptions(field);
+        var opts = rcEditChoiceOptions(field, val);
         var html = '<div class="rc-edit-field"><label for="' + id + '">' + rcEsc(field.label) + req + '</label>' +
             '<select id="' + id + '" required><option value="">— Select —</option>';
         opts.forEach(function (o) {
@@ -1876,14 +1895,18 @@ var RC_WF_ROW_MAP = {
     Issue_In_Details: 'issueInDetails',
     LOB: 'lob',
     Call_Back_Status: 'callBackStatus',
-    Resolution_Type: 'resolutionType',
     Pending_With: 'pendingWith',
     Resolution_Status: 'resolutionStatus'
 };
 
-window.rcOpenEditModal = function (id) {
+window.rcOpenEditModal = async function (id) {
     var item = rcAllItems.find(function (it) { return it.ID === id; });
     if (!item) { rcToast('Record not found', 'warn'); return; }
+    if (!rcSpChoicesLoaded) {
+        try { await rcFetchSpChoices(); } catch (e) {
+            rcToast('Could not load SharePoint choices', 'warn');
+        }
+    }
     rcEnsureEditModal();
     rcEditModalId = id;
     var form = document.getElementById('rcEditForm');
@@ -2053,15 +2076,15 @@ function rcDataColumnDefs() {
         { field: 'lob', headerName: 'LOB', width: 140, minWidth: 110 },
         { field: 'accountNumber', headerName: 'Account #', width: 120, minWidth: 100 },
         { field: 'callDriver', headerName: 'Call Driver', width: 130, minWidth: 110 },
-        { field: 'issueInDetails', headerName: 'Issue Details', width: 180, minWidth: 140, tooltipField: 'issueInDetails',
-            valueFormatter: function (p) {
-                var s = String(p.value || '');
-                return s.length > 45 ? s.slice(0, 45) + '…' : s;
+        { field: 'issueInDetails', headerName: 'Issue Details', width: 200, minWidth: 160, tooltipField: 'issueInDetails',
+            cellRenderer: function (p) {
+                var s = rcStripHtml(p.value);
+                if (!s) return '';
+                return s.length > 50 ? s.slice(0, 50) + '…' : s;
             } },
-        { field: 'callBackStatus', headerName: 'Callback Status', width: 130, minWidth: 110 },
-        { field: 'resolutionType', headerName: 'Resolution Type', width: 130, minWidth: 110 },
-        { field: 'pendingWith', headerName: 'Pending With', width: 120, minWidth: 100 },
-        { field: 'resolutionStatus', headerName: 'Resolution Status', width: 140, minWidth: 120 },
+        { field: 'callBackStatus', headerName: 'Callback Status', width: 140, minWidth: 120 },
+        { field: 'pendingWith', headerName: 'Pending With', width: 130, minWidth: 110 },
+        { field: 'resolutionStatus', headerName: 'Resolution Status', width: 150, minWidth: 130 },
         { field: 'rcStatus', headerName: 'RC Status', width: 125, minWidth: 110, cellRenderer: function (p) { return rcStatusBadge(p.value); } },
         { field: 'assignedTo', headerName: 'Assigned To', width: 140, minWidth: 120 },
         { field: 'uploadDate', headerName: 'Upload Date', width: 120, minWidth: 110, valueFormatter: fmtD },
@@ -2147,8 +2170,12 @@ function rcRenderGrid(gridKey, gridId, countId, items, mode) {
             sortable: true,
             filter: true,
             resizable: true,
-            suppressSizeToFit: false,
-            cellStyle: { display: 'flex', alignItems: 'center' }
+            minWidth: 90,
+            suppressSizeToFit: true,
+            tooltipValueGetter: function (p) {
+                if (p.value == null || p.value === '') return null;
+                return String(p.value);
+            }
         },
         rowSelection: selectable ? 'multiple' : undefined,
         suppressRowClickSelection: true,
@@ -2167,9 +2194,6 @@ function rcRenderGrid(gridKey, gridId, countId, items, mode) {
         onGridReady: function (p) {
             rcGrids[gridKey] = p.api;
             rcUpdateBulkSelCount(gridKey);
-            setTimeout(function () {
-                p.api.autoSizeColumns(['activityNumber', 'customer', 'description', 'assignedTo'], false);
-            }, 150);
         },
         onSelectionChanged: function () { rcUpdateBulkSelCount(gridKey); }
     };
