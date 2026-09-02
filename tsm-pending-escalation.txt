@@ -5033,16 +5033,154 @@ function computeLMRNPS(rnpsGrouped) {
         function smIsAccountSearchOnlyRole() {
             return isAccountSearchViewerRole(USER_CONTEXT.role);
         }
+        function smApplyAccountSearchOnlyLandingUI() {
+            if (!smIsAccountSearchOnlyRole()) return;
+            var dashboardBtn = document.getElementById('goToDashboard');
+            if (dashboardBtn) dashboardBtn.style.display = 'none';
+            var accessNoteEl = document.getElementById('accessNote');
+            if (accessNoteEl) accessNoteEl.style.display = 'none';
+            var occBtn = document.getElementById('goToOccSearch');
+            if (occBtn) occBtn.style.display = 'none';
+            var ownerPanel = document.getElementById('ownerViewAsPanel');
+            if (ownerPanel) ownerPanel.style.display = 'none';
+            var searchBtn = document.getElementById('goToAccountSearch');
+            if (searchBtn) {
+                searchBtn.style.display = 'flex';
+                searchBtn.style.marginTop = '0';
+            }
+            var subtitle = document.querySelector('.landing-subtitle');
+            if (subtitle) subtitle.textContent = 'Search accounts in TSM_ME, DSM & TSM_SE';
+        }
         function smAccountSearchAllowedTeams() {
             if (USER_CONTEXT.isTSMSEViewer || USER_CONTEXT.role === 'TSM_SE_Viewer') return ['TSM_SE'];
             if (isAccountSearchViewerRole(USER_CONTEXT.role)) return ['TSM_ME', 'DSM', 'TSM_SE'];
             return null;
         }
+        function smCanSearchTsmSeFromExcel() {
+            var allowed = smAccountSearchAllowedTeams();
+            return !allowed || allowed.indexOf('TSM_SE') >= 0;
+        }
+        function smNormalizeAccountSearchTeam(team) {
+            if (team == null || team === '') return '';
+            if (typeof team === 'object') {
+                if (Array.isArray(team.results) && team.results.length) team = team.results[0];
+                else if (team.results && typeof team.results === 'object' && team.results.length !== undefined && team.results[0]) team = team.results[0];
+                else if (team.Title) team = team.Title;
+                else return '';
+            }
+            var t = String(team).trim();
+            if (!t || t === '[object Object]') return '';
+            t = t.replace(/[\s\-]+/g, '_').toUpperCase();
+            if (t === 'TSMSE') return 'TSM_SE';
+            if (t === 'TSMME') return 'TSM_ME';
+            return t;
+        }
         function smAccountSearchTeamAllowed(team) {
             var allowed = smAccountSearchAllowedTeams();
             if (!allowed) return true;
-            var t = String(team || '').trim();
+            var t = smNormalizeAccountSearchTeam(team);
+            if (!t) return false;
             return allowed.indexOf(t) >= 0;
+        }
+        function smNormAccountCode(code) {
+            return String(code == null ? '' : code).trim();
+        }
+        function smInitAccountSearchData() {
+            if (typeof tsmSeInit === 'function') {
+                try { tsmSeInit(); } catch (e) { console.warn('[Account Search] tsmSeInit failed:', e); }
+            }
+        }
+        function smCollectTsmSeRows() {
+            var rows = [];
+            function add(arr) {
+                if (Array.isArray(arr) && arr.length) rows = rows.concat(arr);
+            }
+            ['tsmSeAllData', 'tsmSeRows', 'TSM_SE_ROWS', 'tsmSeData', 'tsmSeAccounts', 'tsmSeAllRows'].forEach(function (k) {
+                add(window[k]);
+            });
+            ['tsmSeGetAllRows', 'tsmSeGetRows', 'tsmSeGetData'].forEach(function (fnName) {
+                if (typeof window[fnName] !== 'function') return;
+                try { add(window[fnName]()); } catch (e) {}
+            });
+            try {
+                ['tsm_se_data', 'sm_tsm_se_data', 'TSM_SE_DATA', 'tsmSeExcelData', 'tsm_se_excel_v1', 'tsmSe_cache'].forEach(function (key) {
+                    var raw = localStorage.getItem(key);
+                    if (!raw) return;
+                    var parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) add(parsed);
+                    else if (parsed && Array.isArray(parsed.rows)) add(parsed.rows);
+                    else if (parsed && Array.isArray(parsed.data)) add(parsed.data);
+                    else if (parsed && Array.isArray(parsed.accounts)) add(parsed.accounts);
+                });
+            } catch (e) {}
+            return rows;
+        }
+        function smFindAccountInTsmSeRows(rows, accountCode) {
+            if (!rows || !rows.length) return null;
+            var want = smNormAccountCode(accountCode);
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                if (!r) continue;
+                var codes = [r.code, r.accountCode, r.Title, r.account, r.Account_Code, r['Account Code'], r.parent, r.parentCode, r.Parent_x0020_Code];
+                for (var j = 0; j < codes.length; j++) {
+                    if (smNormAccountCode(codes[j]) === want) return r;
+                }
+            }
+            return null;
+        }
+        function smMapTsmSeRowToSearchAccount(row, accountCode) {
+            if (!row) return null;
+            var code = smNormAccountCode(accountCode || row.code || row.accountCode || row.Title || row.account || row.Account_Code || row['Account Code']);
+            var parent = smNormAccountCode(row.parent || row.parentCode || row.Parent_x0020_Code || row.parent_code || row['Parent Code'] || code);
+            function person(val, objKey) {
+                if (val && typeof val === 'object' && val.Title) return val;
+                if (val) return { Title: String(val) };
+                if (row[objKey] && typeof row[objKey] === 'object') return row[objKey];
+                if (row[objKey]) return { Title: String(row[objKey]) };
+                return null;
+            }
+            return {
+                Title: code,
+                Parent_x0020_Code: parent || code,
+                Customer_x0020_Name: row.customer || row.customerName || row.Customer_x0020_Name || row['Customer Name'] || row.customer_name || '',
+                Team: 'TSM_SE',
+                Line_x0020_Manager: person(row.lm || row.lineManager || row.Line_Manager, 'Line_x0020_Manager'),
+                Service_x0020_Manager: person(row.sm || row.serviceManager || row.Service_Manager, 'Service_x0020_Manager'),
+                Secondary_x0020_Service_x0020_Ma: person(row.secondarySm || row.secondary_sm, 'Secondary_x0020_Service_x0020_Ma'),
+                Account_x0020_Manager: person(row.am || row.accountManager, 'Account_x0020_Manager'),
+                Account_x0020_Director: person(row.ad || row.accountDirector, 'Account_x0020_Director'),
+                Service_x0020_Director: person(row.sd || row.serviceDirector, 'Service_x0020_Director'),
+                POC_x0020_Name: row.pocName || row.poc_name || row.POC_x0020_Name || '',
+                POC_x0020_Email_x0020_ID: row.pocEmail || row.poc_email || row.POC_x0020_Email_x0020_ID || '',
+                POC_x0020_Contact_x0020_No: row.pocContact || row.poc_contact || row.POC_x0020_Contact_x0020_No || '',
+                Secondary_x0020_POC_x0020_Name: row.secondaryPocName || row.Secondary_x0020_POC_x0020_Name || '',
+                Secondary_x0020_POC_x0020_Email: row.secondaryPocEmail || row.Secondary_x0020_POC_x0020_Email || '',
+                Secondary_x0020_POC_x0020_Contac: row.secondaryPocContact || row.Secondary_x0020_POC_x0020_Contac || '',
+                Technical_x0020_POC_x0020_Name: row.technicalPocName || row.Technical_x0020_POC_x0020_Name || '',
+                Technical_x0020_POC_x0020_Email: row.technicalPocEmail || row.Technical_x0020_POC_x0020_Email || '',
+                Technical_x0020_POC_x0020_Contac: row.technicalPocContact || row.Technical_x0020_POC_x0020_Contac || '',
+                _tsmSeSource: true
+            };
+        }
+        function smLookupTsmSeAccount(accountCode) {
+            if (!smCanSearchTsmSeFromExcel()) return null;
+            if (typeof window.tsmSeFindAccountForSearch === 'function') {
+                try {
+                    var direct = window.tsmSeFindAccountForSearch(accountCode);
+                    if (direct) return smMapTsmSeRowToSearchAccount(direct, accountCode) || direct;
+                } catch (e) { console.warn('[Account Search] tsmSeFindAccountForSearch failed:', e); }
+            }
+            if (typeof window.tsmSeFindAccount === 'function') {
+                try {
+                    var direct2 = window.tsmSeFindAccount(accountCode);
+                    if (direct2) return smMapTsmSeRowToSearchAccount(direct2, accountCode) || direct2;
+                } catch (e) {}
+            }
+            var hit = smFindAccountInTsmSeRows(smCollectTsmSeRows(), accountCode);
+            return hit ? smMapTsmSeRowToSearchAccount(hit, accountCode) : null;
+        }
+        function smODataEscapeLiteral(value) {
+            return String(value == null ? '' : value).replace(/'/g, "''");
         }
         function smShowAccountSearchDenied(team) {
             var el = document.getElementById('searchErrorMessage');
@@ -5055,7 +5193,7 @@ function computeLMRNPS(rnpsGrouped) {
                     '<div>' +
                         '<div style="font-weight:700;color:#ef4444;margin-bottom:4px;">Account Not Available</div>' +
                         '<div style="font-size:13px;color:var(--text-secondary);">' +
-                            (team ? ('This account is under team <b>' + smEscapeHtml(team) + '</b>. ') : '') +
+                            (team ? ('This account is under team <b>' + smEscapeHtml(smNormalizeAccountSearchTeam(team) || team) + '</b>. ') : '') +
                             'Your role can search: <b>' + smEscapeHtml(allowed.join(', ')) + '</b> only.' +
                         '</div>' +
                     '</div>' +
@@ -5651,9 +5789,7 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 };
 
             } else if (USER_CONTEXT.isActive && smIsAccountSearchOnlyRole()) {
-                dashboardBtn.style.display = 'none';
-                var accessNoteEl = document.getElementById('accessNote');
-                if (accessNoteEl) accessNoteEl.style.display = 'none';
+                smApplyAccountSearchOnlyLandingUI();
             } else {
                 // NO ACCESS TO DASHBOARD
                 dashboardBtn.disabled = true;
@@ -5675,11 +5811,7 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
             // ===== ACCOUNT SEARCH BUTTON (ALWAYS ENABLED FOR ALL USERS) =====
             const searchBtn = document.getElementById('goToAccountSearch');
             if (searchBtn) {
-                searchBtn.disabled = false; // ✅ ALWAYS ENABLED
-                if (smIsAccountSearchOnlyRole()) {
-                    searchBtn.style.display = 'flex';
-                    searchBtn.style.marginTop = '0';
-                }
+                searchBtn.disabled = false;
                 searchBtn.onclick = function() {
                     showAccountSearch();
                 };
@@ -5687,18 +5819,16 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
 
             // ===== OCC SEARCH BUTTON (Access_Control.OCC_SEARCH = Yes) =====
             const occBtn = document.getElementById('goToOccSearch');
-            if (occBtn) {
-                if (smIsAccountSearchOnlyRole()) {
-                    occBtn.style.display = 'none';
-                } else {
-                    var occEnabled = parseAccessControlYesNo(USER_CONTEXT.occSearchEnabled) || USER_CONTEXT.occSearchEnabled === true;
-                    occBtn.style.display = occEnabled ? 'flex' : 'none';
-                    occBtn.disabled = !occEnabled;
-                    occBtn.onclick = function() {
-                        window.location.href = 'http://sharedspaces:8081/sites/OCC/SitePages/occ-search.aspx';
-                    };
-                }
+            if (occBtn && !smIsAccountSearchOnlyRole()) {
+                var occEnabled = parseAccessControlYesNo(USER_CONTEXT.occSearchEnabled) || USER_CONTEXT.occSearchEnabled === true;
+                occBtn.style.display = occEnabled ? 'flex' : 'none';
+                occBtn.disabled = !occEnabled;
+                occBtn.onclick = function() {
+                    window.location.href = 'http://sharedspaces:8081/sites/OCC/SitePages/occ-search.aspx';
+                };
             }
+
+            smApplyAccountSearchOnlyLandingUI();
 
 // Reinitialize Lucide icons
             if (typeof lucide !== 'undefined') {
@@ -5715,15 +5845,11 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
 
             // Show owner panel only for tehleel & ubaid (not Account Search Viewer)
             var ownerPanel = document.getElementById('ownerViewAsPanel');
-            if (ownerPanel) {
-                if (smIsAccountSearchOnlyRole()) {
-                    ownerPanel.style.display = 'none';
-                } else {
-                    var ownerEmails = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
-                    ownerPanel.style.display = ownerEmails.includes(
-                        (USER_CONTEXT.userEmail || '').toLowerCase()
-                    ) ? 'block' : 'none';
-                }
+            if (ownerPanel && !smIsAccountSearchOnlyRole()) {
+                var ownerEmails = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
+                ownerPanel.style.display = ownerEmails.includes(
+                    (USER_CONTEXT.userEmail || '').toLowerCase()
+                ) ? 'block' : 'none';
             }
         }
 
@@ -8715,6 +8841,7 @@ else if (sectionId === 'rcView') {
     });
                 } else if (hasAccess && smIsAccountSearchOnlyRole()) {
                     console.log('[✓] Account_Search_Viewer — Account Search only (TSM_ME, DSM, TSM_SE)');
+                    smInitAccountSearchData();
                 } else {
                     console.log('[!] No dashboard access - Account Search only');
                 }
@@ -10392,6 +10519,7 @@ else if (sectionId === 'rcView') {
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
             }
+            smInitAccountSearchData();
         }
 
         // ─── COMING SOON VIEWS ──────────────────────────────────────────────
@@ -10511,11 +10639,14 @@ else if (sectionId === 'rcView') {
             }
 
             try {
+                smInitAccountSearchData();
+
                 const pocFields = smCanViewAccountSearchPocDetails()
                     ? ",POC_x0020_Name,POC_x0020_Email_x0020_ID,POC_x0020_Contact_x0020_No," +
                       "Secondary_x0020_POC_x0020_Name,Secondary_x0020_POC_x0020_Email,Secondary_x0020_POC_x0020_Contac," +
                       "Technical_x0020_POC_x0020_Name,Technical_x0020_POC_x0020_Email,Technical_x0020_POC_x0020_Contac"
                     : "";
+                const safeCode = smODataEscapeLiteral(accountCode);
                 const url = SP_URL + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items?" +
                     "$select=Title,Parent_x0020_Code,Customer_x0020_Name,Team," +
                     "Line_x0020_Manager/Title,Service_x0020_Manager/Title," +
@@ -10525,7 +10656,7 @@ else if (sectionId === 'rcView') {
                     "$expand=Line_x0020_Manager,Service_x0020_Manager," +
                     "Secondary_x0020_Service_x0020_Ma,Account_x0020_Manager," +
                     "Account_x0020_Director,Service_x0020_Director&" +
-                    "$filter=Title eq '" + accountCode + "'&" +
+                    "$filter=Title eq '" + safeCode + "'&" +
                     "$top=1";
 
                 const res = await fetch(url, {
@@ -10538,24 +10669,33 @@ else if (sectionId === 'rcView') {
                 if (!res.ok) throw new Error('Failed to search account');
 
                 const data = await res.json();
+                let account = (data.d.results && data.d.results.length) ? data.d.results[0] : null;
 
-                if (data.d.results.length === 0) {
-                    // Show error message below search box
+                if (!account) {
+                    account = smLookupTsmSeAccount(accountCode);
+                } else if (!smAccountSearchTeamAllowed(account.Team)) {
+                    var tsmSeAccount = smLookupTsmSeAccount(accountCode);
+                    if (tsmSeAccount) account = tsmSeAccount;
+                }
+
+                if (!account) {
                     document.getElementById('searchErrorMessage').style.display = 'block';
+                    document.getElementById('searchErrorMessage').innerHTML =
+                        '<div style="display:flex;align-items:center;gap:12px;">' +
+                            '<i data-lucide="alert-circle" style="width:20px;height:20px;color:#ef4444;"></i>' +
+                            '<div>' +
+                                '<div style="font-weight:700;color:#ef4444;margin-bottom:4px;">Account Not Found</div>' +
+                                '<div style="font-size:13px;color:var(--text-secondary);">No match in Service Manager Request or TSM SE Excel data. Check the account code and try again.</div>' +
+                            '</div>' +
+                        '</div>';
                     document.getElementById('accountDetailsSection').style.display = 'none';
                     document.getElementById('relatedAccountsSection').style.display = 'none';
-
-                    // Re-initialize Lucide icons
-                    if (typeof lucide !== 'undefined') {
-                        lucide.createIcons();
-                    }
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
                     return;
                 }
 
-                // Hide error message if account found
                 document.getElementById('searchErrorMessage').style.display = 'none';
 
-                const account = data.d.results[0];
                 if (!smAccountSearchTeamAllowed(account.Team)) {
                     smShowAccountSearchDenied(account.Team);
                     return;
@@ -10599,6 +10739,7 @@ else if (sectionId === 'rcView') {
             const fields = [
                 ['Account Code', account.Title],
                 ['Parent Code', account.Parent_x0020_Code || account.Title],
+                ['Team', smNormalizeAccountSearchTeam(account.Team) || (account._tsmSeSource ? 'TSM_SE (Excel)' : 'N/A')],
                 ['Account Type', isGroup ?
                     '<span style="color: var(--success); font-weight: 700; font-size: 16px;">🟢 Group Account</span>' :
                     '<span style="color: var(--accent); font-weight: 700; font-size: 16px;">🔵 Child Account</span>'
@@ -10646,12 +10787,49 @@ else if (sectionId === 'rcView') {
 
         let relatedAccountsGridApi = null;
 
+        function smLoadTsmSeRelatedAccounts(account) {
+            const isGroup = (account.Title === account.Parent_x0020_Code) || !account.Parent_x0020_Code;
+            let relatedAccounts = [];
+            let titleText = isGroup ? 'Child Accounts' : 'Parent/Group Account';
+            const rows = smCollectTsmSeRows();
+            const code = smNormAccountCode(account.Title);
+
+            if (isGroup) {
+                rows.forEach(function (row) {
+                    var rowCode = smNormAccountCode(row.code || row.accountCode || row.Title || row.account);
+                    var parent = smNormAccountCode(row.parent || row.parentCode || row.Parent_x0020_Code);
+                    if (parent === code && rowCode && rowCode !== code) {
+                        var mapped = smMapTsmSeRowToSearchAccount(row, rowCode);
+                        if (mapped && smAccountSearchTeamAllowed(mapped.Team)) relatedAccounts.push(mapped);
+                    }
+                });
+            } else {
+                var parentCode = smNormAccountCode(account.Parent_x0020_Code);
+                var hit = smFindAccountInTsmSeRows(rows, parentCode);
+                if (hit) {
+                    var mappedParent = smMapTsmSeRowToSearchAccount(hit, parentCode);
+                    if (mappedParent && smAccountSearchTeamAllowed(mappedParent.Team)) relatedAccounts.push(mappedParent);
+                }
+            }
+
+            document.getElementById('relatedAccountsTitle').textContent = titleText;
+            renderRelatedAccountsGrid(relatedAccounts, isGroup);
+            document.getElementById('relatedAccountsSection').style.display = 'block';
+        }
+
         async function loadRelatedAccounts(account) {
+            if (account && account._tsmSeSource) {
+                smLoadTsmSeRelatedAccounts(account);
+                return;
+            }
+
             const isGroup = (account.Title === account.Parent_x0020_Code) || !account.Parent_x0020_Code;
 
             try {
                 let relatedAccounts = [];
                 let titleText = '';
+                const safeTitle = smODataEscapeLiteral(account.Title);
+                const safeParent = smODataEscapeLiteral(account.Parent_x0020_Code);
 
                 if (isGroup) {
                     // Show children
@@ -10665,7 +10843,7 @@ else if (sectionId === 'rcView') {
                         "$expand=Line_x0020_Manager,Service_x0020_Manager," +
                         "Secondary_x0020_Service_x0020_Ma,Account_x0020_Manager," +
                         "Account_x0020_Director,Service_x0020_Director&" +
-                        "$filter=Parent_x0020_Code eq '" + account.Title + "' and Title ne '" + account.Title + "'&" +
+                        "$filter=Parent_x0020_Code eq '" + safeTitle + "' and Title ne '" + safeTitle + "'&" +
                         "$top=500";
 
                     const res = await fetch(url, {
@@ -10693,7 +10871,7 @@ else if (sectionId === 'rcView') {
                         "$expand=Line_x0020_Manager,Service_x0020_Manager," +
                         "Secondary_x0020_Service_x0020_Ma,Account_x0020_Manager," +
                         "Account_x0020_Director,Service_x0020_Director&" +
-                        "$filter=Title eq '" + account.Parent_x0020_Code + "'&" +
+                        "$filter=Title eq '" + safeParent + "'&" +
                         "$top=1";
 
                     const res = await fetch(url, {
@@ -11027,7 +11205,7 @@ else if (sectionId === 'rcView') {
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/processdocs.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/qualityassurance.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd__assignment.js?v=1.2.0"></script>
-    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/repeated-calls.js?v=1.7.3"></script>
+    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/repeated-calls.js?v=1.7.5"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/rnps.js"></script>
   <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/semailbox.js"></script>
   <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/tsm-se.js?v=4"></script>
