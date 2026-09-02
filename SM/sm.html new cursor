@@ -687,6 +687,48 @@
             }
         }
 
+        /* Repeated Calls — full-bleed layout (same as PSD) */
+        .portal-shell.rc-full-shell {
+            max-width: none;
+            width: 100%;
+        }
+
+        .content.rc-full-mode {
+            padding: 0 !important;
+            width: 100%;
+            flex: 1;
+            min-width: 0;
+        }
+
+        #rcView {
+            width: 100%;
+            max-width: none;
+            padding: 0.75rem 1rem 1.25rem;
+            box-sizing: border-box;
+        }
+
+        #rcView #rcContainer,
+        #rcView .rc-root {
+            width: 100%;
+            max-width: none;
+        }
+
+        #rcView .top-stats {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        @media (max-width: 1400px) {
+            #rcView .top-stats {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 900px) {
+            #rcView .top-stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
         @keyframes fadeSection {
             from {
                 opacity: 0;
@@ -2234,6 +2276,7 @@
                             <i data-lucide="info" style="width: 14px; height: 14px;"></i>
                             <span>Please wait while we verify your permissions...</span>
                         </p>
+
                         <!-- OWNER VIEW AS PANEL -->
                         <div id="ownerViewAsPanel" style="display:none; margin-top:16px; padding:16px;
                           background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px;">
@@ -2381,6 +2424,10 @@
                         <div class="nav-icon"><i data-lucide="clipboard-list"></i></div>
                         <div class="nav-label">PSD Assignment</div>
                     </div>
+                    <div class="nav-item" id="rcNavItem" data-section="rcView" onclick="switchDashboardSection('rcView')" style="display:none;">
+                        <div class="nav-icon"><i data-lucide="phone-call"></i></div>
+                        <div class="nav-label">Repeated Calls</div>
+                    </div>
 <div class="nav-item" data-section="seMailboxView" onclick="switchDashboardSection('seMailboxView');initSEMailbox();">
     <div class="nav-icon"><i data-lucide="inbox"></i></div>
     <div class="nav-label">SE Mailbox</div>
@@ -2479,9 +2526,19 @@
                                 <button type="button" id="revenueToggleBtn" class="export-btn" onclick="toggleRevenueEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
                                     <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Revenue: Disabled
                                 </button>
-                                <button type="button" id="pocToggleBtn" class="export-btn" onclick="togglePocDetailsEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
-                                    <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Disabled
-                                </button>
+                                <div id="pocTypesControl" style="display:none;align-items:center;gap:10px;padding:.5rem 1rem;font-size:.82rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+                                    <i data-lucide="users" style="width:14px;height:14px;display:inline-block;vertical-align:middle;"></i>
+                                    <span style="font-weight:700;white-space:nowrap;">POC Edit:</span>
+                                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                                        <input type="checkbox" class="poc-type-checkbox" value="Primary" onchange="savePocDetailsEnabledTypesFromUi()"> Primary
+                                    </label>
+                                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                                        <input type="checkbox" class="poc-type-checkbox" value="Secondary" onchange="savePocDetailsEnabledTypesFromUi()"> Secondary
+                                    </label>
+                                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                                        <input type="checkbox" class="poc-type-checkbox" value="Technical" onchange="savePocDetailsEnabledTypesFromUi()"> Technical
+                                    </label>
+                                </div>
                                 <button type="button" id="rnpsEligibilityToggleBtn" class="export-btn" onclick="toggleRnpsEligibilityEnabled()" style="display:none;padding:.5rem 1rem;font-size:.82rem;">
                                     <i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>RNPS Eligibility: Disabled
                                 </button>
@@ -2736,6 +2793,14 @@
                     <div style="margin-top:12px;font-weight:600;">Loading PSD Assignment...</div>
                 </div>
                 <div id="psdContent" style="display:none;"><div id="psdContainer"></div></div>
+            </div>
+            <!-- REPEATED CALLS SECTION -->
+            <div class="dashboard-section" style="display:none;" id="rcView">
+                <div id="rcLoading" style="text-align:center;padding:40px;color:var(--t2);">
+                    <i data-lucide="loader-2" style="width:40px;height:40px;animation:spin 1s linear infinite;color:var(--acc);display:inline-block;"></i>
+                    <div style="margin-top:12px;font-weight:600;">Loading Repeated Calls...</div>
+                </div>
+                <div id="rcContent" style="display:none;"><div id="rcContainer"></div></div>
             </div>
             <!-- PENDING REQUESTS SECTION -->
             <div id="pending-requests" class="dashboard-section" style="display: none;">
@@ -3823,6 +3888,85 @@ let charts = {};
             };
         }
 
+        function parseAccessControlMultiChoice(val) {
+            const set = new Set();
+            if (!val) return set;
+            if (val.results && Array.isArray(val.results)) {
+                val.results.forEach(function(v) {
+                    if (v) set.add(String(v).trim());
+                });
+                return set;
+            }
+            if (Array.isArray(val)) {
+                val.forEach(function(v) {
+                    if (v) set.add(String(v).trim());
+                });
+                return set;
+            }
+            if (typeof val === 'string') {
+                val.split(';').forEach(function(v) {
+                    v = v.trim();
+                    if (v) set.add(v);
+                });
+            }
+            return set;
+        }
+
+        function buildAccessControlMultiChoicePayload(fieldName, values, sampleItem) {
+            const results = values || [];
+            const existing = sampleItem ? sampleItem[fieldName] : null;
+            if (existing && typeof existing === 'object' && existing.results) {
+                return {
+                    [fieldName]: {
+                        __metadata: {
+                            type: 'Collection(Edm.String)'
+                        },
+                        results: results
+                    }
+                };
+            }
+            return {
+                [fieldName]: results.join('; ')
+            };
+        }
+
+        function applyPocDetailsEnabledTypesFromRows(results) {
+            const merged = new Set();
+            (results || []).forEach(function(r) {
+                parseAccessControlMultiChoice(r.POCDetailsEnabledTypes).forEach(function(t) {
+                    merged.add(t);
+                });
+            });
+            if (merged.size === 0) {
+                (results || []).forEach(function(r) {
+                    if (parseAccessControlYesNo(r.POCDetailsEnabled)) {
+                        ['Primary', 'Secondary', 'Technical'].forEach(function(t) {
+                            merged.add(t);
+                        });
+                    }
+                });
+            }
+            window.POC_DETAILS_ENABLED_TYPES = {
+                primary: merged.has('Primary'),
+                secondary: merged.has('Secondary'),
+                technical: merged.has('Technical')
+            };
+            window.POC_DETAILS_ENABLED = merged.size > 0 ||
+                (results || []).some(function(r) {
+                    return parseAccessControlYesNo(r.POCDetailsEnabled);
+                });
+        }
+
+        function smIsPocCategoryEditable(category) {
+            const map = window.POC_DETAILS_ENABLED_TYPES || {};
+            return !!map[category];
+        }
+
+        function smCanViewAccountSearchPocDetails() {
+            if (isAccessControlAdmin()) return true;
+            return USER_CONTEXT.role === 'PSD_Admin' || USER_CONTEXT.role === 'PSD_Agent';
+        }
+
         function isAccessControlAdmin() {
             const email = (USER_CONTEXT.userEmail || '').toLowerCase();
             return email === 'ubaid.mir@du.ae' || email === 'tehleel.lone@du.ae';
@@ -3831,7 +3975,7 @@ let charts = {};
         async function fetchAccessControlSettings() {
             try {
                 let url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                    "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,RNPSEligibilityEnabled&" +
+                    "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,POCDetailsEnabledTypes,RNPSEligibilityEnabled&" +
                     "$filter=(UserEmailID eq 'ubaid.mir@du.ae' or UserEmailID eq 'tehleel.lone@du.ae')&$top=2";
                 let res = await fetch(url, {
                     headers: {
@@ -3841,7 +3985,7 @@ let charts = {};
                 });
                 if (!res.ok) {
                     url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                        "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,RNPSEligibilityEnabled&" +
+                        "$select=ID,UserEmailID,RevenueEnabled,POCDetailsEnabled,POCDetailsEnabledTypes,RNPSEligibilityEnabled&" +
                         "$filter=(UserEmailID eq 'ubaid.mir@du.ae' or UserEmailID eq 'tehleel.lone@du.ae')&$top=2";
                     res = await fetch(url, {
                         headers: {
@@ -3854,19 +3998,21 @@ let charts = {};
                 const data = await res.json();
                 const results = data.d.results;
                 window.REVENUE_ENABLED = results.some(r => parseAccessControlYesNo(r.RevenueEnabled));
-                window.POC_DETAILS_ENABLED = results.some(r => parseAccessControlYesNo(r.POCDetailsEnabled));
+                applyPocDetailsEnabledTypesFromRows(results);
                 window.RNPS_ELIGIBILITY_EDIT_ENABLED = results.some(r => parseAccessControlYesNo(r.RNPSEligibilityEnabled));
                 window.REVENUE_CONTROL_ITEMS = results;
                 console.log('[RevenueEnabled]', window.REVENUE_ENABLED);
-                console.log('[POCDetailsEnabled]', window.POC_DETAILS_ENABLED, '(global for all users)');
+                console.log('[POCDetailsEnabledTypes]', window.POC_DETAILS_ENABLED_TYPES, '(global for all users)');
+                console.log('[POCDetailsEnabled]', window.POC_DETAILS_ENABLED, '(legacy flag)');
                 console.log('[RNPSEligibilityEnabled]', window.RNPS_ELIGIBILITY_EDIT_ENABLED, '(global for all users in Edit screen)');
                 updateRevenueToggleBtn();
-                updatePocToggleBtn();
+                updatePocTypesControl();
                 updateRnpsEligibilityToggleBtn();
             } catch (e) {
                 console.warn('fetchAccessControlSettings failed:', e);
                 window.REVENUE_ENABLED = false;
                 window.POC_DETAILS_ENABLED = false;
+                window.POC_DETAILS_ENABLED_TYPES = { primary: false, secondary: false, technical: false };
                 window.RNPS_ELIGIBILITY_EDIT_ENABLED = false;
             }
         }
@@ -3952,13 +4098,20 @@ let charts = {};
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
-        async function togglePocDetailsEnabled() {
+        function getSelectedPocTypesFromUi() {
+            return Array.from(document.querySelectorAll('.poc-type-checkbox:checked')).map(function(el) {
+                return el.value;
+            });
+        }
+
+        async function savePocDetailsEnabledTypesFromUi() {
             if (!isAccessControlAdmin()) {
                 alert('Only authorised admins can change this setting.');
                 return;
             }
             try {
-                const newValue = !window.POC_DETAILS_ENABLED;
+                const selectedTypes = getSelectedPocTypesFromUi();
+                const anyEnabled = selectedTypes.length > 0;
                 const items = window.REVENUE_CONTROL_ITEMS || [];
                 if (items.length === 0) {
                     alert('Control rows not found');
@@ -3990,7 +4143,9 @@ let charts = {};
                             __metadata: {
                                 type: 'SP.Data.Access_x005f_ControlListItem'
                             }
-                        }, buildAccessControlYesNoPayload('POCDetailsEnabled', newValue, item)))
+                        },
+                        buildAccessControlMultiChoicePayload('POCDetailsEnabledTypes', selectedTypes, item),
+                        buildAccessControlYesNoPayload('POCDetailsEnabled', anyEnabled, item)))
                     });
                     if (!updateRes.ok) {
                         const errText = await updateRes.text();
@@ -3998,29 +4153,42 @@ let charts = {};
                     }
                 }
 
-                window.POC_DETAILS_ENABLED = newValue;
-                window.REVENUE_CONTROL_ITEMS = items.map(i => ({
-                    ...i,
-                    POCDetailsEnabled: newValue ? 'Yes' : 'No'
+                applyPocDetailsEnabledTypesFromRows(items.map(function(i) {
+                    return Object.assign({}, i, {
+                        POCDetailsEnabledTypes: { results: selectedTypes },
+                        POCDetailsEnabled: anyEnabled ? 'Yes' : 'No'
+                    });
                 }));
-                updatePocToggleBtn();
+                window.REVENUE_CONTROL_ITEMS = items.map(function(i) {
+                    return Object.assign({}, i, {
+                        POCDetailsEnabledTypes: { results: selectedTypes },
+                        POCDetailsEnabled: anyEnabled ? 'Yes' : 'No'
+                    });
+                });
+                updatePocTypesControl();
                 if (typeof renderEditPocFields === 'function' && EDIT_ACCOUNT_DATA) renderEditPocFields();
-                console.log('[POCDetailsEnabled] updated to', newValue);
+                console.log('[POCDetailsEnabledTypes] updated to', selectedTypes);
             } catch (e) {
                 alert('Error updating POC details setting: ' + e.message);
+                updatePocTypesControl();
             }
         }
 
-        function updatePocToggleBtn() {
-            const btn = document.getElementById('pocToggleBtn');
-            if (!btn) return;
-            if (window.POC_DETAILS_ENABLED) {
-                btn.innerHTML = '<i data-lucide="unlock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Enabled';
-                btn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
-            } else {
-                btn.innerHTML = '<i data-lucide="lock" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>POC Details: Disabled';
-                btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
-            }
+        function updatePocTypesControl() {
+            const wrap = document.getElementById('pocTypesControl');
+            if (!wrap) return;
+            const enabled = window.POC_DETAILS_ENABLED_TYPES || {};
+            const typeMap = {
+                Primary: !!enabled.primary,
+                Secondary: !!enabled.secondary,
+                Technical: !!enabled.technical
+            };
+            wrap.querySelectorAll('.poc-type-checkbox').forEach(function(cb) {
+                cb.checked = !!typeMap[cb.value];
+            });
+            const anyEnabled = typeMap.Primary || typeMap.Secondary || typeMap.Technical;
+            wrap.style.borderColor = anyEnabled ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)';
+            wrap.style.background = anyEnabled ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)';
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
@@ -4843,10 +5011,58 @@ function computeLMRNPS(rnpsGrouped) {
             var r = String(role).trim();
             if (r === 'PSD Admin') return 'PSD_Admin';
             if (r === 'PSD Agent') return 'PSD_Agent';
+            if (r === 'RC Admin') return 'RC_Admin';
+            if (r === 'RC Agent') return 'RC_Agent';
+            var lower = r.toLowerCase();
+            if (lower === 'rc admin') return 'RC_Admin';
+            if (lower === 'rc agent') return 'RC_Agent';
+            if (lower === 'psd admin') return 'PSD_Admin';
+            if (lower === 'psd agent') return 'PSD_Agent';
+            if (r === 'Account Search Viewer') return 'Account_Search_Viewer';
             return r;
         }
         function isPsdRole(role) {
             return role === 'PSD_Admin' || role === 'PSD_Agent';
+        }
+        function isRcRole(role) {
+            return role === 'RC_Admin' || role === 'RC_Agent';
+        }
+        function isAccountSearchViewerRole(role) {
+            return role === 'Account_Search_Viewer';
+        }
+        function smIsAccountSearchOnlyRole() {
+            return isAccountSearchViewerRole(USER_CONTEXT.role);
+        }
+        function smAccountSearchAllowedTeams() {
+            if (USER_CONTEXT.isTSMSEViewer || USER_CONTEXT.role === 'TSM_SE_Viewer') return ['TSM_SE'];
+            if (isAccountSearchViewerRole(USER_CONTEXT.role)) return ['TSM_ME', 'DSM', 'TSM_SE'];
+            return null;
+        }
+        function smAccountSearchTeamAllowed(team) {
+            var allowed = smAccountSearchAllowedTeams();
+            if (!allowed) return true;
+            var t = String(team || '').trim();
+            return allowed.indexOf(t) >= 0;
+        }
+        function smShowAccountSearchDenied(team) {
+            var el = document.getElementById('searchErrorMessage');
+            if (!el) return;
+            var allowed = smAccountSearchAllowedTeams() || [];
+            el.style.display = 'block';
+            el.innerHTML =
+                '<div style="display:flex;align-items:center;gap:12px;">' +
+                    '<i data-lucide="alert-circle" style="width:20px;height:20px;color:#ef4444;"></i>' +
+                    '<div>' +
+                        '<div style="font-weight:700;color:#ef4444;margin-bottom:4px;">Account Not Available</div>' +
+                        '<div style="font-size:13px;color:var(--text-secondary);">' +
+                            (team ? ('This account is under team <b>' + smEscapeHtml(team) + '</b>. ') : '') +
+                            'Your role can search: <b>' + smEscapeHtml(allowed.join(', ')) + '</b> only.' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            document.getElementById('accountDetailsSection').style.display = 'none';
+            document.getElementById('relatedAccountsSection').style.display = 'none';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
         function applyPsdNavRestrictions() {
             var psdAllowedLabels = [
@@ -4863,6 +5079,26 @@ function computeLMRNPS(rnpsGrouped) {
                 var labelEl = item.querySelector('.nav-label');
                 var label = labelEl ? labelEl.textContent.trim() : '';
                 item.style.display = (psdAllowedLabels.indexOf(label) >= 0) ? 'flex' : 'none';
+            });
+            document.querySelectorAll('.nav-section-label').forEach(function(lbl) {
+                lbl.style.display = 'none';
+            });
+        }
+        function applyRcNavRestrictions() {
+            var rcAllowedLabels = [
+                'Newsletter',
+                'Events / TT / Activity',
+                'Project Management',
+                'Synergy 360',
+                'Suggestion Box',
+                'Process Documents',
+                'Contact Us',
+                'Repeated Calls'
+            ];
+            document.querySelectorAll('.nav-item').forEach(function(item) {
+                var labelEl = item.querySelector('.nav-label');
+                var label = labelEl ? labelEl.textContent.trim() : '';
+                item.style.display = (rcAllowedLabels.indexOf(label) >= 0) ? 'flex' : 'none';
             });
             document.querySelectorAll('.nav-section-label').forEach(function(lbl) {
                 lbl.style.display = 'none';
@@ -5051,6 +5287,7 @@ USER_CONTEXT.isSM = (DEV_USER_PROFILE.role === 'Service Manager');
 USER_CONTEXT.isReadOnly = (DEV_USER_PROFILE.role === 'Read Only');
 USER_CONTEXT.isTSMManager = (DEV_USER_PROFILE.role === 'TSM Manager');
 USER_CONTEXT.isTSMSEViewer = (DEV_USER_PROFILE.role === 'TSM_SE_Viewer');
+USER_CONTEXT.isAccountSearchViewer = (DEV_USER_PROFILE.role === 'Account_Search_Viewer');
             // For LM/SM roles, use manager name from config
             if (USER_CONTEXT.isLM || USER_CONTEXT.isSM) {
                 USER_CONTEXT.userName = DEV_USER_PROFILE.managerName;
@@ -5134,8 +5371,11 @@ USER_CONTEXT.isTSMSEViewer = (DEV_USER_PROFILE.role === 'TSM_SE_Viewer');
 USER_CONTEXT.isReadOnly = (USER_CONTEXT.role === 'Read Only');
 USER_CONTEXT.isTSMManager = (USER_CONTEXT.role === 'TSM Manager');
 USER_CONTEXT.isTSMSEViewer = (USER_CONTEXT.role === 'TSM_SE_Viewer');
+USER_CONTEXT.isAccountSearchViewer = (USER_CONTEXT.role === 'Account_Search_Viewer');
 USER_CONTEXT.isPsdAdmin = (USER_CONTEXT.role === 'PSD_Admin');
 USER_CONTEXT.isPsdAgent = (USER_CONTEXT.role === 'PSD_Agent');
+USER_CONTEXT.isRcAdmin = (USER_CONTEXT.role === 'RC_Admin');
+USER_CONTEXT.isRcAgent = (USER_CONTEXT.role === 'RC_Agent');
 USER_CONTEXT.occSearchEnabled = parseAccessControlYesNo(accessRecord.OCC_SEARCH);
 USER_CONTEXT.isActive = true;
 
@@ -5283,6 +5523,10 @@ USER_CONTEXT.isActive = true;
     roleEl.innerHTML = '<i data-lucide="building-2" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>TSM SE Viewer';
     roleEl.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2))';
     roleEl.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+} else if (USER_CONTEXT.role === 'Account_Search_Viewer') {
+    roleEl.innerHTML = '<i data-lucide="search" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>Account Search Viewer';
+    roleEl.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2))';
+    roleEl.style.borderColor = 'rgba(16, 185, 129, 0.6)';
 }
  else if (USER_CONTEXT.role === 'Auditor') {
     roleEl.innerHTML = '<i data-lucide="clipboard-check" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>Auditor';
@@ -5294,6 +5538,14 @@ USER_CONTEXT.isActive = true;
     roleEl.style.borderColor = 'rgba(124, 58, 237, 0.6)';
 } else if (USER_CONTEXT.role === 'PSD_Agent') {
     roleEl.innerHTML = '<i data-lucide="inbox" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>PSD Agent';
+    roleEl.style.background = 'linear-gradient(135deg, rgba(8, 145, 178, 0.2), rgba(6, 182, 212, 0.2))';
+    roleEl.style.borderColor = 'rgba(8, 145, 178, 0.6)';
+} else if (USER_CONTEXT.role === 'RC_Admin') {
+    roleEl.innerHTML = '<i data-lucide="phone-call" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>RC Admin';
+    roleEl.style.background = 'linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(139, 92, 246, 0.2))';
+    roleEl.style.borderColor = 'rgba(124, 58, 237, 0.6)';
+} else if (USER_CONTEXT.role === 'RC_Agent') {
+    roleEl.innerHTML = '<i data-lucide="phone-incoming" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>RC Agent';
     roleEl.style.background = 'linear-gradient(135deg, rgba(8, 145, 178, 0.2), rgba(6, 182, 212, 0.2))';
     roleEl.style.borderColor = 'rgba(8, 145, 178, 0.6)';
 }
@@ -5311,7 +5563,7 @@ else {
 
     // ===== DASHBOARD BUTTON (Role-based) =====
             const dashboardBtn = document.getElementById('goToDashboard');
-            if (USER_CONTEXT.isActive && USER_CONTEXT.role !== 'none') {
+            if (USER_CONTEXT.isActive && USER_CONTEXT.role !== 'none' && !smIsAccountSearchOnlyRole()) {
                 dashboardBtn.disabled = false;
 
                 if (USER_CONTEXT.role === 'Admin') {
@@ -5362,6 +5614,18 @@ else {
                         <span class="btn-text">Launch My PSD Queue</span>
                         <span class="btn-shine"></span>
                     `;
+                } else if (USER_CONTEXT.role === 'RC_Admin') {
+                    dashboardBtn.innerHTML = `
+                        <span class="btn-icon"><i data-lucide="phone-call" style="width: 20px; height: 20px;"></i></span>
+                        <span class="btn-text">Launch Repeated Calls</span>
+                        <span class="btn-shine"></span>
+                    `;
+                } else if (USER_CONTEXT.role === 'RC_Agent') {
+                    dashboardBtn.innerHTML = `
+                        <span class="btn-icon"><i data-lucide="phone-incoming" style="width: 20px; height: 20px;"></i></span>
+                        <span class="btn-text">Launch My RC Queue</span>
+                        <span class="btn-shine"></span>
+                    `;
                 }
                 else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Account Director') {
                     dashboardBtn.innerHTML = `
@@ -5377,7 +5641,7 @@ else {
                 `;
 
                 dashboardBtn.onclick = function() {
-       if (USER_CONTEXT.role === 'Admin' || USER_CONTEXT.role === 'Line Manager' || USER_CONTEXT.role === 'Service Manager' || USER_CONTEXT.role === 'Read Only' || USER_CONTEXT.role === 'TSM Manager' || USER_CONTEXT.role === 'Auditor' || USER_CONTEXT.role === 'TSM_SE_Viewer' || isPsdRole(USER_CONTEXT.role)) {
+       if (USER_CONTEXT.role === 'Admin' || USER_CONTEXT.role === 'Line Manager' || USER_CONTEXT.role === 'Service Manager' || USER_CONTEXT.role === 'Read Only' || USER_CONTEXT.role === 'TSM Manager' || USER_CONTEXT.role === 'Auditor' || USER_CONTEXT.role === 'TSM_SE_Viewer' || isPsdRole(USER_CONTEXT.role) || isRcRole(USER_CONTEXT.role)) {
     showDashboard();
 }
 
@@ -5386,6 +5650,21 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                     }
                 };
 
+            } else if (USER_CONTEXT.isActive && smIsAccountSearchOnlyRole()) {
+                dashboardBtn.disabled = true;
+                dashboardBtn.style.opacity = '0.6';
+                dashboardBtn.style.cursor = 'not-allowed';
+                dashboardBtn.innerHTML = `
+                    <span class="btn-icon"><i data-lucide="layout-dashboard" style="width: 20px; height: 20px;"></i></span>
+                    <span class="btn-text">Launch Dashboard</span>
+                    <span class="btn-shine"></span>
+                `;
+                document.getElementById('accessNote').innerHTML = `
+                    <i data-lucide="search" style="width: 14px; height: 14px; color: #10b981;"></i>
+                    <span style="color: #10b981; font-weight: 600;">Account Search access — TSM_ME, DSM &amp; TSM_SE</span>
+                    <br>
+                    <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: inline-block;">Use Go to Account Search below. Dashboard is not available for this role.</span>
+                `;
             } else {
                 // NO ACCESS TO DASHBOARD
                 dashboardBtn.disabled = true;
@@ -5473,6 +5752,13 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 }, 150);
             }
 
+            // RC roles: jump straight to Repeated Calls
+            if (isRcRole(USER_CONTEXT.role)) {
+                setTimeout(function() {
+                    switchDashboardSection('rcView');
+                }, 150);
+            }
+
             const loading = document.getElementById('loading');
             const content = document.getElementById('content');
             if (loading) loading.style.display = 'none';
@@ -5516,6 +5802,26 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 if (typeof nlCheckOnLoad === 'function') nlCheckOnLoad();
             } catch (err) {
                 console.error('PSD shell init error:', err);
+            }
+        }
+
+        function initRcShell() {
+            try {
+                setCurrentDate();
+                var loading = document.getElementById('loading');
+                var content = document.getElementById('content');
+                if (loading) loading.style.display = 'none';
+                if (content) content.style.display = 'block';
+
+                var rcNav = document.getElementById('rcNavItem');
+                if (rcNav) rcNav.style.display = 'flex';
+                applyRcNavRestrictions();
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                if (typeof analyticsStartSession === 'function') analyticsStartSession();
+                if (typeof nlCheckOnLoad === 'function') nlCheckOnLoad();
+            } catch (err) {
+                console.error('RC shell init error:', err);
             }
         }
 
@@ -5619,9 +5925,18 @@ if (rnpsNav) rnpsNav.style.display = 'flex';
                     var psdNav = document.getElementById('psdNavItem');
                     if (psdNav) psdNav.style.display = 'flex';
                 }
+                // Repeated Calls: visible to SM Admin, RC_Admin and RC_Agent
+                if (USER_CONTEXT.isAdmin || USER_CONTEXT.role === 'RC_Admin' || USER_CONTEXT.role === 'RC_Agent') {
+                    var rcNav = document.getElementById('rcNavItem');
+                    if (rcNav) rcNav.style.display = 'flex';
+                }
                 // PSD_Admin / PSD_Agent: restrict the sidebar to an allowed set of menus
                 if (isPsdRole(USER_CONTEXT.role)) {
                     applyPsdNavRestrictions();
+                }
+                // RC_Admin / RC_Agent: restrict the sidebar
+                if (isRcRole(USER_CONTEXT.role)) {
+                    applyRcNavRestrictions();
                 }
 
                 // Auditor: hide all nav items except allowed ones
@@ -8141,9 +8456,13 @@ ${USER_CONTEXT.userName}`
             if (contentDiv) {
                 contentDiv.classList.remove('section-mode');
                 contentDiv.classList.remove('psd-full-mode');
+                contentDiv.classList.remove('rc-full-mode');
             }
             var portalShell = document.querySelector('.portal-shell');
-            if (portalShell) portalShell.classList.remove('psd-full-shell');
+            if (portalShell) {
+                portalShell.classList.remove('psd-full-shell');
+                portalShell.classList.remove('rc-full-shell');
+            }
 
             // ── HIDE ALL SECTIONS ─────────────────────────────────────────
             document.querySelectorAll('.dashboard-section').forEach(function(section) {
@@ -8175,6 +8494,10 @@ ${USER_CONTEXT.userName}`
                 if (sectionId === 'psdView') {
                     contentDiv.classList.add('psd-full-mode');
                     if (portalShell) portalShell.classList.add('psd-full-shell');
+                }
+                if (sectionId === 'rcView') {
+                    contentDiv.classList.add('rc-full-mode');
+                    if (portalShell) portalShell.classList.add('rc-full-shell');
                 }
             }
 
@@ -8209,7 +8532,16 @@ else if (sectionId === 'psdView') {
     else {
         var psdLoading = document.getElementById('psdLoading');
         if (psdLoading) {
-            psdLoading.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">PSD script failed to load. Re-upload psd-assignment.js to SharePoint and hard-refresh (Ctrl+F5).</div>';
+            psdLoading.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">PSD script failed to load. Re-upload psd__assignment.js to SharePoint and hard-refresh (Ctrl+F5).</div>';
+        }
+    }
+}
+else if (sectionId === 'rcView') {
+    if (typeof rcInit === 'function') rcInit();
+    else {
+        var rcLoading = document.getElementById('rcLoading');
+        if (rcLoading) {
+            rcLoading.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">Repeated Calls script failed to load. Re-upload repeated-calls.js to SharePoint and hard-refresh (Ctrl+F5).</div>';
         }
     }
 }
@@ -8353,8 +8685,8 @@ else if (sectionId === 'psdView') {
                 if (isAccessControlAdmin()) {
                     const btn = document.getElementById('revenueToggleBtn');
                     if (btn) btn.style.display = 'inline-flex';
-                    const pocBtn = document.getElementById('pocToggleBtn');
-                    if (pocBtn) pocBtn.style.display = 'inline-flex';
+                    const pocCtrl = document.getElementById('pocTypesControl');
+                    if (pocCtrl) pocCtrl.style.display = 'inline-flex';
                     const rnpsBtn = document.getElementById('rnpsEligibilityToggleBtn');
                     if (rnpsBtn) rnpsBtn.style.display = 'inline-flex';
                 }
@@ -8364,8 +8696,8 @@ else if (sectionId === 'psdView') {
                 // Show landing page ALWAYS
                 document.getElementById('landingPage').style.display = 'grid';
 
-                // Load dashboard data ONLY if user has access
-              if (hasAccess) {
+                // Load dashboard data ONLY if user has access (not search-only roles)
+              if (hasAccess && !smIsAccountSearchOnlyRole()) {
     console.log('[✓] Access granted - Loading dashboard data');
 
     fetchAccessControlSettings().finally(function () {
@@ -8375,9 +8707,13 @@ else if (sectionId === 'psdView') {
             initAMView();
         } else if (isPsdRole(USER_CONTEXT.role)) {
             initPsdShell();
+        } else if (isRcRole(USER_CONTEXT.role)) {
+            initRcShell();
         }
         if (typeof tsmSeInit === 'function') tsmSeInit();
     });
+                } else if (hasAccess && smIsAccountSearchOnlyRole()) {
+                    console.log('[✓] Account_Search_Viewer — Account Search only (TSM_ME, DSM, TSM_SE)');
                 } else {
                     console.log('[!] No dashboard access - Account Search only');
                 }
@@ -8389,176 +8725,6 @@ else if (sectionId === 'psdView') {
         } else {
             window.addEventListener('load', initAll);
         }
-// ===== OWNER: VIEW AS USER =====
-async function ownerFetchUserRole(email) {
-            // Step 1: Check Access_Control list
-            const url = SP_URL + "/_api/web/lists/getbytitle('" + SP_ACCESS_LIST + "')/items?" +
-                "$select=UserEmailID,Role,OCC_SEARCH&" +
-                "$filter=UserEmailID eq '" + email + "'&$top=1";
-            const res = await fetch(url, {
-                headers: { 'Accept': 'application/json;odata=verbose' },
-                credentials: 'include'
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const results = data.d.results;
-                if (results.length > 0) return { role: results[0].Role, name: null, occSearch: results[0].OCC_SEARCH };
-            }
-
-            // Step 2: Get their display name from the main SP list directly
-            // Search by email in Line_Manager or Service_Manager expanded fields
-            const spListUrl = SP_URL + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items?" +
-                "$select=Line_x0020_Manager/Title,Line_x0020_Manager/EMail," +
-                "Service_x0020_Manager/Title,Service_x0020_Manager/EMail&" +
-                "$expand=Line_x0020_Manager,Service_x0020_Manager&" +
-                "$filter=(Line_x0020_Manager/EMail eq '" + email + "') or " +
-                "(Service_x0020_Manager/EMail eq '" + email + "')&$top=1";
-
-            const spRes = await fetch(spListUrl, {
-                headers: { 'Accept': 'application/json;odata=verbose' },
-                credentials: 'include'
-            });
-
-            if (spRes.ok) {
-                const spData = await spRes.json();
-                const spResults = spData.d.results;
-                if (spResults.length > 0) {
-                    const item = spResults[0];
-                    if (item.Line_x0020_Manager && 
-                        item.Line_x0020_Manager.EMail && 
-                        item.Line_x0020_Manager.EMail.toLowerCase() === email) {
-                        return { role: 'Line Manager', name: item.Line_x0020_Manager.Title };
-                    }
-                    if (item.Service_x0020_Manager && 
-                        item.Service_x0020_Manager.EMail && 
-                        item.Service_x0020_Manager.EMail.toLowerCase() === email) {
-                        return { role: 'Service Manager', name: item.Service_x0020_Manager.Title };
-                    }
-                }
-            }
-
-            return null;
-        }        async function ownerFetchUserName(email) {
-            const url = SP_URL + "/_api/web/siteusers?$filter=Email eq '" + email + "'&$select=Title,Email&$top=1";
-            const res = await fetch(url, {
-                headers: { 'Accept': 'application/json;odata=verbose' },
-                credentials: 'include'
-            });
-            if (!res.ok) return null;
-            const data = await res.json();
-            const results = data.d.results;
-            if (results.length > 0) return results[0].Title;
-            return null;
-        }
-
-        window.ownerSwitchView = async function() {
-            const email = document.getElementById('ownerViewAsEmail').value.trim().toLowerCase();
-            const msgEl = document.getElementById('ownerViewAsMsg');
-
-            if (!email) {
-                msgEl.innerHTML = '<span style="color:#ef4444;">Please enter an email.</span>';
-                return;
-            }
-
-            msgEl.innerHTML = '<span style="color:var(--t3);">Checking access...</span>';
-
-          const result = await ownerFetchUserRole(email);
-            if (!result) {
-                msgEl.innerHTML = '<span style="color:#ef4444;">No access found for this email.</span>';
-                return;
-            }
-
-            const role = result.role;
-            let displayName = result.name;
-
-            // If name not returned (Admin/AM/AD roles), fetch from siteusers
-            if (!displayName) {
-                displayName = await ownerFetchUserName(email);
-            }
-            if (!displayName) displayName = email.split('@')[0];
-            msgEl.innerHTML = '<span style="color:#10b981;">Found: ' + role + ' — loading view...</span>';
-
-            msgEl.innerHTML = '<span style="color:#10b981;">Found: ' + role + ' — loading view...</span>';
-
-            USER_CONTEXT.userEmail    = email;
-            USER_CONTEXT.userName     = displayName;
-            USER_CONTEXT.role         = role;
-            USER_CONTEXT.isActive     = true;
-            USER_CONTEXT.isAdmin      = role === 'Admin';
-            USER_CONTEXT.isAM         = role === 'Account Manager';
-            USER_CONTEXT.isAD         = role === 'Account Director';
-            USER_CONTEXT.isLM         = role === 'Line Manager';
-            USER_CONTEXT.isSM         = role === 'Service Manager';
-            USER_CONTEXT.isReadOnly   = role === 'Read Only';
-            USER_CONTEXT.isTSMManager = role === 'TSM Manager';
-            USER_CONTEXT.occSearchEnabled = result.occSearch ? parseAccessControlYesNo(result.occSearch) : false;
-            window.USER_CONTEXT       = USER_CONTEXT;
-
-            document.getElementById('ownerViewAsPanel').style.display = 'none';
-
-            setTimeout(async function() {
-                if (role === 'Account Manager' || role === 'Account Director') {
-                    showAMDashboard();
-                } else {
-                    if (role === 'Line Manager') {
-                        window.ALL_FILTERED = ALL_DATA.filter(a => a.lm === displayName);
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                    } else if (role === 'Service Manager') {
-                        window.ALL_FILTERED = ALL_DATA.filter(a => a.sm === displayName);
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                    } else if (role === 'TSM Manager') {
-                        window.ALL_FILTERED = ALL_DATA.filter(a => a.team === 'TSM_ME' || a.team === 'TSM_SE');
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                   } else {
-                        window.ALL_FILTERED = ALL_DATA.slice();
-                        filtered = window.ALL_FILTERED.filter(a => a.type === 'Group');
-                    }
-
-                    populateLandingPage();
-                    showDashboard();
-                    populateFilters({ preserve: false });
-                    updateServiceManagerFilter();
-                    applyFilters();
-
-                    // Reset all nav items first
-                    ['portalAnalyticsNavItem','transferRequestsNavItem','pendingRequestsNavItem',
-                     'intelligenceNavLabel','executiveHubNavItem','qaNavItem','rnpsNavItem',
-                     'projectMgmtNavItem'].forEach(function(id) {
-                        var el = document.getElementById(id);
-                        if (el) el.style.display = 'none';
-                    });
-
-                    // Show nav items for the impersonated role
-                    if (USER_CONTEXT.isAdmin) {
-                        ['portalAnalyticsNavItem','transferRequestsNavItem','pendingRequestsNavItem',
-                         'executiveHubNavItem','qaNavItem','projectMgmtNavItem'].forEach(function(id) {
-                            var el = document.getElementById(id);
-                            if (el) el.style.display = 'flex';
-                        });
-                        var lbl = document.getElementById('intelligenceNavLabel');
-                        if (lbl) lbl.style.display = 'block';
-                    }
-
-                    if (USER_CONTEXT.isTSMManager) {
-                        var ehNav = document.getElementById('executiveHubNavItem');
-                        if (ehNav) ehNav.style.display = 'flex';
-                        var qaNav = document.getElementById('qaNavItem');
-                        if (qaNav) qaNav.style.display = 'flex';
-                    }
-
-                    if (USER_CONTEXT.role === 'Line Manager' || USER_CONTEXT.role === 'Service Manager') {
-                        var qaNavLmSm = document.getElementById('qaNavItem');
-                        if (qaNavLmSm) qaNavLmSm.style.display = 'flex';
-                    }
-
-                    var rnpsNav = document.getElementById('rnpsNavItem');
-                    if (rnpsNav) rnpsNav.style.display = 'flex';
-
-                    if (typeof lucide !== 'undefined') lucide.createIcons();
-                }
-            }, 300);
-        };
-
 
         // ========================================
         // ACCOUNT REQUESTS FUNCTIONS (ADMIN)
@@ -9724,8 +9890,7 @@ async function ownerFetchUserRole(email) {
             const wrap = document.getElementById('editPocFields');
             if (!wrap) return;
             const values = window.EDIT_POC_VALUES;
-            // Global flag — when enabled by admin, all users with edit access can change POC fields
-            const editable = !!window.POC_DETAILS_ENABLED;
+            const editable = smIsPocCategoryEditable(cat);
 
             const configs = {
                 primary: {
@@ -9783,26 +9948,39 @@ async function ownerFetchUserRole(email) {
             wrap.innerHTML = html;
         }
 
+        function smGetPocFieldGroups() {
+            return {
+                primary: [
+                    ['POC Name', 'pocName'],
+                    ['POC Email', 'pocEmail'],
+                    ['POC Contact', 'pocPhone']
+                ],
+                secondary: [
+                    ['Secondary POC Name', 'secondaryPocName'],
+                    ['Secondary POC Email', 'secondaryPocEmail'],
+                    ['Secondary POC Contact', 'secondaryPocPhone']
+                ],
+                technical: [
+                    ['Technical POC Name', 'technicalPocName'],
+                    ['Technical POC Email', 'technicalPocEmail'],
+                    ['Technical POC Contact', 'technicalPocPhone']
+                ]
+            };
+        }
+
         function getEditPocChanges() {
             const changes = [];
-            if (!EDIT_ACCOUNT_DATA || !window.POC_DETAILS_ENABLED) return changes;
+            if (!EDIT_ACCOUNT_DATA) return changes;
             syncEditPocFromDom();
             const values = window.EDIT_POC_VALUES || {};
-            const pairs = [
-                ['POC Name', 'pocName'],
-                ['POC Email', 'pocEmail'],
-                ['POC Contact', 'pocPhone'],
-                ['Secondary POC Name', 'secondaryPocName'],
-                ['Secondary POC Email', 'secondaryPocEmail'],
-                ['Secondary POC Contact', 'secondaryPocPhone'],
-                ['Technical POC Name', 'technicalPocName'],
-                ['Technical POC Email', 'technicalPocEmail'],
-                ['Technical POC Contact', 'technicalPocPhone']
-            ];
-            pairs.forEach(function (p) {
-                const oldVal = EDIT_ACCOUNT_DATA[p[1]] || '';
-                const newVal = values[p[1]] || '';
-                if (newVal !== oldVal) changes.push({ label: p[0], oldVal: oldVal || '—', newVal: newVal || '—', field: p[1] });
+            const groups = smGetPocFieldGroups();
+            Object.keys(groups).forEach(function(cat) {
+                if (!smIsPocCategoryEditable(cat)) return;
+                groups[cat].forEach(function(p) {
+                    const oldVal = EDIT_ACCOUNT_DATA[p[1]] || '';
+                    const newVal = values[p[1]] || '';
+                    if (newVal !== oldVal) changes.push({ label: p[0], oldVal: oldVal || '—', newVal: newVal || '—', field: p[1] });
+                });
             });
             return changes;
         }
@@ -9901,7 +10079,7 @@ async function ownerFetchUserRole(email) {
 
             const pocChanges = getEditPocChanges();
             const pocChanged = pocChanges.length > 0;
-            if (window.POC_DETAILS_ENABLED && pocChanged) {
+            if (pocChanged) {
                 const phoneErr = smValidatePocPhoneFields(
                     window.EDIT_POC_VALUES,
                     pocChanges.map(function (c) { return c.field; })
@@ -10332,13 +10510,17 @@ async function ownerFetchUserRole(email) {
             }
 
             try {
-                // Fetch account from SharePoint
+                const pocFields = smCanViewAccountSearchPocDetails()
+                    ? ",POC_x0020_Name,POC_x0020_Email_x0020_ID,POC_x0020_Contact_x0020_No," +
+                      "Secondary_x0020_POC_x0020_Name,Secondary_x0020_POC_x0020_Email,Secondary_x0020_POC_x0020_Contac," +
+                      "Technical_x0020_POC_x0020_Name,Technical_x0020_POC_x0020_Email,Technical_x0020_POC_x0020_Contac"
+                    : "";
                 const url = SP_URL + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items?" +
                     "$select=Title,Parent_x0020_Code,Customer_x0020_Name,Team," +
                     "Line_x0020_Manager/Title,Service_x0020_Manager/Title," +
                     "Secondary_x0020_Service_x0020_Ma/Title," +
                     "Account_x0020_Manager/Title,Account_x0020_Director/Title," +
-                    "Service_x0020_Director/Title,Jan_x002d_26&" +
+                    "Service_x0020_Director/Title,Jan_x002d_26" + pocFields + "&" +
                     "$expand=Line_x0020_Manager,Service_x0020_Manager," +
                     "Secondary_x0020_Service_x0020_Ma,Account_x0020_Manager," +
                     "Account_x0020_Director,Service_x0020_Director&" +
@@ -10373,6 +10555,10 @@ async function ownerFetchUserRole(email) {
                 document.getElementById('searchErrorMessage').style.display = 'none';
 
                 const account = data.d.results[0];
+                if (!smAccountSearchTeamAllowed(account.Team)) {
+                    smShowAccountSearchDenied(account.Team);
+                    return;
+                }
                 displayAccountDetails(account);
                 await loadRelatedAccounts(account);
 
@@ -10380,6 +10566,28 @@ async function ownerFetchUserRole(email) {
                 console.error('Search error:', err);
                 alert('Error searching account: ' + err.message);
             }
+        }
+
+        function smEscapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function smRenderAccountSearchPocSection(title, fields) {
+            let section = '<div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">';
+            section += '<div style="font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 12px;">' + smEscapeHtml(title) + '</div>';
+            section += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">';
+            fields.forEach(function(pair) {
+                section += '<div style="padding: 12px; background: rgba(168, 85, 247, 0.1); border-radius: 8px;">' +
+                    '<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;">' + smEscapeHtml(pair[0]) + '</div>' +
+                    '<div style="font-size: 14px; font-weight: 600;">' + smEscapeHtml(pair[1] || 'N/A') + '</div>' +
+                    '</div>';
+            });
+            section += '</div></div>';
+            return section;
         }
 
         function displayAccountDetails(account) {
@@ -10412,6 +10620,24 @@ async function ownerFetchUserRole(email) {
             });
 
             html += '</div>';
+
+            if (smCanViewAccountSearchPocDetails()) {
+                html += smRenderAccountSearchPocSection('Primary POC Details', [
+                    ['POC Name', account.POC_x0020_Name],
+                    ['POC Email', account.POC_x0020_Email_x0020_ID],
+                    ['POC Contact', account.POC_x0020_Contact_x0020_No]
+                ]);
+                html += smRenderAccountSearchPocSection('Secondary POC Details', [
+                    ['Secondary POC Name', account.Secondary_x0020_POC_x0020_Name],
+                    ['Secondary POC Email', account.Secondary_x0020_POC_x0020_Email],
+                    ['Secondary POC Contact', account.Secondary_x0020_POC_x0020_Contac]
+                ]);
+                html += smRenderAccountSearchPocSection('Technical POC Details', [
+                    ['Technical POC Name', account.Technical_x0020_POC_x0020_Name],
+                    ['Technical POC Email', account.Technical_x0020_POC_x0020_Email],
+                    ['Technical POC Contact', account.Technical_x0020_POC_x0020_Contac]
+                ]);
+            }
 
             document.getElementById('accountDetailsContent').innerHTML = html;
             document.getElementById('accountDetailsSection').style.display = 'block';
@@ -10450,7 +10676,9 @@ async function ownerFetchUserRole(email) {
 
                     if (res.ok) {
                         const data = await res.json();
-                        relatedAccounts = data.d.results;
+                        relatedAccounts = data.d.results.filter(function (a) {
+                            return smAccountSearchTeamAllowed(a.Team);
+                        });
                     }
                 } else {
                     // Show parent
@@ -10476,7 +10704,9 @@ async function ownerFetchUserRole(email) {
 
                     if (res.ok) {
                         const data = await res.json();
-                        relatedAccounts = data.d.results;
+                        relatedAccounts = data.d.results.filter(function (a) {
+                            return smAccountSearchTeamAllowed(a.Team);
+                        });
                     }
                 }
 
@@ -10795,7 +11025,8 @@ async function ownerFetchUserRole(email) {
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/suggestions.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/processdocs.js"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/qualityassurance.js"></script>
-    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd-assignment.js"></script>
+    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/psd__assignment.js?v=1.2.0"></script>
+    <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/repeated-calls.js?v=1.7.3"></script>
     <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/rnps.js"></script>
   <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/semailbox.js"></script>
   <script src="http://sharedspaces:8086/sites/SM/Shared%20Documents/tsm-se.js?v=4"></script>
