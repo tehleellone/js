@@ -5651,20 +5651,9 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 };
 
             } else if (USER_CONTEXT.isActive && smIsAccountSearchOnlyRole()) {
-                dashboardBtn.disabled = true;
-                dashboardBtn.style.opacity = '0.6';
-                dashboardBtn.style.cursor = 'not-allowed';
-                dashboardBtn.innerHTML = `
-                    <span class="btn-icon"><i data-lucide="layout-dashboard" style="width: 20px; height: 20px;"></i></span>
-                    <span class="btn-text">Launch Dashboard</span>
-                    <span class="btn-shine"></span>
-                `;
-                document.getElementById('accessNote').innerHTML = `
-                    <i data-lucide="search" style="width: 14px; height: 14px; color: #10b981;"></i>
-                    <span style="color: #10b981; font-weight: 600;">Account Search access — TSM_ME, DSM &amp; TSM_SE</span>
-                    <br>
-                    <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: inline-block;">Use Go to Account Search below. Dashboard is not available for this role.</span>
-                `;
+                dashboardBtn.style.display = 'none';
+                var accessNoteEl = document.getElementById('accessNote');
+                if (accessNoteEl) accessNoteEl.style.display = 'none';
             } else {
                 // NO ACCESS TO DASHBOARD
                 dashboardBtn.disabled = true;
@@ -5687,6 +5676,10 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
             const searchBtn = document.getElementById('goToAccountSearch');
             if (searchBtn) {
                 searchBtn.disabled = false; // ✅ ALWAYS ENABLED
+                if (smIsAccountSearchOnlyRole()) {
+                    searchBtn.style.display = 'flex';
+                    searchBtn.style.marginTop = '0';
+                }
                 searchBtn.onclick = function() {
                     showAccountSearch();
                 };
@@ -5695,12 +5688,16 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
             // ===== OCC SEARCH BUTTON (Access_Control.OCC_SEARCH = Yes) =====
             const occBtn = document.getElementById('goToOccSearch');
             if (occBtn) {
-                var occEnabled = parseAccessControlYesNo(USER_CONTEXT.occSearchEnabled) || USER_CONTEXT.occSearchEnabled === true;
-                occBtn.style.display = occEnabled ? 'flex' : 'none';
-                occBtn.disabled = !occEnabled;
-                occBtn.onclick = function() {
-                    window.location.href = 'http://sharedspaces:8081/sites/OCC/SitePages/occ-search.aspx';
-                };
+                if (smIsAccountSearchOnlyRole()) {
+                    occBtn.style.display = 'none';
+                } else {
+                    var occEnabled = parseAccessControlYesNo(USER_CONTEXT.occSearchEnabled) || USER_CONTEXT.occSearchEnabled === true;
+                    occBtn.style.display = occEnabled ? 'flex' : 'none';
+                    occBtn.disabled = !occEnabled;
+                    occBtn.onclick = function() {
+                        window.location.href = 'http://sharedspaces:8081/sites/OCC/SitePages/occ-search.aspx';
+                    };
+                }
             }
 
 // Reinitialize Lucide icons
@@ -5716,13 +5713,17 @@ else if (USER_CONTEXT.role === 'Account Manager' || USER_CONTEXT.role === 'Accou
                 }, 1500);
             }
 
-            // Show owner panel only for tehleel & ubaid
+            // Show owner panel only for tehleel & ubaid (not Account Search Viewer)
             var ownerPanel = document.getElementById('ownerViewAsPanel');
             if (ownerPanel) {
-                var ownerEmails = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
-                ownerPanel.style.display = ownerEmails.includes(
-                    (USER_CONTEXT.userEmail || '').toLowerCase()
-                ) ? 'block' : 'none';
+                if (smIsAccountSearchOnlyRole()) {
+                    ownerPanel.style.display = 'none';
+                } else {
+                    var ownerEmails = ['tehleel.lone@du.ae', 'ubaid.mir@du.ae'];
+                    ownerPanel.style.display = ownerEmails.includes(
+                        (USER_CONTEXT.userEmail || '').toLowerCase()
+                    ) ? 'block' : 'none';
+                }
             }
         }
 
